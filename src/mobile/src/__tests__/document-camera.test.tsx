@@ -433,7 +433,7 @@ it('unmounts the camera for an undistorted preview and deletes a rejected image 
   expect(capture).not.toHaveBeenCalled();
   expect(native.files.size).toBe(1);
   expect(native.resized).not.toHaveBeenCalled();
-  expect(native.save).toHaveBeenCalledWith({ format: 'jpeg', compress: 0.95 });
+  expect(native.save).toHaveBeenCalledWith({ format: 'jpeg', compress: 1 });
   expect(native.release).toHaveBeenCalledTimes(3);
   fireEvent.click(screen.getByRole('button', { name: 'Chụp lại' }));
   await screen.findByTestId('native-camera');

@@ -19,6 +19,7 @@ import {
   emptyIdentity,
   identityFields,
   mergeIdentity,
+  foldIdentityName,
   type IdentityFields,
 } from '../../lib/identity';
 import { diagnosticWarning } from '../../lib/ocrDiagnostics';
@@ -113,8 +114,9 @@ export function IdentityWizard({
   };
   const [fields, setFields] = useState(emptyIdentity);
   const [sources, setSources] = useState<Partial<Record<keyof IdentityFields, string>>>({});
+  const [uncertain, setUncertain] = useState<Partial<Record<keyof IdentityFields, string>>>({});
   const current = useRef(fields);
-  const fieldOrigin = useRef<Partial<Record<keyof IdentityFields, IdentitySide | 'manual'>>>({});
+  const unaccentedName = useRef(false);
   const [checked, setChecked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [alreadyConfirmed, setAlreadyConfirmed] = useState(false);
@@ -196,31 +198,34 @@ export function IdentityWizard({
     };
   }, [modal, setNotice]);
   const acceptProposal = (proposal: Proposal, face: IdentitySide = side) => {
-    // A rescan replaces only suggestions it actually reads from the same side.
+    // A retake fills gaps. An observed disagreement must not erase a successful
+    // earlier read or a Staff edit; keep that value and ask for comparison.
     const before = { ...current.current };
-    for (const [key] of identityFields) {
-      if (fieldOrigin.current[key] === face && proposal.proposedFields[key]?.trim())
-        before[key] = '';
-    }
-    const merged = mergeIdentity(before, proposal);
-    for (const [key] of identityFields) {
-      if (!before[key] && proposal.proposedFields[key]) fieldOrigin.current[key] = face;
-    }
+    const merged = mergeIdentity(before, proposal, { unaccentedName: unaccentedName.current });
+    const nameUpgraded = !!before.fullName && before.fullName !== merged.fields.fullName;
+    const mrzNameAgrees =
+      proposal.warnings.includes('mrz_name_unaccented') &&
+      !!before.fullName &&
+      foldIdentityName(before.fullName) ===
+        foldIdentityName(proposal.proposedFields.fullName ?? '');
+    if (!before.fullName && proposal.proposedFields.fullName)
+      unaccentedName.current = proposal.warnings.includes('mrz_name_unaccented');
+    else if (nameUpgraded) unaccentedName.current = false;
     statusCallback.current?.('pending');
     const hasFields =
       identityFields.some(([key]) => proposal.proposedFields[key]?.trim()) ||
       !!proposal.proposedFields.placeOfIssue?.trim();
     const complete =
-      face === 'back' ||
-      ['citizenIdentityNumber', 'fullName', 'dateOfBirth'].every((key) =>
-        proposal.proposedFields[key]?.trim(),
-      );
-    const resultStatus =
-      !hasFields || proposal.isFallback
-        ? 'failed'
-        : !complete || proposal.warnings.includes('ocr_partial')
-          ? 'partial'
-          : 'recognized';
+      face === 'back'
+        ? !!proposal.proposedFields.dateOfIssue?.trim()
+        : identityFields
+            .filter(([key]) => key !== 'dateOfIssue')
+            .every(([key]) => proposal.proposedFields[key]?.trim());
+    const resultStatus = !hasFields
+      ? 'failed'
+      : !complete || proposal.warnings.includes('ocr_partial')
+        ? 'partial'
+        : 'recognized';
     const faceLabel = `Mặt ${face === 'front' ? 'trước' : 'sau'}`;
     const failureCode = [
       'ocr_unavailable',
@@ -239,11 +244,7 @@ export function IdentityWizard({
               proposal.warnings
                 .filter(
                   (code) =>
-                    ![
-                      'unsupported_or_unreadable_layout',
-                      'possible_glare',
-                      'orientation_corrected',
-                    ].includes(code),
+                    !['unsupported_or_unreadable_layout', 'orientation_corrected'].includes(code),
                 )
                 .map((code) => `${faceLabel}: ${diagnosticWarning(code, false)}`),
             ),
@@ -266,17 +267,44 @@ export function IdentityWizard({
         return `${label[0]!.toUpperCase()}${label.slice(1)}: ${message}`;
       }),
     );
-    if (proposal.proposedFields.placeOfIssue) setPlaceOfIssue(proposal.proposedFields.placeOfIssue);
+    if (proposal.proposedFields.placeOfIssue && !merged.conflicts.includes('citizenIdentityNumber'))
+      setPlaceOfIssue((previous) => previous || proposal.proposedFields.placeOfIssue!);
     current.current = merged.fields;
     setFields(merged.fields);
+    setUncertain((previous) => {
+      const next = { ...previous };
+      for (const [key] of identityFields) {
+        if (
+          key === 'fullName' &&
+          nameUpgraded &&
+          !proposal.warnings.includes('conflicting_fullName')
+        )
+          delete next.fullName;
+        if (merged.conflicts.includes(key) || proposal.warnings.includes(`conflicting_${key}`))
+          next[key] = 'Các lần đọc không khớp. Đang giữ dữ liệu trước; hãy đối chiếu CCCD.';
+        else if (
+          !(key === 'fullName' && mrzNameAgrees) &&
+          proposal.proposedFields[key] &&
+          Number.isFinite(proposal.confidence[key]) &&
+          proposal.confidence[key]! < 0.9
+        )
+          next[key] = 'OCR chưa chắc chắn. Hãy đối chiếu trực tiếp trên CCCD.';
+      }
+      return next;
+    });
     setChecked(false);
-    setSources((before) => ({
+    setSources((previous) => ({
+      ...previous,
       ...Object.fromEntries(
         identityFields
-          .filter(([key]) => proposal.proposedFields[key])
+          .filter(
+            ([key]) =>
+              proposal.proposedFields[key] &&
+              merged.fields[key] &&
+              (!before[key] || (key === 'fullName' && nameUpgraded)),
+          )
           .map(([key]) => [key, `Đề xuất OCR mặt ${face === 'front' ? 'trước' : 'sau'}`]),
       ),
-      ...before,
     }));
     setScanned(true);
     setAttempted(false);
@@ -695,7 +723,6 @@ export function IdentityWizard({
                 for (const [key] of identityFields) {
                   if (next[key].trim()) continue;
                   next[key] = samples[key];
-                  fieldOrigin.current[key] = 'manual';
                   nextSources[key] = 'Dữ liệu mẫu kiểm thử';
                 }
                 current.current = next;
@@ -722,10 +749,11 @@ export function IdentityWizard({
             const onChange = (value: string) => {
               const next = { ...current.current, [key]: value };
               current.current = next;
-              fieldOrigin.current[key] = 'manual';
               setFields(next);
+              if (key === 'fullName') unaccentedName.current = false;
               statusCallback.current?.('pending');
               setChecked(false);
+              setUncertain((previous) => ({ ...previous, [key]: undefined }));
               setSources((before) => ({ ...before, [key]: 'Staff nhập / chỉnh sửa' }));
             };
             const onBlur = () => setTouched((before) => ({ ...before, [key]: true }));
@@ -758,12 +786,15 @@ export function IdentityWizard({
                     error={error}
                     onBlur={onBlur}
                     keyboardType={key === 'citizenIdentityNumber' ? 'number-pad' : 'default'}
+                    multiline={key === 'placeOfOrigin' || key === 'residentialAddress'}
                     onChangeText={onChange}
                   />
                 )}
                 <Text
                   accessibilityRole={
-                    fieldErrors[key] && (scanned || attempted || touched[key]) ? 'alert' : undefined
+                    uncertain[key] || (fieldErrors[key] && (scanned || attempted || touched[key]))
+                      ? 'alert'
+                      : undefined
                   }
                   variant="labelSmall"
                   style={
@@ -772,9 +803,11 @@ export function IdentityWizard({
                 >
                   {fieldErrors[key] && (scanned || attempted || touched[key])
                     ? fieldErrors[key]
-                    : key === 'dateOfIssue' && !fields.dateOfIssue
-                      ? 'Chưa đọc được Ngày cấp. Vui lòng nhập theo giấy tờ.'
-                      : (sources[key] ?? 'Chưa có dữ liệu • Có thể nhập thủ công')}
+                    : uncertain[key]
+                      ? `Cần đối chiếu: ${uncertain[key]}`
+                      : key === 'dateOfIssue' && !fields.dateOfIssue
+                        ? 'Chưa đọc được Ngày cấp. Vui lòng nhập theo giấy tờ.'
+                        : (sources[key] ?? 'Chưa có dữ liệu • Có thể nhập thủ công')}
                 </Text>
               </View>
             );

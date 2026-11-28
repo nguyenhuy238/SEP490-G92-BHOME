@@ -83,7 +83,8 @@ export function DocumentCameraView(props: Props) {
         {props.preview && !props.working ? (
           <>
             <Text style={styles.lightText}>
-              Kiểm tra ảnh rõ chữ, không lóa và không mất góc giấy tờ.
+              Kiểm tra họ tên và địa chỉ có rõ dấu không. Nếu mờ, lóa hoặc mất góc thẻ, hãy chụp
+              lại.
             </Text>
             <View style={styles.previewActions}>
               <Button
@@ -117,7 +118,7 @@ export function DocumentCameraView(props: Props) {
               <Text style={styles.lightText}>
                 {back
                   ? 'Đảm bảo phần Ngày cấp rõ nét và đủ sáng'
-                  : 'Giữ giấy tờ rõ nét và đủ ánh sáng'}
+                  : 'Để thẻ gần kín khung, giữ đủ 4 góc. Lùi máy nếu chữ mờ; tránh đèn phản chiếu lên thẻ.'}
               </Text>
               <TouchableRipple
                 borderless={false}

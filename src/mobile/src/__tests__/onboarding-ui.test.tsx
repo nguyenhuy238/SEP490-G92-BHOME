@@ -1109,10 +1109,11 @@ it('retries the back side independently and preserves Staff edits and front fiel
   ).toBe('01/01/2000');
   expect(
     (screen.getByRole('textbox', { name: 'Ngày cấp (dd/MM/yyyy)' }) as HTMLInputElement).value,
-  ).toBe('05/04/2021');
+  ).toBe('03/02/2020');
+  expect(screen.getByText(/Cần đối chiếu: Các lần đọc không khớp/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Chụp lại mặt sau' }));
   fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh mặt sau' }));
-  expect(await screen.findByDisplayValue('05/04/2021')).toBeTruthy();
+  expect(await screen.findByDisplayValue('03/02/2020')).toBeTruthy();
   fireEvent.change(screen.getByRole('textbox', { name: 'Ngày cấp (dd/MM/yyyy)' }), {
     target: { value: '06/04/2021' },
   });

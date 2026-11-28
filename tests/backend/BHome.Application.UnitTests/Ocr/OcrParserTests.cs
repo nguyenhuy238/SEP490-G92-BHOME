@@ -7,6 +7,44 @@ namespace BHome.Application.UnitTests.Ocr;
 public sealed class OcrParserTests
 {
     [Fact]
+    public void ChipCardDateCanBeSeparatedFromItsLabelByBilingualWhitespace()
+    {
+        OcrLine[] lines = [
+            new("Ngày sinh / Date of birth:", .99f) { Bounds = new(354, 454, 256, 29) },
+            new("12/03/2001", .98f) { Bounds = new(840, 442, 180, 38) },
+            new("Giới tính / Sex: Nam", .99f) { Bounds = new(354, 507, 300, 35) }
+        ];
+        var proposal = OcrFieldParser.Parse(new(lines, "synthetic", []), OcrDocumentKind.IdentityFront);
+        Assert.Equal("2001-03-12", proposal.ProposedFields["dateOfBirth"]);
+        Assert.Equal(.98f, proposal.Confidence["dateOfBirth"]);
+        // Another field between the label and the date is still a barrier.
+        lines[2] = lines[2] with { Bounds = new(650, 450, 160, 35) };
+        Assert.False(OcrFieldParser.Parse(new(lines, "synthetic", []), OcrDocumentKind.IdentityFront)
+            .ProposedFields.ContainsKey("dateOfBirth"));
+    }
+
+    [Fact]
+    public void ChipCardResidenceWrapsFromInlineValueBackToTheLabelMargin()
+    {
+        OcrLine[] lines = [
+            new("Quê quán / Place of origin:", .99f) { Bounds = new(350, 565, 275, 29) },
+            new("Xã Giả Lập, Huyện Mô Phỏng", .98f) { Bounds = new(350, 597, 478, 40) },
+            new("Nơi thường trú / Place of residence:", .97f) { Bounds = new(350, 642, 368, 29) },
+            new("Thôn Thử", .96f) { Bounds = new(877, 628, 163, 41) },
+            new("Xã Kiểm Thử, Tỉnh Giả Lập", .95f) { Bounds = new(350, 687, 438, 42) },
+            new("Có giá trị đến: 12/03/2031", .99f) { Bounds = new(22, 670, 270, 28) }
+        ];
+        var proposal = OcrFieldParser.Parse(new(lines, "synthetic", []), OcrDocumentKind.IdentityFront);
+        Assert.Equal("Xã Giả Lập, Huyện Mô Phỏng", proposal.ProposedFields["placeOfOrigin"]);
+        Assert.Equal("Thôn Thử Xã Kiểm Thử, Tỉnh Giả Lập", proposal.ProposedFields["residentialAddress"]);
+        Assert.Equal(.95f, proposal.Confidence["residentialAddress"]);
+        Assert.Equal("2031-03-12", proposal.ProposedFields["dateOfExpiry"]);
+        lines[4] = lines[4] with { Bounds = new(1200, 687, 438, 42) };
+        Assert.Equal("Thôn Thử", OcrFieldParser.Parse(new(lines, "synthetic", []), OcrDocumentKind.IdentityFront)
+            .ProposedFields["residentialAddress"]);
+    }
+
+    [Fact]
     public void ADateMayFollowABilingualLabelAcrossPrintedWhitespaceButNotAcrossAnotherField()
     {
         OcrLine label = new("Ngày, tháng, năm / Date, month, year:", .99f) { Bounds = new(55, 235, 367, 28) };

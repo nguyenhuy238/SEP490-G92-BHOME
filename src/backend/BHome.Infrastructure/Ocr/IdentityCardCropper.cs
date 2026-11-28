@@ -19,17 +19,30 @@ internal static class IdentityCardCropper
         using var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(3, 3));
         Cv2.MorphologyEx(edges, edges, MorphTypes.Close, kernel);
         var candidates = Candidates(edges, small.Size());
-        if (candidates.Count == 0)
+        using (var foreground = new Mat())
         {
             // Desk grain may join the card boundary into one frame-sized edge
             // contour. A low-frequency brightness mask gives an independent
-            // boundary proposal, still subject to the same geometric checks.
-            using var foreground = new Mat();
+            // proposal even when a portrait inset produced a smaller edge box.
+            // Both proposals remain subject to the same geometric checks.
             Cv2.GaussianBlur(gray, foreground, new Size(15, 15), 0);
             Cv2.Threshold(foreground, foreground, 0, 255, ThresholdTypes.Binary | ThresholdTypes.Otsu);
-            candidates = Candidates(foreground, small.Size());
+            candidates.AddRange(Candidates(foreground, small.Size()));
+        }
+        if (candidates.Count == 0)
+        {
+            // The pale cyan/green chip-card surface can be darker than a bright
+            // wood desk, joining the Otsu mask to the background. A bounded hue
+            // proposal supplies another geometric candidate, never identity data.
+            using var colour = new Mat();
+            Cv2.CvtColor(small, colour, ColorConversionCodes.BGR2HSV);
+            Cv2.InRange(colour, new Scalar(35, 20, 45), new Scalar(115, 240, 255), colour);
+            using var close = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(15, 15));
+            Cv2.MorphologyEx(colour, colour, MorphTypes.Close, close);
+            candidates.AddRange(Candidates(colour, small.Size()));
         }
         if (candidates.Count == 0) return false;
+        candidates = candidates.OrderByDescending(candidate => candidate.Area).ToList();
         var best = candidates[0];
         // Nested contours are the two sides of one border. Distinct cards are ambiguous.
         if (candidates.Skip(1).Any(c => c.Area > best.Area * .7 &&
@@ -68,15 +81,19 @@ internal static class IdentityCardCropper
         foreach (var contour in contours.OrderByDescending(c => Math.Abs(Cv2.ContourArea(c))).Take(64))
         {
             var contourArea = Math.Abs(Cv2.ContourArea(contour));
-            if (contourArea < area * .12 || contourArea > area * .92) continue;
+            // A distant card can occupy well below 12% of a portrait frame.
+            // Absolute output size, aspect, convexity and ambiguity checks still
+            // apply; no identity fields are inferred from this proposal.
+            if (contourArea < area * .04 || contourArea > area * .92) continue;
             var polygon = Cv2.ApproxPolyDP(contour, Cv2.ArcLength(contour, true) * .02, true);
             if (polygon.Length != 4 || !Cv2.IsContourConvex(polygon)) continue;
-            // A portrait inset on a tightly framed landscape card is not its
-            // boundary. A portrait-oriented photograph can still contain a whole
-            // rotated card and must be localized before the image is reduced.
+            // Reject the portrait inset and the supported back layout's upper
+            // right fingerprint panel in a card-shaped frame. Keep centered
+            // distant cards in landscape photographs eligible for localization.
             var bounds = Cv2.BoundingRect(polygon);
             var frameRatio = frame.Width / (double)frame.Height;
-            if (frameRatio is >= 1.35 and <= 1.9 && bounds.Width < bounds.Height * 1.2 && contourArea < area * .5) continue;
+            if (frameRatio is >= 1.35 and <= 1.9 && contourArea < area * .5 &&
+                (bounds.Width < bounds.Height * 1.2 || bounds.X > frame.Width * .45 && bounds.Bottom < frame.Height * .6)) continue;
             if (polygon.Any(p => p.X <= 2 || p.Y <= 2 || p.X >= frame.Width - 3 || p.Y >= frame.Height - 3)) continue;
             var box = Cv2.MinAreaRect(polygon);
             var ratio = Math.Max(box.Size.Width, box.Size.Height) / Math.Min(box.Size.Width, box.Size.Height);
