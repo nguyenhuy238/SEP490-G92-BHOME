@@ -11,12 +11,16 @@ Giữ Modular Monolith .NET 8 + PostgreSQL. Bốn project backend trước đây
 | `Controllers/<Nghiệp vụ>`          | HTTP route, binding DTO, policy, gọi service                                      | Tự tính tiền hoặc truy vấn DB        |
 | `Services/<Nghiệp vụ>`             | Use case, quyền tài nguyên, trạng thái, transaction qua repository, calculator    | EF mapping, SQL, giao diện           |
 | `DTOs/`, `Interfaces/`             | DTO/contract types và interface riêng; một số kiểu liên quan vẫn nằm cùng service | Logic HTTP hoặc persistence          |
-| `Domain/<Nghiệp vụ>`               | Entity, enum và quy tắc/công thức thuần                                           | HTTP, database, dependency injection |
+| `Domain/Entities/<Nghiệp vụ>`, `Domain/<Nghiệp vụ>` | Entity lưu trữ sát 24 bảng và model nghiệp vụ, enum, quy tắc/công thức thuần | HTTP, SQL, dependency injection |
 | `Repositories/`, `Data/`           | Repository thực, EF mapping, Compact24, migrations                                | Tự thay đổi giá hoặc quy tắc đã chốt |
 | `Integrations/`, `BackgroundJobs/` | Adapter OCR/storage/provider, worker và lịch nền                                  | Thay đổi nghiệp vụ qua đường tắt     |
 | `Configuration/`                   | Đăng ký DI, cấu hình ứng dụng                                                     | Nghiệp vụ trong composition root     |
 
 Đường dẫn trong bảng tính từ `src/backend/BHome.Api/`. Luồng chạy: Controller → Service → Domain (quy tắc) và repository interface → Repository/Data → PostgreSQL. Hướng phụ thuộc logic giữ nguyên; `Configuration/` đăng ký implementation. Vì cùng assembly, kiểm tra ranh giới namespace trong `ArchitectureTests` thay thế kiểm tra phụ thuộc assembly trước đây. Không chuyển kiểm soát giao dịch, tính nhất quán và bảo vệ dữ liệu lên controller.
+
+### Entity và Database Compact24
+
+Mô hình 24 Entity vật lý đã được bổ sung trong `Domain/Entities/`; các luồng đọc đầu tiên dùng `Compact24TableContext` trực tiếp. Các projection/model nghiệp vụ cũ và writer được giữ cho các luồng chưa chuyển. Xem [bản đồ Entity và phạm vi chuyển đổi](COMPACT24_ENTITY_MAPPING.md), không suy luận mọi Domain class là một bảng.
 
 ### Quy ước tổ chức
 
