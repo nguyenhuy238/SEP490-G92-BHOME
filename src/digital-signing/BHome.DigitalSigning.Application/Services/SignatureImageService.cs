@@ -1,11 +1,11 @@
 using System.Security.Cryptography;
-using BHome.Application.IdentityAccess;
+using BHome.DigitalSigning.Application.Identity;
 using BHome.DigitalSigning.Application.Contracts;
 
 namespace BHome.DigitalSigning.Application.Services;
 
 // "Ảnh chữ ký": the picture a signer's signature shows on the page. Each signer keeps at most one.
-public sealed class SignatureImageService(ICurrentUser user, ISignatureImageStore store, TimeProvider clock)
+public sealed class SignatureImageService(ISigningCurrentUser user, ISignatureImageStore store, TimeProvider clock)
 {
     private const int MaxBytes = 1024 * 1024;
     private const int MinSide = 40;

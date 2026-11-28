@@ -1,0 +1,8 @@
+{
+    "solution":  {
+                     "path":  "BHome.sln",
+                     "projects":  [
+                                      "BHome.Api\\BHome.Api.csproj"
+                                  ]
+                 }
+}

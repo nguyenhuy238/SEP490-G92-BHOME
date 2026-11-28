@@ -1,10 +1,9 @@
-using BHome.Application.IdentityAccess;
+using BHome.DigitalSigning.Application.Identity;
 using BHome.DigitalSigning.Application;
 using BHome.DigitalSigning.Application.Contracts;
 using BHome.DigitalSigning.Application.Services;
 using BHome.DigitalSigning.Domain;
 using BHome.DigitalSigning.Infrastructure.Pdf;
-using BHome.Domain.IdentityAccess;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 
@@ -18,14 +17,14 @@ public sealed class RemoteSigningServiceTests : IDisposable
     private readonly FakeCa ca = new();
     private readonly InMemoryStore store = new();
     private readonly ISigningProvider provider = Substitute.For<ISigningProvider>();
-    private readonly ICurrentUser user = Substitute.For<ICurrentUser>();
+    private readonly ISigningCurrentUser user = Substitute.For<ISigningCurrentUser>();
     private readonly MutableClock clock = new(new DateTimeOffset(2026, 10, 29, 3, 0, 0, TimeSpan.Zero));
     private readonly Guid certificateId = Guid.NewGuid();
     private byte[]? sentDigest;
 
     public RemoteSigningServiceTests()
     {
-        ActAs(Signer, Roles.Tenant);
+        ActAs(Signer, SigningRoles.Tenant);
         provider.Code.Returns(SigningProviders.ViettelMySign);
         provider.ListCredentialsAsync("079000000001", "01AB", Arg.Any<CancellationToken>())
             .Returns([new RemoteCredential("01AB", ca.Certificate, ca.Chain, "cred-1")]);
@@ -160,7 +159,7 @@ public sealed class RemoteSigningServiceTests : IDisposable
     public async Task OnlyTheRequesterFollowsTheAttempt()
     {
         var started = await Service().StartAsync(Request(), CancellationToken.None);
-        ActAs(SomebodyElse, Roles.Owner);
+        ActAs(SomebodyElse, SigningRoles.Owner);
 
         var hidden = await Assert.ThrowsAsync<DigitalSigningException>(
             () => Service().StatusAsync(started.Id, CancellationToken.None));
@@ -170,7 +169,7 @@ public sealed class RemoteSigningServiceTests : IDisposable
     [Fact]
     public async Task SomebodyElsesCertificateCannotSign()
     {
-        ActAs(SomebodyElse, Roles.Owner);
+        ActAs(SomebodyElse, SigningRoles.Owner);
 
         var refused = await Assert.ThrowsAsync<DigitalSigningException>(
             () => Service().StartAsync(Request(), CancellationToken.None));

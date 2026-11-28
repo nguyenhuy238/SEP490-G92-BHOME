@@ -1,11 +1,13 @@
 using BHome.Api.IdentityAccess;
 using BHome.Api.Middleware;
 using BHome.Application.IdentityAccess;
+using BHome.DigitalSigning.Application.Identity;
 using BHome.Domain.IdentityAccess;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.OpenApi.Models;
 using System.Threading.RateLimiting;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace BHome.Api.Configuration;
 
@@ -84,6 +86,7 @@ public static class ApiFoundation
             };
         });
         services.AddScoped<ICurrentUser, HttpCurrentUser>();
+        AddSigningIdentity(services);
         services.AddAuthorization(options =>
         {
             options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
@@ -134,5 +137,15 @@ public static class ApiFoundation
             return string.Concat(type.GetGenericArguments().Select(SchemaId)) + type.Name.Split('`')[0];
         var name = type.Name.Replace("[]", "Array", StringComparison.Ordinal);
         return name == "ExpenseView" ? type.FullName!.Replace('.', '_').Replace('+', '_') : name;
+    }
+
+    internal static void AddSigningIdentity(IServiceCollection services) =>
+        services.TryAddScoped<ISigningCurrentUser>(provider =>
+            new SigningCurrentUserAdapter(provider.GetRequiredService<ICurrentUser>()));
+
+    private sealed class SigningCurrentUserAdapter(ICurrentUser user) : ISigningCurrentUser
+    {
+        public Guid? UserId => user.UserId;
+        public bool IsInRole(string role) => user.IsInRole(role);
     }
 }

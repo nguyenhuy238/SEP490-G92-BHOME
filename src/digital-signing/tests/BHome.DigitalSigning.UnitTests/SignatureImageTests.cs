@@ -1,20 +1,19 @@
-using BHome.Application.IdentityAccess;
+using BHome.DigitalSigning.Application.Identity;
 using BHome.DigitalSigning.Application;
 using BHome.DigitalSigning.Application.Services;
-using BHome.Domain.IdentityAccess;
 using NSubstitute;
 
 namespace BHome.DigitalSigning.UnitTests;
 
 public sealed class SignatureImageTests
 {
-    private readonly ICurrentUser user = Substitute.For<ICurrentUser>();
+    private readonly ISigningCurrentUser user = Substitute.For<ISigningCurrentUser>();
     private readonly ISignatureImageStore store = Substitute.For<ISignatureImageStore>();
 
     public SignatureImageTests()
     {
         user.UserId.Returns(Guid.NewGuid());
-        user.IsInRole(Roles.Tenant).Returns(true);
+        user.IsInRole(SigningRoles.Tenant).Returns(true);
     }
 
     private SignatureImageService Service() => new(user, store, TimeProvider.System);
