@@ -6,7 +6,6 @@ using BHome.Domain.Billing;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
-using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Billing;
 
@@ -25,23 +24,23 @@ internal static class NativeAdjustmentPersistence
         decimal EffectiveBefore, decimal EffectiveAfter, decimal PaidAtDecision, string SourceFingerprint,
         string Reason, Guid OwnerId, DateTimeOffset DecidedAt);
 
-    internal static IQueryable<Native.InvoiceAdjustment> Visible(Compact24DbContext db, InvoiceScope scope)
+    internal static IQueryable<InvoiceAdjustmentRequest> Visible(Compact24DbContext db, InvoiceScope scope)
     {
         var invoices = NativeInvoicePersistence.Visible(db, scope);
-        return db.Set<Native.InvoiceAdjustment>().AsNoTracking().Where(r => invoices.Any(i => i.Id == r.InvoiceId)
-            && (scope.Owner || scope.Tenant && r.RequestedByUserId == scope.Actor));
+        return db.Set<InvoiceAdjustmentRequest>().AsNoTracking().Where(r => invoices.Any(i => i.Id == r.InvoiceId)
+            && (scope.Owner || scope.Tenant && r.RequesterId == scope.Actor));
     }
 
     internal static async Task<InvoiceAdjustmentRequest[]> ReadAsync(Compact24DbContext db,
-        IQueryable<Native.InvoiceAdjustment> query, CancellationToken t)
+        IQueryable<InvoiceAdjustmentRequest> query, CancellationToken t)
     {
         var rows = await query.ToArrayAsync(t);
         if (rows.Length == 0) return [];
         var ids = rows.Select(r => r.Id).ToArray();
         var invoiceIds = rows.Select(r => r.InvoiceId).Distinct().ToArray();
-        var invoices = (await NativeInvoicePersistence.ReadAsync(db, db.Set<Native.Invoice>().AsNoTracking()
+        var invoices = (await NativeInvoicePersistence.ReadAsync(db, db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking()
             .Where(i => invoiceIds.Contains(i.Id)), t, includeLines: false)).ToDictionary(i => i.Id);
-        var evidence = (await db.Set<Native.OperationalTask>().FromSqlInterpolated($"""
+        var evidence = (await db.Set<BHome.Domain.Billing.OperationalTask>().FromSqlInterpolated($"""
             SELECT * FROM operational_tasks WHERE task_type='SYSTEM_JOB'
                 AND task_data->>'recordType'='InvoiceAdjustmentEvidence'
                 AND COALESCE(task_data->>'deleted','false')<>'true'
@@ -51,27 +50,24 @@ internal static class NativeAdjustmentPersistence
         {
             var state = row.RequestSnapshot.GetProperty("compactState").Deserialize<RequestState>(Json)
                 ?? throw new InvalidOperationException("Missing invoice adjustment request snapshot.");
-            var request = InvoiceAdjustmentRequest.RestoreIdentity(row.Id, state.CreatedAt, state.UpdatedAt);
-            request.InvoiceId = row.InvoiceId;
-            request.Invoice = invoices[row.InvoiceId];
-            request.RequesterId = row.RequestedByUserId;
-            request.SubmittedAt = row.RequestedAt;
-            request.Reason = row.Reason;
-            request.InvoiceLineId = state.InvoiceLineId;
-            request.ChargeCode = state.ChargeCode;
-            request.CurrentAmount = state.CurrentAmount;
-            request.ProposedAmount = state.ProposedAmount;
-            request.InvoiceSnapshot = state.InvoiceSnapshot;
-            request.InvoiceStatus = state.InvoiceStatus;
-            request.InvoiceVersion = state.InvoiceVersion;
-            request.FinancialVersion = state.FinancialVersion;
-            request.Decision = ReadDecision(row);
-            request.Evidence = evidence[row.Id].ToList();
-            return request;
+            row.CreatedAt = state.CreatedAt;
+            row.UpdatedAt = state.UpdatedAt;
+            row.Invoice = invoices[row.InvoiceId];
+            row.InvoiceLineId = state.InvoiceLineId;
+            row.ChargeCode = state.ChargeCode;
+            row.CurrentAmount = state.CurrentAmount;
+            row.ProposedAmount = state.ProposedAmount;
+            row.InvoiceSnapshot = state.InvoiceSnapshot;
+            row.InvoiceStatus = state.InvoiceStatus;
+            row.InvoiceVersion = state.InvoiceVersion;
+            row.FinancialVersion = state.FinancialVersion;
+            row.Decision = ReadDecision(row);
+            row.Evidence = evidence[row.Id].ToList();
+            return row;
         }).ToArray();
     }
 
-    internal static InvoiceAdjustmentDecision? ReadDecision(Native.InvoiceAdjustment row)
+    internal static InvoiceAdjustmentDecision? ReadDecision(InvoiceAdjustmentRequest row)
     {
         if (row.DecisionSnapshot is not { } snapshot) return null;
         var state = snapshot.Deserialize<DecisionState>(Json)
@@ -96,15 +92,15 @@ internal static class NativeAdjustmentPersistence
         return decision;
     }
 
-    internal static IQueryable<Native.OperationalTask> EvidenceRows(Compact24DbContext db) =>
-        db.Set<Native.OperationalTask>().FromSqlRaw("""
+    internal static IQueryable<BHome.Domain.Billing.OperationalTask> EvidenceRows(Compact24DbContext db) =>
+        db.Set<BHome.Domain.Billing.OperationalTask>().FromSqlRaw("""
             SELECT * FROM operational_tasks WHERE task_type='SYSTEM_JOB'
                 AND task_data->>'recordType'='InvoiceAdjustmentEvidence'
                 AND COALESCE(task_data->>'deleted','false')<>'true'
             """).AsNoTracking();
 
-    internal static IQueryable<Native.OperationalTask> ExpiredEvidenceRows(Compact24DbContext db, DateTimeOffset now) =>
-        db.Set<Native.OperationalTask>().FromSqlInterpolated($"""
+    internal static IQueryable<BHome.Domain.Billing.OperationalTask> ExpiredEvidenceRows(Compact24DbContext db, DateTimeOffset now) =>
+        db.Set<BHome.Domain.Billing.OperationalTask>().FromSqlInterpolated($"""
             SELECT * FROM operational_tasks WHERE task_type='SYSTEM_JOB'
                 AND task_data->>'recordType'='InvoiceAdjustmentEvidence'
                 AND COALESCE(task_data->>'deleted','false')<>'true'
@@ -112,7 +108,7 @@ internal static class NativeAdjustmentPersistence
                 AND (task_data->'state'->>'cleanupAfter')::timestamptz < {now}
             """).AsNoTracking();
 
-    internal static InvoiceAdjustmentEvidence ReadEvidence(Native.OperationalTask row) =>
+    internal static InvoiceAdjustmentEvidence ReadEvidence(BHome.Domain.Billing.OperationalTask row) =>
         row.TaskData.GetProperty("state").Deserialize<InvoiceAdjustmentEvidence>(Json)
             ?? throw new InvalidOperationException("Missing invoice adjustment evidence snapshot.");
 
@@ -169,7 +165,7 @@ internal static class NativeAdjustmentPersistence
     internal static async Task<InvoiceAdjustmentCommand?> CommandAsync(Compact24DbContext db, Guid actor,
         Guid key, string operation, CancellationToken t)
     {
-        var row = await db.Set<Native.OperationalTask>().FromSqlInterpolated($"""
+        var row = await db.Set<BHome.Domain.Billing.OperationalTask>().FromSqlInterpolated($"""
             SELECT * FROM operational_tasks WHERE task_type='COMMAND'
                 AND task_data->>'recordType'='InvoiceAdjustmentCommand'
                 AND COALESCE(task_data->>'deleted','false')<>'true'

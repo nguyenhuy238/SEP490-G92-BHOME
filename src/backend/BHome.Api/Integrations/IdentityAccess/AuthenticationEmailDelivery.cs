@@ -169,9 +169,9 @@ internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, Compact
         IReadOnlyList<EmailAttachment>? attachments = null;
         if (tenantInvitation)
         {
-            var row = await db.Set<BHome.Domain.Entities.Contract>().AsNoTracking()
-                .Where(c => c.TenantUserId == recipient && c.ContractType == "MAIN" &&
-                    c.Status == (short)BHome.Domain.TenantContracts.ContractStatus.Active)
+            var row = await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking()
+                .Where(c => c.TenantUserId == recipient && c.Kind == BHome.Domain.TenantContracts.ContractKind.Main &&
+                    c.Status == BHome.Domain.TenantContracts.ContractStatus.Active)
                 .OrderByDescending(c => c.ActivatedAt)
                 .FirstOrDefaultAsync(t);
             var contract = row is null ? null : NativeContractSnapshot.Read(row);

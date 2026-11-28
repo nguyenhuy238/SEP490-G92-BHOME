@@ -192,12 +192,12 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
         while (true)
         {
             var now = clock.BusinessUtcNow();
-            var batch = await compact.Set<Native.Contract>().AsNoTracking()
-                .Where(c => (c.ContractType == "MAIN" || c.ContractType == "RENEWAL" || c.ContractType == "HOLDING" || c.ContractType == "ADDENDUM")
-                    && (c.ContractType == "HOLDING"
-                        ? (c.Status == (short)ContractStatus.Draft || c.Status == (short)ContractStatus.PendingSigning ||
-                            c.Status == (short)ContractStatus.PendingActivation || c.Status == (short)ContractStatus.Active) && c.HoldingExpiryAt <= now
-                        : c.Status == (short)ContractStatus.Active && c.EndDate <= through)
+            var batch = await compact.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking()
+                .Where(c => (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal || c.Kind == BHome.Domain.TenantContracts.ContractKind.Holding || c.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum)
+                    && (c.Kind == BHome.Domain.TenantContracts.ContractKind.Holding
+                        ? (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning ||
+                            c.Status == ContractStatus.PendingActivation || c.Status == ContractStatus.Active) && c.HoldingExpiryAt <= now
+                        : c.Status == ContractStatus.Active && c.EndDate <= through)
                     && (after == null || c.Id.CompareTo(after.Value) > 0))
                 .OrderBy(c => c.Id).Select(c => new { c.Id, c.RoomId }).Take(100).ToArrayAsync(t);
             if (batch.Length == 0) break;
@@ -223,9 +223,9 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
                                 ReviewedAt = now,
                                 FinancialSnapshot = JsonSerializer.Serialize(new { verifiedDeposit = deposit, source = "SystemHoldingExpiry", automaticRefund = false })
                             });
-                        var otherBinding = await compact.Set<Native.Contract>().AnyAsync(x => x.RoomId == c.RoomId && x.Id != c.Id &&
-                            x.Status == (short)ContractStatus.Active &&
-                            (x.ContractType == "MAIN" || x.ContractType == "RENEWAL" || x.ContractType == "HOLDING" || x.ContractType == "ADDENDUM"), t);
+                        var otherBinding = await compact.Set<BHome.Domain.TenantContracts.Contract>().AnyAsync(x => x.RoomId == c.RoomId && x.Id != c.Id &&
+                            x.Status == ContractStatus.Active &&
+                            (x.Kind == BHome.Domain.TenantContracts.ContractKind.Main || x.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal || x.Kind == BHome.Domain.TenantContracts.ContractKind.Holding || x.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum), t);
                         if (room.Status == RoomStatus.OnHold && !otherBinding)
                         {
                             var before = JsonSerializer.Serialize(new { room.Status, room.Version, ContractId = c.Id });

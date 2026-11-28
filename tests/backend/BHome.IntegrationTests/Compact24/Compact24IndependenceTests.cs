@@ -75,8 +75,8 @@ public sealed class Compact24IndependenceTests
             }
             await Task.Delay(TimeSpan.FromSeconds(3));
             await using (var scope = host.Services.CreateAsyncScope())
-                Assert.True(await scope.ServiceProvider.GetRequiredService<Compact24DbContext>().Set<BHome.Domain.Entities.OperationalTask>()
-                    .AnyAsync(j => j.TaskType == "SYSTEM_JOB" && j.Status == "Completed"));
+                Assert.True(await scope.ServiceProvider.GetRequiredService<Compact24DbContext>().Set<BHome.Domain.Billing.OperationalTask>()
+                    .AnyAsync(j => j.TaskType == "SYSTEM_JOB" && j.StoredStatus == "Completed"));
             Assert.Empty(guard.Unexpected);
             var database = new NpgsqlConnectionStringBuilder(fixture.Connection).Database!;
             var logPath = Environment.GetEnvironmentVariable("BHOME_COMPACT24_QUERY_LOG")!;

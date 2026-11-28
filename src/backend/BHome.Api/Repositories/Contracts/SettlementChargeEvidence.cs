@@ -14,7 +14,7 @@ internal sealed class SettlementChargeEvidence(BHomePersistenceContext db, IObje
     public async Task<IReadOnlyList<DeductionEvidence>> CaptureUtilityAsync(Guid contractId, SettlementUtilitySource source, CancellationToken token)
     {
         var roomId = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext
-            ? await db.Set<BHome.Domain.Entities.Contract>().AsNoTracking().Where(c => c.Id == contractId).Select(c => c.RoomId).SingleAsync(token)
+            ? await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => c.Id == contractId).Select(c => c.RoomId).SingleAsync(token)
             : await db.Set<Contract>().AsNoTracking().Where(c => c.Id == contractId).Select(c => c.RoomId).SingleAsync(token);
         var points = new[] { source.Baseline, source.Final }.DistinctBy(p => p.ReadingId).ToArray();
         var ids = points.Select(p => p.ReadingId).ToArray();

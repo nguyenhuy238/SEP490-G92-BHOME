@@ -74,34 +74,32 @@ internal sealed class NativeIncidentSession(Compact24DbContext db)
     internal void Audit(Guid actor, string action, Guid target, DateTimeOffset at) =>
         audits.Add(new(Guid.NewGuid(), actor, null, null, action, true, at, "IncidentActivity", target));
 
-    internal static IncidentReport Read(Native.IncidentReport row)
+    internal static IncidentReport Read(IncidentReport row)
     {
         var state = IncidentSnapshots.Latest(row.History, "IncidentReport");
-        var report = state.ValueKind == JsonValueKind.Object
-            ? state.Deserialize<IncidentSnapshots.IncidentReportState>(Json)!.ToDomain()
-            : IncidentReport.Rehydrate(row.Id, row.ReportedAt, DateTimeOffset.UnixEpoch);
-        report.LocationId = row.LocationId;
-        report.RoomId = row.RoomId;
-        report.AssetId = row.AssetId;
-        report.ReporterId = row.ReporterUserId;
-        report.ReporterRole ??= "";
-        report.Description = row.Description;
-        report.Severity = row.Severity == "EMERGENCY" ? IncidentSeverity.Emergency : IncidentSeverity.Normal;
-        report.Status = Enum.Parse<IncidentStatus>(row.Status);
-        report.DuplicateOfId = row.DuplicateOfReportId;
-        report.CreatedAt = row.ReportedAt;
-        report.ResolvedAt = row.ResolvedAt;
-        report.Version = row.Version;
-        return report;
+        var snapshot = state.ValueKind == JsonValueKind.Object
+            ? state.Deserialize<IncidentSnapshots.IncidentReportState>(Json)
+            : null;
+        row.UpdatedAt = snapshot?.UpdatedAt ?? DateTimeOffset.UnixEpoch;
+        row.CommonArea = snapshot?.CommonArea;
+        row.ContractId = snapshot?.ContractId;
+        row.ReporterRole = snapshot?.ReporterRole ?? "";
+        row.Type = snapshot?.Type;
+        row.Category = snapshot?.Category;
+        row.AcknowledgedById = snapshot?.AcknowledgedById;
+        row.AcknowledgedAt = snapshot?.AcknowledgedAt;
+        row.OwnerDecisionAt = snapshot?.OwnerDecisionAt;
+        row.ResolutionNote = snapshot?.ResolutionNote;
+        return row;
     }
-    internal static MaintenanceWorkOrder Read(Native.OperationalTask row)
+    internal static MaintenanceWorkOrder Read(BHome.Domain.Billing.OperationalTask row)
     {
         var state = row.TaskData.TryGetProperty("state", out var value) ? value : default;
         var work = state.ValueKind == JsonValueKind.Object
             ? state.Deserialize<IncidentSnapshots.MaintenanceWorkOrderState>(Json)!.ToDomain()
             : MaintenanceWorkOrder.Rehydrate(row.Id, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch);
         work.IncidentId = row.IncidentReportId;
-        work.LocationId = row.LocationId ?? Guid.Empty;
+        work.LocationId = row.StoredLocationId ?? Guid.Empty;
         work.RoomId = row.RoomId;
         work.AssetId = row.AssetId;
         work.AssignedStaffId = row.AssignedUserId ?? Guid.Empty;
@@ -111,7 +109,7 @@ internal sealed class NativeIncidentSession(Compact24DbContext db)
         work.ApprovedAt = row.CostApprovedAt;
         work.VerifiedById = row.VerifiedByUserId;
         work.VerifiedAt = row.VerifiedAt;
-        work.Status = Enum.Parse<WorkOrderStatus>(row.Status);
+        work.Status = Enum.Parse<WorkOrderStatus>(row.StoredStatus);
         work.Version = row.Version;
         work.Source ??= "Incident";
         work.Description ??= "";
@@ -121,29 +119,29 @@ internal sealed class NativeIncidentSession(Compact24DbContext db)
     internal async Task<IncidentReport?> IncidentAsync(Guid id, CancellationToken t)
     {
         if (pending.TryGetValue((typeof(IncidentReport), id), out var current)) return (IncidentReport)current.Entity;
-        var row = await db.Set<Native.IncidentReport>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == id, t);
+        var row = await db.Set<IncidentReport>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == id, t);
         return row is null ? null : Track(Read(row));
     }
     internal async Task<MaintenanceWorkOrder?> WorkAsync(Guid id, CancellationToken t)
     {
         if (pending.TryGetValue((typeof(MaintenanceWorkOrder), id), out var current)) return (MaintenanceWorkOrder)current.Entity;
-        var row = await db.Set<Native.OperationalTask>().AsNoTracking()
+        var row = await db.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking()
             .SingleOrDefaultAsync(w => w.Id == id && w.TaskType == "WORK_ORDER", t);
         return row is null ? null : Track(Read(row));
     }
     internal async Task<IReadOnlyList<MaintenanceWorkOrder>> WorkOrdersAsync(Guid incident, CancellationToken t) =>
-        (await db.Set<Native.OperationalTask>().AsNoTracking().Where(w => w.TaskType == "WORK_ORDER" && w.IncidentReportId == incident)
+        (await db.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking().Where(w => w.TaskType == "WORK_ORDER" && w.IncidentReportId == incident)
             .OrderBy(w => w.Id).ToArrayAsync(t)).Select(w => Track(Read(w))).ToArray();
     internal async Task<Asset?> AssetAsync(Guid id, CancellationToken t)
     {
         if (pending.TryGetValue((typeof(Asset), id), out var current)) return (Asset)current.Entity;
-        var row = await db.Set<Native.Asset>().AsNoTracking().SingleOrDefaultAsync(a => a.Id == id, t);
+        var row = await db.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking().SingleOrDefaultAsync(a => a.Id == id, t);
         return row is null ? null : Track(NativeAssetPersistence.Read(row));
     }
     internal async Task<FastRepairPolicy?> PolicyAsync(CancellationToken t)
     {
         if (pending.TryGetValue((typeof(FastRepairPolicy), FastRepairPolicy.GlobalId), out var current)) return (FastRepairPolicy)current.Entity;
-        var row = await db.Set<Native.OperationalTask>().AsNoTracking()
+        var row = await db.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking()
             .SingleOrDefaultAsync(w => w.Id == FastRepairPolicy.GlobalId && w.TaskType == "SYSTEM_JOB", t);
         return row is null || !row.TaskData.TryGetProperty("state", out var state) ? null :
             Track(state.Deserialize<IncidentSnapshots.FastRepairPolicyState>(Json)!.ToDomain());
@@ -160,7 +158,7 @@ internal sealed class NativeIncidentSession(Compact24DbContext db)
     }
     internal async Task<MaintenanceCompensation?> CompensationAsync(Guid work, CancellationToken t)
     {
-        var row = await db.Set<Native.OperationalTask>().AsNoTracking()
+        var row = await db.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking()
             .Where(w => w.Id == work && w.TaskType == "WORK_ORDER").Select(w => w.History).SingleOrDefaultAsync(t);
         if (row.ValueKind != JsonValueKind.Array) return null;
         var state = IncidentSnapshots.Latest(row, "MaintenanceCompensation");

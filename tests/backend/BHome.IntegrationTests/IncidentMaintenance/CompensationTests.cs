@@ -82,7 +82,8 @@ public sealed partial class IncidentApiTests
         var context = verify.ServiceProvider.GetFixturePersistence();
         Assert.False(await context.Set<BHome.Domain.Billing.Invoice>().AnyAsync(i => i.RepresentativeContractId == w.Contract));
         Assert.Equal(50000, (await context.Set<MaintenanceCompensation>().SingleAsync(c => c.WorkOrderId == id)).Amount);
-        var task = await context.Set<BHome.Domain.Entities.OperationalTask>().AsNoTracking().SingleAsync(t => t.Id == id);
+        var runtime = verify.ServiceProvider.GetRequiredService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>();
+        var task = await runtime.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking().SingleAsync(t => t.Id == id);
         var decisions = task.History.EnumerateArray().Where(h => h.GetProperty("recordType").GetString() == "MaintenanceCompensation").ToArray();
         Assert.Equal(2, decisions.Length);
         Assert.All(decisions, h => Assert.Equal(row.Id.ToString(), h.GetProperty("recordKey").GetString()));
@@ -148,9 +149,10 @@ public sealed partial class IncidentApiTests
         var invoice = await db.Set<BHome.Domain.Billing.Invoice>().SingleAsync(i => i.Id == row.InvoiceId);
         Assert.Equal("AD_HOC", invoice.Type);
         Assert.Single(await db.Set<MaintenanceCompensation>().Where(c => c.WorkOrderId == id).ToArrayAsync());
-        var nativeInvoice = await db.Set<BHome.Domain.Entities.Invoice>().AsNoTracking().SingleAsync(i => i.Id == row.InvoiceId);
-        Assert.Equal("AD_HOC", nativeInvoice.InvoiceType);
-        Assert.Equal(1, nativeInvoice.Status);
+        var runtime = scope.ServiceProvider.GetRequiredService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>();
+        var nativeInvoice = await runtime.Set<BHome.Domain.Billing.Invoice>().AsNoTracking().SingleAsync(i => i.Id == row.InvoiceId);
+        Assert.Equal("AD_HOC", nativeInvoice.Type);
+        Assert.Equal(BHome.Domain.Billing.InvoiceStatus.Final, nativeInvoice.Status);
         Assert.Contains(w.Tenant.Id, nativeInvoice.RecipientUserIds);
         var versions = nativeInvoice.History.EnumerateArray().Where(h => h.GetProperty("recordType").GetString() == "Invoice").ToArray();
         Assert.Equal(2, versions.Length);

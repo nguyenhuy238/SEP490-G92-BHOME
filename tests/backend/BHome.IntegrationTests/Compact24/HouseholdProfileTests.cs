@@ -162,20 +162,21 @@ public sealed partial class Compact24NotificationMvpTests
         await using (var scope = host.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
-            var physical = await db.Set<Native.Contract>().AsNoTracking().SingleAsync(c => c.Id == draftId);
-            Assert.Equal(2, physical.Version); Assert.NotEqual(oldHash, physical.SnapshotHash);
+            var runtime = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var physical = await runtime.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().SingleAsync(c => c.Id == draftId);
+            Assert.Equal(2, physical.DraftVersion); Assert.NotEqual(oldHash, physical.SnapshotHash);
             newHash = physical.SnapshotHash!;
             var history = physical.History.EnumerateArray().Where(h => h.GetProperty("recordType").GetString() == "Contract").ToArray();
             Assert.Equal(2, history.Length);
             Assert.Equal(oldHash, history[0].GetProperty("state").GetProperty("snapshotHash").GetString());
             Assert.Equal(newHash, history[1].GetProperty("state").GetProperty("snapshotHash").GetString());
             Assert.DoesNotContain(name, physical.History.GetRawText());
-            var roster = await db.Set<Native.ContractResident>().AsNoTracking().Where(r => r.ContractId == draftId).ToArrayAsync();
+            var roster = await runtime.Set<BHome.Domain.TenantContracts.ContractResident>().AsNoTracking().Where(r => r.ContractId == draftId).ToArrayAsync();
             Assert.Equal(2, roster.Length);
             var member = Assert.Single(roster, r => r.ResidentId == child.ResidentId);
-            Assert.Equal((short)ResidentType.CoOccupant, member.ResidentRole);
+            Assert.Equal(ResidentType.CoOccupant, member.Role);
             Assert.Equal("ContractResident", Assert.Single(member.History.EnumerateArray()).GetProperty("recordType").GetString());
-            var resident = await db.Set<Native.Resident>().AsNoTracking().SingleAsync(r => r.Id == child.ResidentId);
+            var resident = await runtime.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().SingleAsync(r => r.Id == child.ResidentId);
             Assert.DoesNotContain(name, resident.History.GetRawText());
             var legacy = await db.Set<Contract>().AsNoTracking().Include(c => c.Residents).SingleAsync(c => c.Id == draftId);
             var state = scope.ServiceProvider.GetRequiredService<IMainDraftData>().Unprotect(legacy);
@@ -188,10 +189,10 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Equal(HttpStatusCode.InternalServerError, (await Save(new(saved.Version, true, []))).StatusCode);
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
-            var physical = await db.Set<Native.Contract>().AsNoTracking().SingleAsync(c => c.Id == draftId);
-            Assert.Equal(2, physical.Version); Assert.Equal(newHash, physical.SnapshotHash);
-            Assert.Equal(2, await db.Set<Native.ContractResident>().CountAsync(r => r.ContractId == draftId));
+            var runtime = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var physical = await runtime.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().SingleAsync(c => c.Id == draftId);
+            Assert.Equal(2, physical.DraftVersion); Assert.Equal(newHash, physical.SnapshotHash);
+            Assert.Equal(2, await runtime.Set<BHome.Domain.TenantContracts.ContractResident>().CountAsync(r => r.ContractId == draftId));
         }
         var reloaded = (await staff.GetFromJsonAsync<HouseholdView>($"/api/v1/capture/residents/{w.Residents[0]}/household"))!;
         Assert.Equal(saved.Version, reloaded.Version);

@@ -128,7 +128,7 @@ internal static class NativeCaptureWrites
     {
         RequireTransaction(db);
         var meter = task.MeterId is { } meterId
-            ? await db.Set<Native.Meter>().AsNoTracking().SingleAsync(m => m.Id == meterId, t) : null;
+            ? await db.Set<BHome.Domain.Billing.Meter>().AsNoTracking().SingleAsync(m => m.Id == meterId, t) : null;
         if (task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading && task.Purpose == ReadingPurpose.Periodic)
         {
             task.BillingRoomId = meter!.RoomId;
@@ -183,7 +183,7 @@ internal static class NativeCaptureWrites
         {
             ReadingPurpose.Initial when task.ContractId is not null => $"meter-contract-initial:{task.MeterId}:{task.ContractId}",
             ReadingPurpose.Initial => $"meter-initial:{task.MeterId}",
-            ReadingPurpose.Periodic => $"meter-period:{meter!.RoomId}:{meter.UtilityType.ToString(CultureInfo.InvariantCulture)}:{task.BillingPeriod!.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}",
+            ReadingPurpose.Periodic => $"meter-period:{meter!.RoomId}:{((short)meter.UtilityType).ToString(CultureInfo.InvariantCulture)}:{task.BillingPeriod!.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}",
             ReadingPurpose.Final when task.ContractId is not null => $"meter-final:{task.MeterId}:{task.ContractId}",
             _ => null
         };

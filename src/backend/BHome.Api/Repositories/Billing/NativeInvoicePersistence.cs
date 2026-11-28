@@ -8,95 +8,32 @@ using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Billing;
 
-// Map physical columns explicitly; only calculation/audit metadata comes from
-// the existing versioned snapshots. Domain objects here are detached workflow values.
+// Direct physical entity reads; attach the aggregate's lines and recipient values in one batch.
 internal static class NativeInvoicePersistence
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-    private sealed record InvoiceMetadata(DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
-        Guid? AutomationPlanId, Guid? AutomationFinalizationPlanId, string? RoomNumber,
-        string? LocationName, string? ScheduleSnapshot, Guid CreatedByUserId);
-    private sealed record LineMetadata(ChargeCategory Category, int? PolicyVersion,
-        DateOnly RateDate, int OccupiedDays, int PeriodDays, decimal? CalculatedAmount,
-        Guid? CorrectionRequestId, decimal? PreviousReading, decimal? ConfirmedReading,
-        string? UtilityCalculationSnapshot);
 
-    internal static IQueryable<Native.Invoice> Visible(Compact24DbContext db, InvoiceScope scope) =>
-        db.Set<Native.Invoice>().AsNoTracking().Where(i => scope.Owner ||
+    internal static IQueryable<Invoice> Visible(Compact24DbContext db, InvoiceScope scope) =>
+        db.Set<Invoice>().AsNoTracking().Where(i => scope.Owner ||
             scope.Tenant && i.RecipientUserIds.Contains(scope.Actor));
 
-    internal static async Task<Invoice[]> ReadAsync(Compact24DbContext db, IQueryable<Native.Invoice> query,
+    internal static async Task<Invoice[]> ReadAsync(Compact24DbContext db, IQueryable<Invoice> query,
         CancellationToken t, bool includeLines = true)
     {
         var rows = await query.ToArrayAsync(t);
         if (rows.Length == 0) return [];
         var ids = rows.Select(r => r.Id).ToArray();
         var items = includeLines
-            ? await db.Set<Native.InvoiceItem>().AsNoTracking().Where(l => ids.Contains(l.InvoiceId)).ToArrayAsync(t)
-            : Array.Empty<Native.InvoiceItem>();
+            ? await db.Set<InvoiceLine>().AsNoTracking().Where(l => ids.Contains(l.InvoiceId)).ToArrayAsync(t)
+            : Array.Empty<InvoiceLine>();
         var lines = items.ToLookup(l => l.InvoiceId);
-        return rows.Select(row => Read(row, lines[row.Id])).ToArray();
-    }
-
-    private static Invoice Read(Native.Invoice row, IEnumerable<Native.InvoiceItem> lines)
-    {
-        var state = row.BillingSnapshot.TryGetProperty("compactState", out var data)
-            ? data.Deserialize<InvoiceMetadata>(Json) : null;
-        var invoice = Invoice.RestoreIdentity(row.Id,
-            state is null || state.CreatedAt == default ? DateTimeOffset.UnixEpoch : state.CreatedAt.ToUniversalTime(),
-            state is null || state.UpdatedAt == default ? DateTimeOffset.UnixEpoch : state.UpdatedAt.ToUniversalTime());
-        invoice.RoomId = row.RoomId;
-        invoice.LocationId = row.LocationId;
-        invoice.RepresentativeContractId = row.ContractId;
-        invoice.RepresentativeTenantUserId = row.RepresentativeTenantUserId;
-        invoice.Type = row.InvoiceType;
-        invoice.BillingPeriod = row.BillingPeriod;
-        invoice.Status = (InvoiceStatus)row.Status;
-        invoice.Version = row.Version;
-        invoice.Total = row.BaseTotalAmount;
-        invoice.MissingInputs = row.MissingInputs;
-        invoice.ScheduledFinalDate = row.ScheduledFinalDate;
-        invoice.DueDate = row.DueDate;
-        invoice.FinalizedAt = row.FinalizedAt;
-        invoice.FinalizedByUserId = row.FinalizedByUserId;
-        invoice.AutomationPlanId = state?.AutomationPlanId;
-        invoice.AutomationFinalizationPlanId = state?.AutomationFinalizationPlanId;
-        invoice.RoomNumber = state?.RoomNumber ?? "";
-        invoice.LocationName = state?.LocationName ?? "";
-        invoice.ScheduleSnapshot = state?.ScheduleSnapshot ?? "";
-        invoice.CreatedByUserId = state?.CreatedByUserId ?? Guid.Empty;
-        invoice.Recipients = row.RecipientUserIds.Select(id => new InvoiceRecipient
-        { InvoiceId = row.Id, TenantUserId = id }).ToList();
-        invoice.Lines = lines.Select(ReadLine).ToList();
-        return invoice;
-    }
-
-    internal static InvoiceLine ReadLine(Native.InvoiceItem row)
-    {
-        var state = row.CalculationSnapshot.TryGetProperty("compactState", out var data)
-            ? data.Deserialize<LineMetadata>(Json) : null;
-        return new InvoiceLine
+        foreach (var invoice in rows)
         {
-            Id = row.Id,
-            InvoiceId = row.InvoiceId,
-            ChargeCode = row.ChargeCode,
-            Name = row.Description,
-            PolicyId = row.BillingPolicyId,
-            MeterReadingId = row.MeterReadingId,
-            Quantity = row.Quantity,
-            Rate = row.UnitPrice,
-            Amount = row.Amount,
-            Category = state?.Category ?? default,
-            PolicyVersion = state?.PolicyVersion,
-            RateDate = state?.RateDate ?? default,
-            OccupiedDays = state?.OccupiedDays ?? 0,
-            PeriodDays = state?.PeriodDays ?? 0,
-            CalculatedAmount = state?.CalculatedAmount,
-            CorrectionRequestId = state?.CorrectionRequestId,
-            PreviousReading = state?.PreviousReading,
-            ConfirmedReading = state?.ConfirmedReading,
-            UtilityCalculationSnapshot = state?.UtilityCalculationSnapshot
-        };
+            invoice.Recipients = invoice.RecipientUserIds.Select(id => new InvoiceRecipient
+            { InvoiceId = invoice.Id, TenantUserId = id }).ToList();
+            invoice.Lines = lines[invoice.Id].ToList();
+        }
+        return rows;
     }
 
     private static JsonElement State(Invoice i) => JsonSerializer.SerializeToElement(new

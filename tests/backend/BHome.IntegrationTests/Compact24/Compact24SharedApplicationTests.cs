@@ -95,13 +95,21 @@ public sealed partial class Compact24OwnerSetupTests
     public async Task NativeFeeWritesParticipateInSharedTransactionRollback()
     {
         var w = await Seed();
-        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var store = scope.ServiceProvider.GetRequiredService<ISharedConfigurationStore>(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
-        await Assert.ThrowsAsync<InvalidOperationException>(() => store.TransactionAsync<bool>([w.Location], async () =>
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var store = scope.ServiceProvider.GetRequiredService<ISharedConfigurationStore>(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => store.TransactionAsync<bool>([w.Location], async () =>
         {
             var repository = scope.ServiceProvider.GetRequiredService<IPropertyRepository>();
-            await repository.WithLocationLockAsync(w.Location, async () => { db.Add(new BHome.Domain.PropertyManagement.BillingPolicy { LocationId = w.Location, Category = BHome.Domain.PropertyManagement.ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rollback", Rate = 1, EffectiveFrom = Today }); await db.SaveChangesAsync(); return true; }, default);
+            await repository.WithLocationLockAsync(w.Location, async () =>
+            {
+                var policy = new BHome.Domain.PropertyManagement.BillingPolicy { LocationId = w.Location, Category = BHome.Domain.PropertyManagement.ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rollback", Rate = 1, EffectiveFrom = Today };
+                await BHome.Infrastructure.Modules.PropertyManagement.Persistence.NativePolicyPersistence.StageAsync(db, policy, null, DateTimeOffset.UtcNow, default);
+                await db.SaveChangesAsync();
+                Assert.True(await db.Set<BHome.Domain.PropertyManagement.BillingPolicy>().AnyAsync(p => p.Id == policy.Id));
+                return true;
+            }, default);
             throw new InvalidOperationException("Synthetic failure after fee persistence");
         }, default));
+        Assert.Equal("Synthetic failure after fee persistence", error.Message);
         db.ChangeTracker.Clear(); Assert.False(await db.Set<BHome.Domain.PropertyManagement.BillingPolicy>().AnyAsync(p => p.LocationId == w.Location));
     }
     [CompactPostgresFact]

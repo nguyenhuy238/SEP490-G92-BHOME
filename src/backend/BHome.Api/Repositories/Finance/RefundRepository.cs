@@ -80,8 +80,8 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
                 verified_at AS "VerifiedAt",COALESCE((verification_data->'compactState'->>'isDevelopmentDemo')::boolean,false) AS "IsDevelopmentDemo"
             FROM payments WHERE id={id} AND verification_data ? 'compactState'
             """).SingleOrDefaultAsync(t) ?? throw new FinanceException(404, "bank_transfer_not_found");
-        var allocation = await db.Set<Native.PaymentAllocation>().AsNoTracking().SingleOrDefaultAsync(a => a.SourcePaymentId == id &&
-            (a.TargetInvoiceId != null || a.TargetDepositContractId != null || a.TargetSettlementContractId != null || a.TargetInitialContractId != null), t);
+        var allocation = await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AsNoTracking().SingleOrDefaultAsync(a => a.TransferId == id &&
+            (a.InvoiceId != null || a.TargetDepositContractId != null || a.TargetSettlementContractId != null || a.TargetInitialContractId != null), t);
         var whole = allocation is null ? await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.ReadAsync(db, id, t) : null;
         var external = await BHome.Infrastructure.PaymentsDebt.ExternalPaymentPayerRecords.ReadAsync(db, id, t);
         if (external is not null && (external.TransferFingerprint != payment.Fingerprint() || allocation?.PaidByUserId is not null ||
@@ -105,11 +105,11 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
             upload.ObjectKey != r.EvidenceKey || upload.ExternalReference != r.ExternalReference || !System.Text.RegularExpressions.Regex.IsMatch(upload.Sha256, "^[A-F0-9]{64}$") || !r.State.Events.Any(e => e.Action == "Completed"))))
             throw new FinanceException(409, "refund_source_requires_manual_review");
         var people = allocation?.PaidByUserId is not { } payer ? [] : await (
-            from person in db.Set<Native.Resident>().AsNoTracking()
-            from invoice in db.Set<Native.Invoice>().AsNoTracking()
-            where invoice.Id == allocation.TargetInvoiceId && person.UserId == payer &&
-                person.VerificationStatus == (short)IdentityVerificationStatus.Verified && invoice.RecipientUserIds.Contains(payer) &&
-                db.Set<Native.ContractResident>().Any(cr => cr.ResidentId == person.Id && db.Set<Native.Contract>().Any(c => c.Id == cr.ContractId && (c.ContractType == "MAIN" || c.ContractType == "RENEWAL" || c.ContractType == "HOLDING" || c.ContractType == "ADDENDUM") && c.RoomId == invoice.RoomId))
+            from person in db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking()
+            from invoice in db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking()
+            where invoice.Id == allocation.InvoiceId && person.TenantUserId == payer &&
+                person.VerificationStatus == IdentityVerificationStatus.Verified && invoice.RecipientUserIds.Contains(payer) &&
+                db.Set<BHome.Domain.TenantContracts.ContractResident>().Any(cr => cr.ResidentId == person.Id && db.Set<BHome.Domain.TenantContracts.Contract>().Any(c => c.Id == cr.ContractId && (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal || c.Kind == BHome.Domain.TenantContracts.ContractKind.Holding || c.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum) && c.RoomId == invoice.RoomId))
             orderby person.Id
             select new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
         if (allocation is { PaidByUserId: { } chargePayer, TargetSettlementContractId: { } contractId, SettlementReceivableId: { } chargeId })
@@ -117,8 +117,8 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
             var charge = (await BHome.Infrastructure.Contracts.SettlementChargeRecords.ReadAsync<BHome.Application.Contracts.SettlementReceivable>(db,
                 contractId, BHome.Infrastructure.Contracts.SettlementChargeRecords.ChargeKind, t)).SingleOrDefault(c => c.Id == chargeId);
             if (charge is null || !charge.RecipientUserIds.Contains(chargePayer)) throw new FinanceException(409, "refund_source_requires_manual_review");
-            people = await db.Set<Native.Resident>().AsNoTracking().Where(person => person.UserId == chargePayer && person.VerificationStatus == (short)IdentityVerificationStatus.Verified &&
-                db.Set<Native.ContractResident>().Any(cr => cr.ResidentId == person.Id && db.Set<Native.Contract>().Any(c => c.Id == cr.ContractId && (c.ContractType == "MAIN" || c.ContractType == "RENEWAL" || c.ContractType == "HOLDING" || c.ContractType == "ADDENDUM") && c.RoomId == charge.RoomId)))
+            people = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(person => person.TenantUserId == chargePayer && person.VerificationStatus == IdentityVerificationStatus.Verified &&
+                db.Set<BHome.Domain.TenantContracts.ContractResident>().Any(cr => cr.ResidentId == person.Id && db.Set<BHome.Domain.TenantContracts.Contract>().Any(c => c.Id == cr.ContractId && (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal || c.Kind == BHome.Domain.TenantContracts.ContractKind.Holding || c.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum) && c.RoomId == charge.RoomId)))
                 .OrderBy(person => person.Id).Select(person => new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
         }
         if (allocation?.TargetDepositContractId is { } depositContract)
@@ -130,19 +130,19 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
                     deposit.ContractId != depositContract || deposit.AllocatedAmount != allocation.Amount.ToString("0", System.Globalization.CultureInfo.InvariantCulture) ||
                     deposit.PayerUserId != allocation.PaidByUserId || deposit.ExternalPayerAttestationId != external?.Id)
                     throw new FinanceException(409, "refund_source_requires_manual_review");
-                people = await db.Set<Native.Resident>().AsNoTracking().Where(person => person.Id == deposit.PayerResidentId &&
-                    person.VerificationStatus == (short)IdentityVerificationStatus.Verified && (deposit.PayerUserId == null || person.UserId == deposit.PayerUserId) &&
-                    db.Set<Native.ContractResident>().Any(cr => cr.ContractId == depositContract && cr.ResidentId == person.Id))
+                people = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(person => person.Id == deposit.PayerResidentId &&
+                    person.VerificationStatus == IdentityVerificationStatus.Verified && (deposit.PayerUserId == null || person.TenantUserId == deposit.PayerUserId) &&
+                    db.Set<BHome.Domain.TenantContracts.ContractResident>().Any(cr => cr.ContractId == depositContract && cr.ResidentId == person.Id))
                     .Select(person => new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
             }
             else if (allocation.PaidByUserId is { } depositUser)
-                people = await db.Set<Native.Resident>().AsNoTracking().Where(person => person.UserId == depositUser && person.VerificationStatus == (short)IdentityVerificationStatus.Verified &&
-                    db.Set<Native.ContractResident>().Any(cr => cr.ContractId == depositContract && cr.ResidentId == person.Id))
+                people = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(person => person.TenantUserId == depositUser && person.VerificationStatus == IdentityVerificationStatus.Verified &&
+                    db.Set<BHome.Domain.TenantContracts.ContractResident>().Any(cr => cr.ContractId == depositContract && cr.ResidentId == person.Id))
                     .Select(person => new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
         }
         if (whole is not null)
-            people = await db.Set<Native.Resident>().AsNoTracking().Where(person => person.Id == whole.PayerResidentId && person.VerificationStatus == (short)IdentityVerificationStatus.Verified &&
-                (whole.PayerUserId == null || person.UserId == whole.PayerUserId)).Select(person => new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
+            people = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(person => person.Id == whole.PayerResidentId && person.VerificationStatus == IdentityVerificationStatus.Verified &&
+                (whole.PayerUserId == null || person.TenantUserId == whole.PayerUserId)).Select(person => new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
         return new(Math.Max(0, excess), payment.IsDevelopmentDemo, external is null ? people : [], requests, ReceiptExcessDispositionId: whole?.Id,
             ExternalBeneficiary: external is null ? null : new(external.Id, external.PayerLabel));
     }

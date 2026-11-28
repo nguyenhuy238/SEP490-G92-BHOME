@@ -24,10 +24,10 @@ public partial class Compact24DbContext
                 Native.FinancialScenario => entry.State == EntityState.Added,
                 Native.StaffEmployment => entry.State is EntityState.Added or EntityState.Modified,
                 Native.Expense => entry.State is EntityState.Added or EntityState.Modified,
-                Native.Asset => entry.State is EntityState.Added or EntityState.Modified,
-                Native.Location => entry.State is EntityState.Added or EntityState.Modified,
-                Native.Room => entry.State is EntityState.Added or EntityState.Modified,
-                Native.BillingPolicy => entry.State is EntityState.Added or EntityState.Modified,
+                BHome.Domain.PropertyManagement.Asset => entry.State is EntityState.Added or EntityState.Modified,
+                BHome.Domain.Locations.Location => entry.State is EntityState.Added or EntityState.Modified,
+                BHome.Domain.PropertyManagement.Room => entry.State is EntityState.Added or EntityState.Modified,
+                BHome.Domain.PropertyManagement.BillingPolicy => entry.State is EntityState.Added or EntityState.Modified,
                 Native.RefundRequest => entry.State is EntityState.Added or EntityState.Modified,
                 Native.Notification notification => entry.State == EntityState.Added &&
                     notification.EventData.ValueKind == System.Text.Json.JsonValueKind.Object &&
@@ -44,17 +44,17 @@ public partial class Compact24DbContext
             if (!allowed)
                 throw new InvalidOperationException("Use the explicit repository for this record; physical deletions are not allowed.");
         }
-        var propertyLocations = entries.Select(e => e.Entity).OfType<Native.Asset>()
-            .Select(a => a.LocationId).Concat(entries.Where(e => e.Entity is Native.Room &&
-                (e.State == EntityState.Added || e.Property(nameof(Native.Room.RoomNumber)).IsModified ||
-                 e.Property(nameof(Native.Room.LocationId)).IsModified || NativeRoomTypeChanged(e)))
-                .Select(e => ((Native.Room)e.Entity).LocationId))
-            .Concat(entries.Select(e => e.Entity).OfType<Native.BillingPolicy>().Select(p => p.LocationId)).Distinct().Order().ToArray();
+        var propertyLocations = entries.Select(e => e.Entity).OfType<BHome.Domain.PropertyManagement.Asset>()
+            .Select(a => a.LocationId).Concat(entries.Where(e => e.Entity is BHome.Domain.PropertyManagement.Room &&
+                (e.State == EntityState.Added || e.Property(nameof(BHome.Domain.PropertyManagement.Room.RoomNumber)).IsModified ||
+                 e.Property(nameof(BHome.Domain.PropertyManagement.Room.LocationId)).IsModified || NativeRoomTypeChanged(e)))
+                .Select(e => ((BHome.Domain.PropertyManagement.Room)e.Entity).LocationId))
+            .Concat(entries.Select(e => e.Entity).OfType<BHome.Domain.PropertyManagement.BillingPolicy>().Select(p => p.LocationId)).Distinct().Order().ToArray();
         try
         {
             foreach (var location in propertyLocations)
                 await Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({location.ToString()},0))", token);
-            foreach (var entry in entries.Where(e => e.Entity is Native.BillingPolicy && e.State == EntityState.Modified))
+            foreach (var entry in entries.Where(e => e.Entity is BHome.Domain.PropertyManagement.BillingPolicy && e.State == EntityState.Modified))
                 ValidateNativePolicyHistory(entry);
             var count = await base.SaveChangesAsync(true, token);
             await ValidatePropertyConfigurationAsync(propertyLocations, token);
@@ -85,7 +85,7 @@ public partial class Compact24DbContext
                         id.ValueKind == System.Text.Json.JsonValueKind.String ? id.GetString() : null;
             return null;
         }
-        var history = entry.Property(nameof(Native.Room.History));
+        var history = entry.Property(nameof(BHome.Domain.PropertyManagement.Room.History));
         return history.IsModified && TypeId((System.Text.Json.JsonElement)history.OriginalValue!) !=
             TypeId((System.Text.Json.JsonElement)history.CurrentValue!);
     }

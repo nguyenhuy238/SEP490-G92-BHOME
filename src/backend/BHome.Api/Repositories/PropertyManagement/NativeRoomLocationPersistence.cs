@@ -3,7 +3,6 @@ using BHome.Domain.Locations;
 using BHome.Domain.PropertyManagement;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
-using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 
@@ -16,8 +15,6 @@ internal static class NativeRoomLocationPersistence
         string? Floor, int Capacity, RoomStatus Status, int Version, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
     private sealed record HistoryEntry<T>(int SchemaVersion, string RecordType, string RecordKey, bool Deleted, T State);
 
-    private static JsonElement EmptyObject() => JsonSerializer.SerializeToElement(new { }, Json);
-    private static JsonElement EmptyArray() => JsonSerializer.SerializeToElement(Array.Empty<JsonElement>(), Json);
     private static JsonElement LastState(JsonElement history, string kind)
     {
         var entry = history.EnumerateArray().Reverse().FirstOrDefault(h =>
@@ -35,51 +32,36 @@ internal static class NativeRoomLocationPersistence
         JsonSerializer.SerializeToElement(history.EnumerateArray().Append(
             JsonSerializer.SerializeToElement(new HistoryEntry<T>(1, kind, id.ToString(), false, state), Json)), Json);
 
-    internal static Location Read(Native.Location row)
+    internal static Location Read(Location row)
     {
         var state = LastState(row.History, "Location");
-        var location = Location.Rehydrate(row.Id, Timestamp(state, "createdAt"), Timestamp(state, "updatedAt"));
-        location.ChainId = NullableGuid(state, "chainId");
-        location.Name = row.Name;
-        location.Address = row.Address;
-        location.IsActive = row.IsActive;
-        location.Version = row.Version;
-        location.ContractSettings = row.OperatingSettings.TryGetProperty("contractSettings", out var settings)
+        row.CreatedAt = Timestamp(state, "createdAt");
+        row.UpdatedAt = Timestamp(state, "updatedAt");
+        row.ChainId = NullableGuid(state, "chainId");
+        row.ContractSettings = row.OperatingSettings.TryGetProperty("contractSettings", out var settings)
             ? settings.GetRawText() : "[]";
-        return location;
+        return row;
     }
-    internal static Room Read(Native.Room row)
+    internal static Room Read(Room row)
     {
         var state = LastState(row.History, "Room");
-        var room = Room.Rehydrate(row.Id, Timestamp(state, "createdAt"), Timestamp(state, "updatedAt"));
-        room.LocationId = row.LocationId;
-        room.RoomNumber = row.RoomNumber;
-        room.RoomTypeId = NullableGuid(state, "roomTypeId");
-        room.Floor = row.Floor;
-        room.Capacity = row.Capacity;
-        room.Status = (RoomStatus)row.Status;
-        room.Version = row.Version;
-        return room;
+        row.CreatedAt = Timestamp(state, "createdAt");
+        row.UpdatedAt = Timestamp(state, "updatedAt");
+        row.RoomTypeId = NullableGuid(state, "roomTypeId");
+        return row;
     }
     internal static async Task StageAsync(Compact24DbContext db, Location location, int? expectedVersion,
         DateTimeOffset now, CancellationToken t)
     {
-        Native.Location row;
+        Location row;
         if (expectedVersion is null)
         {
-            row = new Native.Location
-            {
-                Id = location.Id,
-                StaffAssignments = EmptyArray(),
-                OperatingSettings = EmptyObject(),
-                PublicProfile = EmptyObject(),
-                History = EmptyArray()
-            };
+            row = location;
             db.Add(row);
         }
         else
         {
-            row = await db.Set<Native.Location>().AsTracking().SingleOrDefaultAsync(l => l.Id == location.Id, t)
+            row = await db.Set<Location>().AsTracking().SingleOrDefaultAsync(l => l.Id == location.Id, t)
                 ?? throw new DbUpdateConcurrencyException("Location no longer exists.");
             if (row.Version != expectedVersion.Value)
             {
@@ -103,22 +85,15 @@ internal static class NativeRoomLocationPersistence
     internal static async Task StageAsync(Compact24DbContext db, Room room, int? expectedVersion,
         DateTimeOffset now, CancellationToken t)
     {
-        Native.Room row;
+        Room row;
         if (expectedVersion is null)
         {
-            row = new Native.Room
-            {
-                Id = room.Id,
-                LocationId = room.LocationId,
-                BillingRepresentatives = EmptyArray(),
-                PublicProfile = EmptyObject(),
-                History = EmptyArray()
-            };
+            row = room;
             db.Add(row);
         }
         else
         {
-            row = await db.Set<Native.Room>().AsTracking().SingleOrDefaultAsync(r => r.Id == room.Id, t)
+            row = await db.Set<BHome.Domain.PropertyManagement.Room>().AsTracking().SingleOrDefaultAsync(r => r.Id == room.Id, t)
                 ?? throw new DbUpdateConcurrencyException("Room no longer exists.");
             if (row.Version != expectedVersion.Value)
             {
@@ -131,7 +106,7 @@ internal static class NativeRoomLocationPersistence
         row.RoomNumber = room.RoomNumber;
         row.Floor = room.Floor;
         row.Capacity = checked((short)room.Capacity);
-        row.Status = (short)room.Status;
+        row.Status = room.Status;
         row.Version = room.Version;
         row.History = Append(row.History, room.Id, "Room", new RoomState(room.Id, room.LocationId, room.RoomNumber,
             room.RoomTypeId, room.Floor, room.Capacity, room.Status, room.Version, room.CreatedAt, room.UpdatedAt));

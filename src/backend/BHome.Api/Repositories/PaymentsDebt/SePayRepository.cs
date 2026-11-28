@@ -66,15 +66,15 @@ internal sealed class SePayRepository(BHomePersistenceContext db, IPaymentReposi
             (await SettlementAsync(code.ObligationId, token)
                 ?? throw new PaymentException(404, "settlement_receivable_not_found")).ContractId : code.ObligationId;
         var roomId = code.Kind == "Invoice"
-            ? await db.Set<Native.Invoice>().AsNoTracking().Where(i => i.Id == code.ObligationId).Select(i => i.RoomId).SingleAsync(token)
+            ? await db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking().Where(i => i.Id == code.ObligationId).Select(i => i.RoomId).SingleAsync(token)
             : await PaymentObligationQueries.Contracts(db).Where(c => c.Id == contractId).Select(c => c.RoomId).SingleAsync(token);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({code.LocationId.ToString()},0))", token);
         await PaymentLedgerWrites.LockRoomAsync(db, roomId, token);
     }
     public Task<Invoice?> InvoiceAsync(Guid id, CancellationToken token) => PaymentObligationQueries.InvoiceAsync(db, id, null, token);
     public Task<bool> DemoInvoiceAsync(Guid id, CancellationToken token) =>
-        (from i in db.Set<Native.Invoice>().AsNoTracking()
-         join c in PaymentObligationQueries.ContractModes(db) on i.ContractId equals c.Id
+        (from i in db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking()
+         join c in PaymentObligationQueries.ContractModes(db) on i.RepresentativeContractId equals c.Id
          where i.Id == id
          select c.PaymentMode == "Test" || c.PaymentMode == null && c.IsDevelopmentDemo).SingleAsync(token);
     private sealed record SePaySettlementRow(Guid ContractId, Guid LocationId, SettlementReceivable Charge);

@@ -30,7 +30,7 @@ public sealed partial class InvoiceApiTests
         Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PutAsJsonAsync(path, input with { ExpectedVersion = 1 })).StatusCode);
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
-        var location = await db.Set<Native.Location>().AsNoTracking().SingleAsync(l => l.Id == w.Location);
+        var location = await db.Set<BHome.Domain.Locations.Location>().AsNoTracking().SingleAsync(l => l.Id == w.Location);
         Assert.Equal(2, location.OperatingSettings.GetProperty("billingSchedule").GetProperty("version").GetInt32());
         Assert.Equal(15, location.OperatingSettings.GetProperty("billingSchedule").GetProperty("dueDay").GetInt32());
         Assert.Equal(2, location.History.EnumerateArray().Count(h => h.TryGetProperty("recordType", out var type) && type.GetString() == "BillingSchedule"));

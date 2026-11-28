@@ -51,30 +51,27 @@ internal static class InvoiceFinancialQueries
             FROM invoice_items
             """);
 
-    public static IQueryable<InvoiceFinancialRow> Financials(this BHomePersistenceContext db, IQueryable<Native.Invoice> invoices)
+    public static IQueryable<InvoiceFinancialRow> Financials(this BHomePersistenceContext db, IQueryable<Invoice> invoices)
     {
+        if (db is not Compact24DbContext || db is Compact24ArchiveContext) return LegacyFinancials(db, invoices);
         var decisions = db.FinalApprovedDecisions();
-        var allocations = db.Set<Native.PaymentAllocation>().AsNoTracking();
+        var allocations = db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AsNoTracking();
         return invoices.AsNoTracking().Select(i => new InvoiceFinancialRow
         {
             Id = i.Id,
             LocationId = i.LocationId,
             RoomId = i.RoomId,
-            ContractId = i.ContractId,
+            ContractId = i.RepresentativeContractId,
             LocationName = i.BillingSnapshot.GetProperty("compactState").GetProperty("locationName").GetString() ?? "",
             RoomNumber = i.BillingSnapshot.GetProperty("compactState").GetProperty("roomNumber").GetString() ?? "",
             BillingPeriod = i.BillingPeriod,
             DueDate = i.DueDate,
-            Original = i.BaseTotalAmount,
+            Original = i.Total,
             Adjustments = decisions.Where(d => d.InvoiceId == i.Id).Sum(d => (decimal?)d.Delta) ?? 0m,
-            Paid = allocations.Where(a => a.TargetInvoiceId == i.Id).Sum(a => (decimal?)a.Amount) ?? 0m,
+            Paid = allocations.Where(a => a.InvoiceId == i.Id).Sum(a => (decimal?)a.Amount) ?? 0m,
             Version = decisions.Count(d => d.InvoiceId == i.Id)
         });
     }
-
-    // Only the offline source-schema fixture uses the original domain query.
-    public static IQueryable<InvoiceFinancialRow> Financials(this BHomePersistenceContext db, IQueryable<Invoice> invoices) =>
-        LegacyFinancials(db, invoices);
 
     private static IQueryable<InvoiceFinancialRow> LegacyFinancials(BHomePersistenceContext db, IQueryable<Invoice> invoices) => invoices.Select(i => new InvoiceFinancialRow
     {
@@ -93,7 +90,7 @@ internal static class InvoiceFinancialQueries
     });
     public static async Task<InvoiceFinancialView> FinancialsAsync(this BHomePersistenceContext db, Guid invoiceId, CancellationToken t) =>
         (await (db is Compact24DbContext
-            ? db.Financials(db.Set<Native.Invoice>().AsNoTracking().Where(i => i.Id == invoiceId))
+            ? db.Financials(db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking().Where(i => i.Id == invoiceId))
             : LegacyFinancials(db, db.Set<Invoice>().AsNoTracking().Where(i => i.Id == invoiceId))).SingleAsync(t)).View();
 }
 

@@ -72,13 +72,13 @@ internal sealed class HouseholdProfiles(Compact24DbContext db, CaptureScope scop
     public async Task<HouseholdView> ContractAsync(Guid contract, CancellationToken t)
     {
         if (user.UserId is not { } actor) throw new OcrAccessException();
-        var c = await db.Set<Native.Contract>().AsNoTracking().SingleOrDefaultAsync(c => c.Id == contract, t)
+        var c = await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().SingleOrDefaultAsync(c => c.Id == contract, t)
             ?? throw ContractException.Missing();
         var representative = await NativeHouseholdPersistence.ResidentAsync(db, c.RepresentativeResidentId, t) ?? throw ContractException.Missing();
         var allowed = user.IsInRole(Roles.Tenant) && c.TenantUserId == actor && representative.TenantUserId == actor ||
             user.IsInRole(Roles.Owner) && c.OwnerSignerId == actor || user.IsInRole(Roles.Staff) && await scope.RoomVisibleAsync(c.RoomId, t);
         if (!allowed) throw ContractException.Missing();
-        var ids = await db.Set<Native.ContractResident>().AsNoTracking().Where(r => r.ContractId == c.Id).Select(r => r.ResidentId).ToArrayAsync(t);
+        var ids = await db.Set<BHome.Domain.TenantContracts.ContractResident>().AsNoTracking().Where(r => r.ContractId == c.Id).Select(r => r.ResidentId).ToArrayAsync(t);
         return await Read(representative, ids, t);
     }
     public async Task<HouseholdView> SaveAsync(Guid id, HouseholdSaveInput input, Guid key, CancellationToken t)
@@ -144,7 +144,7 @@ internal sealed class HouseholdProfiles(Compact24DbContext db, CaptureScope scop
             {
                 var index = protection.CreateMatchIndex(member.CitizenNumber.Trim(), resident.OwnerUserId);
                 var digests = protection.CreateMatchIndexes(member.CitizenNumber.Trim(), resident.OwnerUserId).Select(i => i.Digest).ToArray();
-                if (await db.Set<Native.Resident>().AnyAsync(r => r.Id != resident.Id && r.IdentityHmac != null && digests.Contains(r.IdentityHmac), t))
+                if (await db.Set<BHome.Domain.TenantContracts.Resident>().AnyAsync(r => r.Id != resident.Id && r.IdentityHmac != null && digests.Contains(r.IdentityHmac), t))
                     throw ContractException.Conflict("duplicate_or_conflicting_record");
                 resident.IdentityHmac = index.Digest; resident.HmacKeyVersion = index.KeyVersion;
             }

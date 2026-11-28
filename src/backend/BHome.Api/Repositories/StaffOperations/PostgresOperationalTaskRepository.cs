@@ -58,21 +58,21 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
         { throw OperationalTaskException.Conflict("task_dependency_conflict"); }
     }
     public Task<TaskLocation?> LocationAsync(Guid id, CancellationToken t) => db is Compact24DbContext compact
-        ? compact.Set<Native.Location>().AsNoTracking().Where(x => x.Id == id).Select(x => new TaskLocation(x.Id, x.IsActive)).SingleOrDefaultAsync(t)
+        ? compact.Set<BHome.Domain.Locations.Location>().AsNoTracking().Where(x => x.Id == id).Select(x => new TaskLocation(x.Id, x.IsActive)).SingleOrDefaultAsync(t)
         : db.Locations.AsNoTracking().Where(x => x.Id == id)
         .Select(x => new TaskLocation(x.Id, x.IsActive)).SingleOrDefaultAsync(t);
     public Task<string?> TargetRoomNameAsync(Guid locationId, Guid roomId, CancellationToken t) => db is Compact24DbContext compact
-        ? compact.Set<Native.Room>().AsNoTracking().Where(x => x.Id == roomId && x.LocationId == locationId).Select(x => x.RoomNumber).SingleOrDefaultAsync(t)
+        ? compact.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(x => x.Id == roomId && x.LocationId == locationId).Select(x => x.RoomNumber).SingleOrDefaultAsync(t)
         : db.Set<Room>().AsNoTracking()
         .Where(x => x.Id == roomId && x.LocationId == locationId).Select(x => x.RoomNumber).SingleOrDefaultAsync(t);
     public Task<TaskTargetOption?> TargetAssetAsync(Guid locationId, Guid assetId, CancellationToken t) => db is Compact24DbContext compact
-        ? compact.Set<Native.Asset>().AsNoTracking().Where(x => x.Id == assetId && x.LocationId == locationId && x.Status != (short)AssetStatus.Retired)
+        ? compact.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking().Where(x => x.Id == assetId && x.LocationId == locationId && x.Status != AssetStatus.Retired)
             .Select(x => new TaskTargetOption(x.Id, x.Name, x.RoomId, x.CommonArea)).SingleOrDefaultAsync(t)
         : db.Set<Asset>().AsNoTracking()
         .Where(x => x.Id == assetId && x.LocationId == locationId && x.Status != AssetStatus.Retired)
         .Select(x => new TaskTargetOption(x.Id, x.Name, x.RoomId, x.CommonArea)).SingleOrDefaultAsync(t);
     public async Task<IReadOnlyList<string>> CommonAreasAsync(Guid locationId, CancellationToken t) => db is Compact24DbContext compact
-        ? await compact.Set<Native.Asset>().AsNoTracking().Where(x => x.LocationId == locationId && x.RoomId == null && x.CommonArea != null && x.Status != (short)AssetStatus.Retired)
+        ? await compact.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking().Where(x => x.LocationId == locationId && x.RoomId == null && x.CommonArea != null && x.Status != AssetStatus.Retired)
             .Select(x => x.CommonArea!).Distinct().OrderBy(x => x).ToArrayAsync(t)
         : await db.Set<Asset>().AsNoTracking()
         .Where(x => x.LocationId == locationId && x.RoomId == null && x.CommonArea != null && x.Status != AssetStatus.Retired)
@@ -81,7 +81,7 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
     {
         if (db is Compact24DbContext compact)
         {
-            var nativeRows = compact.Set<Native.Asset>().AsNoTracking().Where(x => x.LocationId == locationId && x.RoomId == roomId && x.CommonArea == commonArea && x.Status != (short)AssetStatus.Retired);
+            var nativeRows = compact.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking().Where(x => x.LocationId == locationId && x.RoomId == roomId && x.CommonArea == commonArea && x.Status != AssetStatus.Retired);
             if (!string.IsNullOrWhiteSpace(search)) nativeRows = nativeRows.Where(x => EF.Functions.ILike(x.Name, "%" + search.Trim() + "%"));
             var count = await nativeRows.CountAsync(t);
             var result = await nativeRows.OrderBy(x => x.Name).ThenBy(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize)
@@ -100,7 +100,7 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
         : db.Set<OperationalTask>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, t);
     public async Task<MeterTaskStatus?> MoveInMainTaskStatusAsync(Guid contractId, CancellationToken t) =>
         db is Compact24DbContext compact
-        ? (await NativeOperationalTaskPersistence.Roots(compact).Where(x => x.TaskType == "GENERAL" && x.ContractId == contractId && x.Title != null && x.Title.StartsWith("Bàn giao vào phòng")).ToArrayAsync(t))
+        ? (await NativeOperationalTaskPersistence.Roots(compact).Where(x => x.TaskType == "GENERAL" && x.ContractId == contractId && x.StoredTitle != null && x.StoredTitle.StartsWith("Bàn giao vào phòng")).ToArrayAsync(t))
             .Select(NativeCaptureReads.Task).Where(x => x.Kind == OperationalTaskKind.AdHoc).OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).Select(x => (MeterTaskStatus?)x.Status).FirstOrDefault()
         : await db.Set<OperationalTask>().AsNoTracking()
             .Where(task => task.ContractId == contractId && task.Kind == OperationalTaskKind.AdHoc &&
@@ -129,9 +129,9 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
     }
     public async Task<IReadOnlyList<TaskIncidentTarget>> IncidentTargetsAsync(Guid[] ids, CancellationToken t) =>
         db is Compact24DbContext compact
-        ? await compact.Set<Native.IncidentReport>().AsNoTracking().Where(x => ids.Contains(x.Id))
-            .Select(x => new TaskIncidentTarget(x.Id, x.LocationId, x.RoomId, x.AssetId, x.ReporterUserId,
-                x.Status == "Submitted" || x.Status == "InProgress" || x.Status == "Resolved")).ToArrayAsync(t)
+        ? await compact.Set<IncidentReport>().AsNoTracking().Where(x => ids.Contains(x.Id))
+            .Select(x => new TaskIncidentTarget(x.Id, x.LocationId, x.RoomId, x.AssetId, x.ReporterId,
+                x.Status == IncidentStatus.Submitted || x.Status == IncidentStatus.InProgress || x.Status == IncidentStatus.Resolved)).ToArrayAsync(t)
         : await db.Set<IncidentReport>().AsNoTracking().Where(x => ids.Contains(x.Id))
             .Select(x => new TaskIncidentTarget(x.Id, x.LocationId, x.RoomId, x.AssetId, x.ReporterId,
                 x.Status == IncidentStatus.Submitted || x.Status == IncidentStatus.InProgress ||
@@ -140,7 +140,7 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
     {
         var ids = incidentIds.Distinct().ToArray();
         if (db is Compact24DbContext compact)
-            return ids.Length == 0 || await compact.Set<Native.IncidentReport>().AsNoTracking().CountAsync(x => ids.Contains(x.Id) && x.Status == "Resolved", t) == ids.Length;
+            return ids.Length == 0 || await compact.Set<IncidentReport>().AsNoTracking().CountAsync(x => ids.Contains(x.Id) && x.Status == IncidentStatus.Resolved, t) == ids.Length;
         return ids.Length == 0 || await db.Set<IncidentReport>().AsNoTracking()
             .CountAsync(x => ids.Contains(x.Id) && x.Status == IncidentStatus.Resolved, t) == ids.Length;
     }
@@ -201,7 +201,7 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
             """).SingleAsync(t);
         if (!approved) throw OperationalTaskException.Conflict("approved_contract_move_out_required");
 
-        var meters = await compact.Set<Native.Meter>().AsNoTracking()
+        var meters = await compact.Set<BHome.Domain.Billing.Meter>().AsNoTracking()
             .Where(m => m.RoomId == roomId && m.IsActive && m.InstalledOn <= date)
             .OrderBy(m => m.UtilityType).ThenBy(m => m.Id).ToArrayAsync(t);
         var existing = (await NativeOperationalTaskPersistence.Roots(compact).Where(x => x.ContractId == contractId && x.MeterId != null && x.TaskType == "METER_READ").ToArrayAsync(t))
@@ -230,7 +230,7 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
                 LocationId = inspectionTask.LocationId,
                 MeterId = meter.Id,
                 ContractId = contractId,
-                Title = $"Chụp chỉ số {(meter.UtilityType == (short)UtilityType.Electricity ? "điện" : "nước")} chốt trả phòng",
+                Title = $"Chụp chỉ số {(meter.UtilityType == UtilityType.Electricity ? "điện" : "nước")} chốt trả phòng",
                 Requirements = "Chụp ảnh thực tế, đối chiếu OCR và xác nhận chỉ số Final khi kiểm tra trả phòng.",
                 Purpose = ReadingPurpose.Final,
                 ReadingDate = date,

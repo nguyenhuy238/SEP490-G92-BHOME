@@ -28,11 +28,11 @@ internal sealed partial class PaymentRepository
     public Task<bool> VerifiedReceiptAsync(Guid transferId, CancellationToken token) => db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM payments WHERE id={transferId} AND status='VERIFIED') AS \"Value\"").SingleAsync(token);
     public Task<ExternalPaymentPayer?> ExternalPayerAsync(Guid transferId, CancellationToken token) => ExternalPaymentPayerRecords.ReadAsync(db, transferId, token);
     public async Task<IReadOnlyList<DepositPayerChoice>> DepositPayersAsync(Guid contractId, CancellationToken token) => db is Compact24DbContext
-        ? await db.Set<Native.Resident>().AsNoTracking()
-            .Where(r => r.VerificationStatus == (short)IdentityVerificationStatus.Verified &&
-                db.Set<Native.ContractResident>().Any(cr => cr.ContractId == contractId && cr.ResidentId == r.Id) &&
-                (r.UserId == null || db.Users.Any(u => u.Id == r.UserId && u.IsActive && EF.Property<string[]>(u, "roles").Contains("Tenant"))))
-            .OrderBy(r => r.Id).Select(r => new DepositPayerChoice(r.Id, r.UserId, r.DisplayLabel)).ToArrayAsync(token)
+        ? await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking()
+            .Where(r => r.VerificationStatus == IdentityVerificationStatus.Verified &&
+                db.Set<BHome.Domain.TenantContracts.ContractResident>().Any(cr => cr.ContractId == contractId && cr.ResidentId == r.Id) &&
+                (r.TenantUserId == null || db.Users.Any(u => u.Id == r.TenantUserId && u.IsActive && EF.Property<string[]>(u, "roles").Contains("Tenant"))))
+            .OrderBy(r => r.Id).Select(r => new DepositPayerChoice(r.Id, r.TenantUserId, r.DisplayLabel)).ToArrayAsync(token)
         : await db.Set<Resident>().AsNoTracking()
         .Where(r => r.VerificationStatus == IdentityVerificationStatus.Verified && db.Set<ContractResident>().Any(cr => cr.ContractId == contractId && cr.ResidentId == r.Id) &&
             (r.TenantUserId == null || db.Users.Any(u => u.Id == r.TenantUserId && u.IsActive) &&

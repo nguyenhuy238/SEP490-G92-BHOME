@@ -37,30 +37,6 @@ internal static class IncidentSnapshots
     {
         internal static IncidentReportState From(IncidentReport value) => new(value.Id, value.CreatedAt, value.UpdatedAt,
             value.LocationId, value.RoomId, value.CommonArea, value.AssetId, value.ContractId, value.ReporterId, value.ReporterRole, value.Description, value.Severity, value.Status, value.Type, value.Category, value.DuplicateOfId, value.AcknowledgedById, value.AcknowledgedAt, value.OwnerDecisionAt, value.ResolutionNote, value.ResolvedAt, value.Version);
-        internal IncidentReport ToDomain()
-        {
-            var row = IncidentReport.Rehydrate(Id, CreatedAt, UpdatedAt);
-            row.LocationId = LocationId;
-            row.RoomId = RoomId;
-            row.CommonArea = CommonArea;
-            row.AssetId = AssetId;
-            row.ContractId = ContractId;
-            row.ReporterId = ReporterId;
-            row.ReporterRole = ReporterRole;
-            row.Description = Description;
-            row.Severity = Severity;
-            row.Status = Status;
-            row.Type = Type;
-            row.Category = Category;
-            row.DuplicateOfId = DuplicateOfId;
-            row.AcknowledgedById = AcknowledgedById;
-            row.AcknowledgedAt = AcknowledgedAt;
-            row.OwnerDecisionAt = OwnerDecisionAt;
-            row.ResolutionNote = ResolutionNote;
-            row.ResolvedAt = ResolvedAt;
-            row.Version = Version;
-            return row;
-        }
     }
 
     internal sealed record MaintenanceWorkOrderState(Guid Id, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,

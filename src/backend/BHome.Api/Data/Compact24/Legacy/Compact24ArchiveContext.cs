@@ -14,7 +14,7 @@ public sealed partial class Compact24ArchiveContext(DbContextOptions<Compact24Db
     protected override void OnModelCreating(ModelBuilder model)
     {
         Compact24DomainModel.Configure(model);
-        ConfigurePhysicalModel(model);
+        ConfigurePhysicalModel(model, archive: true);
     }
 
     public override BHomePersistenceContext CreateIndependentContext() => new Compact24ArchiveContext(ContextOptions, Compatibility, PersistenceClock);

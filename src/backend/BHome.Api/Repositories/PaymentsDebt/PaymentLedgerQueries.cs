@@ -1,41 +1,70 @@
 using BHome.Domain.PaymentsDebt;
 using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace BHome.Infrastructure.PaymentsDebt;
 
-// Query DTOs retain the original snapshot defaults and physical-column
-// precedence without registering domain classes as persistence projections.
+// Receipt queries explicitly exclude non-receipt payment records. List
+// projections retain server-side filtering of history fields.
 internal static class PaymentLedgerQueries
 {
-    internal static IQueryable<PaymentReceiptRow> Receipts(BHomePersistenceContext db) => db.Database.SqlQueryRaw<PaymentReceiptRow>("""
+    internal static IQueryable<PaymentTransfer> ReceiptEntities(BHomePersistenceContext db) =>
+        db.Set<PaymentTransfer>().AsNoTracking().Where(p => EF.Functions.JsonExists(p.VerificationData, "compactState"));
+
+    internal static PaymentTransfer HydrateReceipt(PaymentTransfer payment)
+    {
+        // Physical columns remain authoritative, including nullable provider
+        // metadata; only the business extras come from the v1 receipt snapshot.
+        var state = payment.VerificationData.GetProperty("compactState");
+        JsonElement Field(string name) => state.ValueKind == JsonValueKind.Object &&
+            state.TryGetProperty(name, out var value) ? value : default;
+        string? Text(string name) => Field(name) is { ValueKind: JsonValueKind.String } value ? value.GetString() : null;
+        Guid? Id(string name) => Field(name) is { ValueKind: JsonValueKind.String } value ? value.GetGuid() : null;
+        DateTimeOffset Timestamp(string name) => Field(name) is { ValueKind: JsonValueKind.String } value
+            ? value.GetDateTimeOffset() : DateTimeOffset.UnixEpoch;
+        if (payment.StoredVerifiedAt is null)
+            throw new InvalidOperationException("Receipt verification timestamp is missing.");
+        payment.NormalizedReference = Text("normalizedReference") ?? "";
+        payment.StatementReference = Text("statementReference") ?? "";
+        payment.StatementEvidenceObjectKey = Text("statementEvidenceObjectKey");
+        payment.StatementEvidenceSha256 = Text("statementEvidenceSha256");
+        payment.StatementEvidenceContentType = Text("statementEvidenceContentType");
+        payment.StatementEvidenceLength = Field("statementEvidenceLength") is { ValueKind: JsonValueKind.Number } length ? length.GetInt64() : null;
+        payment.VerificationReason = Text("verificationReason") ?? "";
+        payment.VerificationSource = Text("verificationSource") ?? "";
+        payment.ProposedInvoiceId = Id("proposedInvoiceId");
+        payment.ProposedDepositContractId = Id("proposedDepositContractId");
+        payment.IsDevelopmentDemo = Field("isDevelopmentDemo").ValueKind == JsonValueKind.True;
+        payment.CreatedAt = Timestamp("createdAt");
+        payment.UpdatedAt = Timestamp("updatedAt");
+        return payment;
+    }
+
+    internal static IQueryable<PaymentReceiptListRow> ReceiptList(BHomePersistenceContext db) => db.Database.SqlQueryRaw<PaymentReceiptListRow>("""
         SELECT p.id AS "Id",p.provider_code AS "ProviderIdentity",p.transaction_reference AS "BankReference",
-          COALESCE(s.data->>'normalizedReference','') AS "NormalizedReference",p.amount AS "Amount",p.currency AS "Currency",
+          p.amount AS "Amount",p.currency AS "Currency",
           p.received_at AS "OccurredAt",p.remittance_info AS "TransferDescription",
           COALESCE(s.data->>'statementReference','') AS "StatementReference",
-          s.data->>'statementEvidenceObjectKey' AS "StatementEvidenceObjectKey",
           s.data->>'statementEvidenceSha256' AS "StatementEvidenceSha256",
           s.data->>'statementEvidenceContentType' AS "StatementEvidenceContentType",
           (s.data->>'statementEvidenceLength')::bigint AS "StatementEvidenceLength",
           COALESCE(s.data->>'verificationReason','') AS "VerificationReason",
-          COALESCE(s.data->>'verificationSource','') AS "VerificationSource",
           COALESCE(p.verified_by_user_id,'00000000-0000-0000-0000-000000000000'::uuid) AS "VerifiedByUserId",
           p.verified_at AS "VerifiedAt",(s.data->>'proposedInvoiceId')::uuid AS "ProposedInvoiceId",
-          (s.data->>'proposedDepositContractId')::uuid AS "ProposedDepositContractId",
-          COALESCE((s.data->>'isDevelopmentDemo')::boolean,false) AS "IsDevelopmentDemo",
-          COALESCE((s.data->>'createdAt')::timestamptz,'1970-01-01Z'::timestamptz) AS "CreatedAt",
-          COALESCE((s.data->>'updatedAt')::timestamptz,'1970-01-01Z'::timestamptz) AS "UpdatedAt"
+          COALESCE((s.data->>'isDevelopmentDemo')::boolean,false) AS "IsDevelopmentDemo"
         FROM payments p CROSS JOIN LATERAL (SELECT p.verification_data->'compactState' AS data) s
         WHERE p.verification_data ? 'compactState'
         """);
 
-    internal static IQueryable<PaymentAllocationRow> AllocationRows(BHomePersistenceContext db) => db.Database.SqlQueryRaw<PaymentAllocationRow>("""
-        SELECT a.id AS "Id",a.source_payment_id AS "TransferId",a.source_deposit_contract_id AS "SourceDepositContractId",
-          a.target_invoice_id AS "InvoiceId",a.target_deposit_contract_id AS "TargetDepositContractId",
-          a.target_initial_contract_id AS "TargetInitialContractId",a.target_settlement_contract_id AS "TargetSettlementContractId",
-          a.settlement_receivable_id AS "SettlementReceivableId",a.deposit_offset_approval_id AS "DepositOffsetApprovalId",
-          a.amount AS "Amount",a.paid_by_user_id AS "PaidByUserId",a.allocated_at AS "AllocatedAt",
-          COALESCE(a.created_by_user_id,'00000000-0000-0000-0000-000000000000'::uuid) AS "VerifiedByUserId",
+    // Only the audit timestamps are stored outside the allocation's physical columns.
+    internal static async Task HydrateAllocationAuditAsync(BHomePersistenceContext db,
+        IReadOnlyCollection<PaymentAllocation> allocations, CancellationToken token)
+    {
+        if (allocations.Count == 0) return;
+        var ids = allocations.Select(a => a.Id).ToArray();
+        var rows = await db.Database.SqlQuery<AllocationAuditRow>($"""
+        SELECT a.id AS "Id",
           COALESCE((s.data->>'createdAt')::timestamptz,a.allocated_at) AS "CreatedAt",
           COALESCE((s.data->>'updatedAt')::timestamptz,a.allocated_at) AS "UpdatedAt"
         FROM payment_allocations a LEFT JOIN payments p ON p.id=a.source_payment_id
@@ -43,9 +72,15 @@ internal static class PaymentLedgerQueries
           SELECT h->'state' AS data FROM jsonb_array_elements(p.history) WITH ORDINALITY e(h,n)
           WHERE h->>'recordType'='PaymentAllocation' AND h->>'recordKey'=a.id::text ORDER BY n DESC LIMIT 1
         ) s ON true
-        WHERE a.target_invoice_id IS NOT NULL OR a.target_deposit_contract_id IS NOT NULL OR
-          a.target_settlement_contract_id IS NOT NULL OR a.target_initial_contract_id IS NOT NULL
-        """);
+        WHERE a.id=ANY({ids})
+        """).ToDictionaryAsync(a => a.Id, token);
+        foreach (var allocation in allocations)
+        {
+            var audit = rows[allocation.Id];
+            allocation.CreatedAt = audit.CreatedAt;
+            allocation.UpdatedAt = audit.UpdatedAt;
+        }
+    }
 
     internal static IQueryable<PaymentReviewRow> Reviews(BHomePersistenceContext db) => db.Database.SqlQueryRaw<PaymentReviewRow>("""
         SELECT COALESCE((s.data->>'id')::uuid,'00000000-0000-0000-0000-000000000000'::uuid) AS "Id",
@@ -98,72 +133,31 @@ internal sealed class PaymentCommandRow
     public DateTimeOffset CreatedAt { get; set; }
 }
 
-internal sealed class PaymentReceiptRow
+internal sealed class PaymentReceiptListRow
 {
     public Guid Id { get; set; }
     public string ProviderIdentity { get; set; } = "";
     public string BankReference { get; set; } = "";
-    public string NormalizedReference { get; set; } = "";
     public decimal Amount { get; set; }
     public string Currency { get; set; } = "";
     public DateTimeOffset OccurredAt { get; set; }
     public string TransferDescription { get; set; } = "";
     public string StatementReference { get; set; } = "";
-    public string? StatementEvidenceObjectKey { get; set; }
     public string? StatementEvidenceSha256 { get; set; }
     public string? StatementEvidenceContentType { get; set; }
     public long? StatementEvidenceLength { get; set; }
     public string VerificationReason { get; set; } = "";
-    public string VerificationSource { get; set; } = "";
     public Guid VerifiedByUserId { get; set; }
     public DateTimeOffset VerifiedAt { get; set; }
     public Guid? ProposedInvoiceId { get; set; }
-    public Guid? ProposedDepositContractId { get; set; }
     public bool IsDevelopmentDemo { get; set; }
-    public DateTimeOffset CreatedAt { get; set; }
-    public DateTimeOffset UpdatedAt { get; set; }
-    internal PaymentTransfer ToValue()
-    {
-        var p = PaymentTransfer.RestoreIdentity(Id, CreatedAt, UpdatedAt);
-        p.ProviderIdentity = ProviderIdentity; p.BankReference = BankReference; p.NormalizedReference = NormalizedReference;
-        p.Amount = Amount; p.Currency = Currency; p.OccurredAt = OccurredAt; p.TransferDescription = TransferDescription;
-        p.StatementReference = StatementReference; p.StatementEvidenceObjectKey = StatementEvidenceObjectKey;
-        p.StatementEvidenceSha256 = StatementEvidenceSha256; p.StatementEvidenceContentType = StatementEvidenceContentType;
-        p.StatementEvidenceLength = StatementEvidenceLength; p.VerificationReason = VerificationReason;
-        p.VerificationSource = VerificationSource; p.VerifiedByUserId = VerifiedByUserId; p.VerifiedAt = VerifiedAt;
-        p.ProposedInvoiceId = ProposedInvoiceId; p.ProposedDepositContractId = ProposedDepositContractId;
-        p.IsDevelopmentDemo = IsDevelopmentDemo;
-        return p;
-    }
 }
 
-internal sealed class PaymentAllocationRow
+internal sealed class AllocationAuditRow
 {
     public Guid Id { get; set; }
-    public Guid? TransferId { get; set; }
-    public Guid? SourceDepositContractId { get; set; }
-    public Guid? InvoiceId { get; set; }
-    public Guid? TargetDepositContractId { get; set; }
-    public Guid? TargetInitialContractId { get; set; }
-    public Guid? TargetSettlementContractId { get; set; }
-    public Guid? SettlementReceivableId { get; set; }
-    public Guid? DepositOffsetApprovalId { get; set; }
-    public decimal Amount { get; set; }
-    public Guid? PaidByUserId { get; set; }
-    public Guid VerifiedByUserId { get; set; }
-    public DateTimeOffset AllocatedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
-    internal PaymentAllocation ToValue()
-    {
-        var a = PaymentAllocation.RestoreIdentity(Id, CreatedAt, UpdatedAt);
-        a.TransferId = TransferId; a.SourceDepositContractId = SourceDepositContractId; a.InvoiceId = InvoiceId;
-        a.TargetDepositContractId = TargetDepositContractId; a.TargetInitialContractId = TargetInitialContractId;
-        a.TargetSettlementContractId = TargetSettlementContractId; a.SettlementReceivableId = SettlementReceivableId;
-        a.DepositOffsetApprovalId = DepositOffsetApprovalId; a.Amount = Amount; a.PaidByUserId = PaidByUserId;
-        a.VerifiedByUserId = VerifiedByUserId; a.AllocatedAt = AllocatedAt;
-        return a;
-    }
 }
 
 internal sealed class PaymentReviewRow

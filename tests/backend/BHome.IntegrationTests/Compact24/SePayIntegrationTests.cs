@@ -791,8 +791,8 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
         await Assert.ThrowsAsync<HttpRequestException>(() => job.ExecuteAsync(execution, default)); Assert.Equal(2, (await Cursor()).Page);
         failSecond = false; await job.ExecuteAsync(execution, default);
         var completed = await Cursor(); Assert.Equal(second.Id, completed.SinceId); Assert.Equal(1, completed.Page); Assert.NotNull(completed.SynchronizedAt);
-        Assert.Equal(2, await db.Set<BHome.Domain.Entities.PaymentAllocation>().CountAsync(a => a.TargetInvoiceId == scenario.Invoice));
-        Assert.Equal(100000, await db.Set<BHome.Domain.Entities.PaymentAllocation>().Where(a => a.TargetInvoiceId == scenario.Invoice).SumAsync(a => a.Amount));
+        Assert.Equal(2, await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().CountAsync(a => a.InvoiceId == scenario.Invoice));
+        Assert.Equal(100000, await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Where(a => a.InvoiceId == scenario.Invoice).SumAsync(a => a.Amount));
     }
 
     [CompactPostgresFact]

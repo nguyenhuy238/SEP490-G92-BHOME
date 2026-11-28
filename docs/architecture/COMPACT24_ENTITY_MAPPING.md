@@ -2,11 +2,11 @@
 
 ## Mục tiêu và phạm vi hiện tại
 
-Database vẫn có 24 bảng nghiệp vụ trong schema `public`. Backend là một project `BHome.Api` và giữ các use case, DTO, quyền, tính tiền và API hiện có. Runtime chỉ map các Entity vật lý; model nghiệp vụ được repository dựng từ cột native và snapshot có kiểu.
+Database giữ nguyên schema vật lý Compact24 đã duyệt. BHome.Api là project runtime nghiệp vụ duy nhất. Service và EF dùng chung entity chuẩn; repository chỉ khôi phục phần metadata không nằm ở cột vật lý từ snapshot có kiểu.
 
-- `Domain/Entities/<module>/`: 24 Entity tương ứng 24 bảng, 390 thuộc tính vật lý. 22 POCO dùng `[Table]` và `[Column]`; `ApplicationUser` và `CompactRefreshRow` là hai Entity Identity hiện có, cấu hình tại `Compact24DbContext.cs` để không nhân đôi user/session hoặc thay cơ chế Identity. Kiểu PostgreSQL và nullability theo DDL. `ContractResident` có khóa ghép `contract_id`, `resident_id`.
+- `Entities/<module>/`: đúng 24 file entity cho 24 bảng vật lý. Mỗi bảng có một kiểu CLR chuẩn; bảng dùng chung giữ discriminator và các trường nullable vật lý. Identity tiếp tục dùng ApplicationUser và CompactRefreshRow. ContractResident có khóa ghép contract_id, resident_id.
 - `Data/Compact24/Compact24DbContext.cs` + `Compact24NativeModel.cs`: một DbContext runtime có đúng 24 mapping bảng vật lý và 85 quan hệ FK, không có `ToSqlQuery`. Repository dùng context scoped hiện có, đọc bằng EF/native SQL và ghi qua EF có guard hoặc câu lệnh SQL chuyên biệt trong transaction. Mô hình vật lý bị loại khỏi migration scaffolding vì DDL/migration SQL đã phát hành là nguồn chính. `Compact24NativeWrites.cs` giới hạn những thao tác được phép qua change tracker; các repository chuyên biệt giữ kiểm soát khóa, version, append-only history và audit. Không có generic projection writer trong runtime.
-- `Domain/<module>/`: giữ model nghiệp vụ đang được service sử dụng, enum, calculator, rule và đối tượng snapshot/lịch sử. Các class này không đại diện cho bảng vật lý mới. Không đổi namespace, ID, DTO, giá hay trạng thái chỉ để làm mapping đẹp hơn.
+- `Enums/`, `Models/`, `Common/`, `Services/`: trạng thái nghiệp vụ, snapshot JSONB có kiểu, sự kiện, bản ghi lịch sử/audit, quyền dùng chung và công thức/quy tắc thuần. Đây không phải các entity vật lý trùng lặp. Giữ namespace hiện hữu để bảo toàn migration đã phát hành, serializer và hợp đồng API.
 - `Data/Compact24/Legacy/`: `Compact24ArchiveContext` và projection/writer cũ chỉ dành cho công cụ import hoặc fixture kiểm thử được gọi tường minh. Không đăng ký archive context trong DI API. Không dùng archive để xử lý nghiệp vụ hoặc tạo đường fallback runtime.
 
 ## Bản đồ 24 bảng
@@ -21,7 +21,7 @@ Database vẫn có 24 bảng nghiệp vụ trong schema `public`. Backend là m�
 | PropertyManagement | `assets` | `Asset` |
 | TenantContracts | `residents` | `Resident` |
 | TenantContracts | `contracts` | `Contract` |
-| TenantContracts | `contract_signings` | `ContractSigning` |
+| TenantContracts | `contract_signings` | `ContractSignature` |
 | TenantContracts | `contract_residents` | `ContractResident` |
 | IncidentMaintenance | `incident_reports` | `IncidentReport` |
 | StaffOperations | `operational_tasks` | `OperationalTask` |
@@ -29,16 +29,16 @@ Database vẫn có 24 bảng nghiệp vụ trong schema `public`. Backend là m�
 | Billing | `meter_readings` | `MeterReading` |
 | Billing | `billing_policies` | `BillingPolicy` |
 | Billing | `invoices` | `Invoice` |
-| Billing | `invoice_items` | `InvoiceItem` |
-| Billing | `invoice_adjustments` | `InvoiceAdjustment` |
-| PaymentsDebt | `payments` | `Payment` |
+| Billing | `invoice_items` | `InvoiceLine` |
+| Billing | `invoice_adjustments` | `InvoiceAdjustmentRequest` |
+| PaymentsDebt | `payments` | `PaymentTransfer` |
 | PaymentsDebt | `payment_allocations` | `PaymentAllocation` |
 | PaymentsDebt | `refund_requests` | `RefundRequest` |
 | Finance | `expenses` | `Expense` |
 | Finance | `financial_scenarios` | `FinancialScenario` |
 | Notifications | `notifications` | `Notification` |
 
-Namespace của 22 Entity POCO là `BHome.Domain.Entities`; hai Entity Identity giữ namespace CLR cũ. Khi một repository cần cả Entity lưu trữ và model nghiệp vụ cùng tên, dùng alias `using Native = BHome.Domain.Entities;` để tránh nhầm lẫn. Repository/Data và adapter persistence sử dụng trực tiếp model lưu trữ; không trả Entity chứa dữ liệu riêng tư ra HTTP.
+Entity chuẩn giữ namespace CLR hiện hữu (`BHome.Domain.*`). Các trường chỉ phục vụ lưu trữ không xuất hiện trong snapshot nghiệp vụ cũ; EF mapping tường minh quy định tên cột, kiểu, nullable và khóa. Đã bỏ 17 kiểu entity trùng lặp cùng các bước sao chép toàn bộ bản ghi tương ứng. Các kiểu lưu trữ còn lại (StaffEmployment, RefundRequest, Expense, FinancialScenario, Notification và hai entity Identity) không có entity nghiệp vụ thứ hai tương đương.
 
 ## Các luồng đọc/ghi đã chuyển
 
@@ -66,7 +66,7 @@ Công thức, snapshot biểu phí, quyền theo người thuê, predicate hợp
 
 ## JSONB và quy tắc nghiệp vụ
 
-57 cột JSONB giữ nguyên schema; POCO dùng `JsonElement` hoặc `JsonElement?`, riêng các cột JSON Identity giữ cấu hình string/shadow hiện có. Các class nghiệp vụ như `ContractHandover`, `ContractMoveOut`, `InvoiceLine`, `InvoiceMath` vẫn giữ trách nhiệm hiện tại. Dùng snapshot có kiểu, giữ lịch sử/audit và dữ liệu cần thiết của nghiệp vụ; không ghi đè lịch sử bằng generic deserialize/serialize toàn bộ JSON. Tương thích tuyệt đối với dữ liệu test cũ không phải điều kiện nghiệm thu của refactor.
+57 cột JSONB giữ nguyên schema; POCO dùng `JsonElement` hoặc `JsonElement?`, riêng các cột JSON Identity giữ cấu hình string/shadow hiện có. `InvoiceLine` là entity chuẩn của bảng `invoice_items`; `ContractHandover`, `ContractMoveOut` và các model snapshot vẫn là kiểu nghiệp vụ riêng, còn `InvoiceMath` nằm trong Services. Dùng snapshot có kiểu, giữ lịch sử/audit và dữ liệu cần thiết của nghiệp vụ; không ghi đè lịch sử bằng generic deserialize/serialize toàn bộ JSON. Bảng `operational_tasks` chứa nhiều loại công việc nên giữ trạng thái vật lý dạng chuỗi và chỉ diễn giải enum theo loại công việc tương ứng. Tương thích tuyệt đối với dữ liệu test cũ không phải điều kiện nghiệm thu của refactor.
 
 ## Quy tắc chuyển tiếp và kiểm thử
 

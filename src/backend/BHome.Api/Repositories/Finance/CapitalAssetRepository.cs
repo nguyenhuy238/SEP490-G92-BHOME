@@ -14,11 +14,11 @@ public sealed class CapitalAssetRepository(BHomePersistenceContext db, ISetupWor
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     public Task<bool> LocationExistsAsync(Guid id, CancellationToken token) =>
-        db.Set<Native.Location>().AsNoTracking().AnyAsync(l => l.Id == id, token);
+        db.Set<BHome.Domain.Locations.Location>().AsNoTracking().AnyAsync(l => l.Id == id, token);
 
     public async Task<IReadOnlyList<CapitalAssetEntry>> ReadAsync(Guid id, CancellationToken token)
     {
-        var assets = await db.Set<Native.Asset>().AsNoTracking()
+        var assets = await db.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking()
             .Where(a => a.LocationId == id)
             .Select(a => new
             {
@@ -28,9 +28,9 @@ public sealed class CapitalAssetRepository(BHomePersistenceContext db, ISetupWor
                 a.Name,
                 a.Category,
                 a.Status,
-                a.PurchaseInfo
+                a.PurchaseMetadata
             }).ToArrayAsync(token);
-        var names = await db.Set<Native.Room>().AsNoTracking().Where(r => r.LocationId == id)
+        var names = await db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(r => r.LocationId == id)
             .ToDictionaryAsync(r => r.Id, r => r.RoomNumber, token);
         var attestations = await db.Database.SqlQuery<CapitalVerificationRow>($"""
             SELECT (task_data->'document'->'data'->>'assetId')::uuid AS "AssetId",
@@ -122,7 +122,7 @@ public sealed class CapitalAssetRepository(BHomePersistenceContext db, ISetupWor
         var result = new List<CapitalAssetEntry>(assets.Length);
         foreach (var a in assets)
         {
-            var data = a.PurchaseInfo;
+            var data = a.PurchaseMetadata;
             var quantity = data.TryGetProperty("quantity", out var qty) && qty.TryGetInt32(out var count) && count > 0 ? count : 1;
             decimal? purchase = null;
             if (data.TryGetProperty("purchaseCost", out var price) && price.ValueKind is JsonValueKind.Number or JsonValueKind.String &&
@@ -135,7 +135,7 @@ public sealed class CapitalAssetRepository(BHomePersistenceContext db, ISetupWor
             var confirmed = (a.RoomId is not null
                     ? verified.TryGetValue(a.Id, out var checkedQty) && checkedQty.Quantity == quantity
                     : commonEverVerified.ContainsKey(a.Id));
-            var currentCommonVerified = commonVerified.ContainsKey(a.Id) && a.Status == (short)AssetStatus.Active &&
+            var currentCommonVerified = commonVerified.ContainsKey(a.Id) && a.Status == AssetStatus.Active &&
                       commonItems.Any(i => i.Name == a.Name && i.Category == a.Category &&
                           i.CommonArea == a.CommonArea && i.Quantity == quantity);
             var actor = a.RoomId is not null ? verified.GetValueOrDefault(a.Id)?.VerifiedBy :
@@ -196,7 +196,7 @@ public sealed class CapitalAssetRepository(BHomePersistenceContext db, ISetupWor
                 legacyAmount.HasValue, legacyAmount, actor,
                 pending.Sum(item => item.Amount), pending,
                 !legacy.ContainsKey(a.Id) && AssetCapitalMath.HasMissingHistoricalPrice(revisions, posted),
-                a.RoomId is not null ? confirmed && a.Status == (short)AssetStatus.Active : currentCommonVerified));
+                a.RoomId is not null ? confirmed && a.Status == AssetStatus.Active : currentCommonVerified));
         }
         return result;
     }

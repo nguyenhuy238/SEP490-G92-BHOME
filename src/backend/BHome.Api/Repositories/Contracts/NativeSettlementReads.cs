@@ -36,14 +36,14 @@ internal static class NativeSettlementReads
     internal static async Task<Invoice?> PeriodicInvoiceAsync(BHomePersistenceContext db, Guid room, DateOnly period, CancellationToken t)
     {
         if (db is Compact24DbContext native)
-            return (await NativeInvoicePersistence.ReadAsync(native, native.Set<Native.Invoice>().AsNoTracking()
-                .Where(i => i.InvoiceType == "PERIODIC" && i.RoomId == room && i.BillingPeriod == period), t)).SingleOrDefault();
+            return (await NativeInvoicePersistence.ReadAsync(native, native.Set<BHome.Domain.Billing.Invoice>().AsNoTracking()
+                .Where(i => i.Type == "PERIODIC" && i.RoomId == room && i.BillingPeriod == period), t)).SingleOrDefault();
         return await db.PeriodicInvoices().AsNoTracking().SingleOrDefaultAsync(i => i.RoomId == room && i.BillingPeriod == period, t);
     }
 
     internal static Task<Guid> LocationAsync(BHomePersistenceContext db, Guid contract, CancellationToken t) =>
-        (from c in db.Set<Native.Contract>().AsNoTracking()
-         join r in db.Set<Native.Room>() on c.RoomId equals r.Id
+        (from c in db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking()
+         join r in db.Set<BHome.Domain.PropertyManagement.Room>() on c.RoomId equals r.Id
          where c.Id == contract
          select r.LocationId).SingleAsync(t);
 
@@ -60,21 +60,14 @@ internal static class NativeSettlementReads
             ORDER BY (s.data->>'id')::uuid
             """).ToArrayAsync(t);
 
-    internal static async Task<MeterReading?> ReadingAsync(BHomePersistenceContext db, Guid id, CancellationToken t)
-    {
-        if (db is Compact24DbContext)
-        {
-            var row = await db.Set<Native.MeterReading>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == id, t);
-            return row is null ? null : NativeCaptureReads.Reading(row);
-        }
-        return await db.Set<MeterReading>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == id, t);
-    }
+    internal static Task<MeterReading?> ReadingAsync(BHomePersistenceContext db, Guid id, CancellationToken t) =>
+        db.Set<MeterReading>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == id, t);
 
     internal static async Task<OperationalTask?> TaskAsync(BHomePersistenceContext db, Guid id, CancellationToken t)
     {
         if (db is Compact24DbContext)
         {
-            var row = await db.Set<Native.OperationalTask>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == id && r.TaskType == "METER_READ", t);
+            var row = await db.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == id && r.TaskType == "METER_READ", t);
             return row is null ? null : NativeCaptureReads.Task(row);
         }
         return await db.Set<OperationalTask>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == id, t);
@@ -100,15 +93,15 @@ internal static class NativeSettlementReads
 
     internal static async Task<MeterProof[]> MeterProofsAsync(BHomePersistenceContext db, Guid room, Guid[] ids, CancellationToken t)
     {
-        var rows = await (from reading in db.Set<Native.MeterReading>().AsNoTracking()
-                          join task in db.Set<Native.OperationalTask>() on reading.OperationalTaskId equals task.Id
-                          join meter in db.Set<Native.Meter>() on reading.MeterId equals meter.Id
+        var rows = await (from reading in db.Set<BHome.Domain.Billing.MeterReading>().AsNoTracking()
+                          join task in db.Set<BHome.Domain.Billing.OperationalTask>() on reading.TaskId equals task.Id
+                          join meter in db.Set<BHome.Domain.Billing.Meter>() on reading.MeterId equals meter.Id
                           where ids.Contains(reading.Id) && meter.RoomId == room && task.TaskType == "METER_READ"
                           select new { reading, task, meter.UtilityType }).ToArrayAsync(t);
         var result = new List<MeterProof>();
         foreach (var row in rows)
         {
-            var reading = NativeCaptureReads.Reading(row.reading);
+            var reading = row.reading;
             var task = NativeCaptureReads.Task(row.task);
             var evidence = NativeCaptureReads.Evidence(row.task, reading.EvidenceId);
             if (task.Status == MeterTaskStatus.Completed && evidence is { IsLinked: true, IsUploaded: true })

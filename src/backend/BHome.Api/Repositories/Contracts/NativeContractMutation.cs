@@ -36,9 +36,9 @@ internal sealed class NativeContractMutation(Compact24DbContext db)
     internal async Task<Room?> RoomAsync(Guid id, CancellationToken t)
     {
         if (rooms.TryGetValue(id, out var cached)) return cached.Value;
-        var row = await db.Set<Native.Room>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == id, t);
+        var row = await db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == id, t);
         if (row is null) return null;
-        var location = await db.Set<Native.Location>().AsNoTracking().SingleAsync(l => l.Id == row.LocationId, t);
+        var location = await db.Set<BHome.Domain.Locations.Location>().AsNoTracking().SingleAsync(l => l.Id == row.LocationId, t);
         var room = NativeRoomLocationPersistence.Read(row);
         room.Location = NativeRoomLocationPersistence.Read(location);
         NativeContractSnapshot.RestoreRoomType(room, location.OperatingSettings);
@@ -48,7 +48,11 @@ internal sealed class NativeContractMutation(Compact24DbContext db)
 
     internal async Task<Contract?> FindAsync(Guid id, CancellationToken t)
     {
-        if (contracts.TryGetValue(id, out var cached)) return cached.Value;
+        if (contracts.TryGetValue(id, out var cached))
+        {
+            cached.Value.Room = await RoomAsync(cached.Value.RoomId, t) ?? throw new DbUpdateConcurrencyException("Contract room missing.");
+            return cached.Value;
+        }
         var value = await NativeContractSnapshot.LoadAsync(db, id, t);
         if (value is null) return null;
         value.Room = await RoomAsync(value.RoomId, t) ?? throw new DbUpdateConcurrencyException("Contract room missing.");
@@ -63,7 +67,7 @@ internal sealed class NativeContractMutation(Compact24DbContext db)
         {
             // Contact/account changes are serialized with the same resident row lock.
             await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM residents WHERE id=ANY({missing}) AND current_room_id={roomId} ORDER BY id FOR UPDATE").ToArrayAsync(t);
-            var rows = await db.Set<Native.Resident>().AsNoTracking().Where(r => r.CurrentRoomId == roomId && missing.Contains(r.Id)).ToArrayAsync(t);
+            var rows = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => r.RoomId == roomId && missing.Contains(r.Id)).ToArrayAsync(t);
             foreach (var row in rows)
             {
                 var value = NativeResidentPersistence.Read(row);
@@ -84,6 +88,14 @@ internal sealed class NativeContractMutation(Compact24DbContext db)
         if (!contracts.TryGetValue(s.ContractId, out var contract))
             throw new InvalidOperationException("Signature requires the loaded contract.");
         if (!contract.Value.Signatures.Any(existing => existing.Id == s.Id)) contract.Value.Signatures.Add(s);
+    }
+
+    internal void Add(ContractResident member)
+    {
+        if (!contracts.TryGetValue(member.ContractId, out var contract))
+            throw new InvalidOperationException("Contract member requires the loaded contract.");
+        if (!contract.Value.Residents.Any(existing => existing.ResidentId == member.ResidentId))
+            contract.Value.Residents.Add(member);
     }
 
     internal void Audit(PropertyChange change) => audits.Add(change);

@@ -208,11 +208,11 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
             VALUES ({task},'GENERAL',{location},{previous.Id},'0','Synthetic open task',
               jsonb_build_object('state',jsonb_build_object('assignedStaffUserId',{previous.Id})))
             """);
-        var version = await db.Set<BHome.Domain.Entities.Location>().Where(x => x.Id == location).Select(x => x.Version).SingleAsync();
+        var version = await db.Set<BHome.Domain.Locations.Location>().Where(x => x.Id == location).Select(x => x.Version).SingleAsync();
 
         Assert.Equal(ChangeAssignmentStatus.Invalid, (await repository.ReplaceAssignmentAsync(owner.Id, location,
             previous.Id, today, version, "Synthetic same staff", default)).Status);
-        Assert.Equal(version, await db.Set<BHome.Domain.Entities.Location>().Where(x => x.Id == location).Select(x => x.Version).SingleAsync());
+        Assert.Equal(version, await db.Set<BHome.Domain.Locations.Location>().Where(x => x.Id == location).Select(x => x.Version).SingleAsync());
         Assert.Equal(0, await EmailNotices(db, location, previous.Id, "STAFF_ASSIGNMENT_REMOVED"));
 
         var changed = await repository.ReplaceAssignmentAsync(owner.Id, location, replacement.Id, today, version,
@@ -357,7 +357,7 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
                 THEN (a-'actorId'-'recordedAt')||jsonb_build_object('createdByUserId',{owner.Id},'createdAt',{clock.Now})
                 ELSE a END) FROM jsonb_array_elements(staff_assignments) a) WHERE id={location}
             """);
-        var version = await db.Set<BHome.Domain.Entities.Location>().Where(l => l.Id == location).Select(l => l.Version).SingleAsync();
+        var version = await db.Set<BHome.Domain.Locations.Location>().Where(l => l.Id == location).Select(l => l.Version).SingleAsync();
         Assert.Equal(UpdateAssignmentPeriodStatus.Invalid, (await repository.CancelFutureAssignmentAsync(owner.Id, current.Id, version, "Cannot cancel current", default)).Status);
         Assert.Equal(UpdateAssignmentPeriodStatus.StaleVersion, (await repository.CancelFutureAssignmentAsync(owner.Id, future.Id, version - 1, "Stale request", default)).Status);
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => repository.CancelFutureAssignmentAsync(staff.Id, future.Id, version, "Unauthorized", default));
@@ -382,7 +382,7 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         var repo = scope.ServiceProvider.GetRequiredService<ILocationAssignments>();
         var current = (await repo.CreateAssignmentAsync(owner.Id, location, employee.Id, today, today.AddDays(1), default)).Assignment!;
         var future = (await repo.CreateAssignmentAsync(owner.Id, location, employee.Id, today.AddDays(3), today.AddDays(5), default)).Assignment!;
-        var version = await db.Set<BHome.Domain.Entities.Location>().Where(l => l.Id == location).Select(l => l.Version).SingleAsync();
+        var version = await db.Set<BHome.Domain.Locations.Location>().Where(l => l.Id == location).Select(l => l.Version).SingleAsync();
 
         Assert.Equal(UpdateAssignmentPeriodStatus.Changed,
             (await repo.UpdateAssignmentPeriodAsync(owner.Id, current.Id, today, today, version, "Current end amended", default)).Status);
@@ -414,7 +414,7 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         var repo = scope.ServiceProvider.GetRequiredService<ILocationAssignments>();
         Assert.Equal(CreateAssignmentStatus.Created,
             (await repo.CreateAssignmentAsync(owner.Id, location, employee.Id, today, today.AddDays(4), default)).Status);
-        var version = await db.Set<BHome.Domain.Entities.Location>().Where(l => l.Id == location).Select(l => l.Version).SingleAsync();
+        var version = await db.Set<BHome.Domain.Locations.Location>().Where(l => l.Id == location).Select(l => l.Version).SingleAsync();
 
         Assert.Equal(ChangeAssignmentStatus.Changed,
             (await repo.RemoveAssignmentAsync(owner.Id, location, today, version, "Staff removed", default)).Status);
@@ -484,7 +484,7 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
             .SingleAsync(t => t.Id == initialHandoverId)).Status);
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE staff_employments SET status='Ended' WHERE id={firstPeriod}");
 
-        var version = await db.Set<BHome.Domain.Entities.Location>().Where(x => x.Id == location).Select(x => x.Version).SingleAsync();
+        var version = await db.Set<BHome.Domain.Locations.Location>().Where(x => x.Id == location).Select(x => x.Version).SingleAsync();
         var changed = await assignments.ReplaceAssignmentAsync(owner.Id, location, next.Id, today, version,
             "Ended employment successor", default);
         Assert.Equal(ChangeAssignmentStatus.Changed, changed.Status);

@@ -27,7 +27,7 @@ internal sealed partial class CompactNotificationEvents
             if (policy.InvoiceDueSoonDays is >= 1 and <= 30)
             {
                 var until = billingToday.AddDays(policy.InvoiceDueSoonDays.Value);
-                var invoices = await db.Set<Native.Invoice>().AsNoTracking().Where(i => i.LocationId == location && i.Status == (short)InvoiceStatus.Final && i.DueDate >= billingToday && i.DueDate <= until).ToArrayAsync(t);
+                var invoices = await db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking().Where(i => i.LocationId == location && i.Status == InvoiceStatus.Final && i.DueDate >= billingToday && i.DueDate <= until).ToArrayAsync(t);
                 foreach (var invoice in invoices)
                 {
                     var key = $"invoice-due-soon:{invoice.Id}:{invoice.DueDate:yyyyMMdd}";
@@ -39,8 +39,8 @@ internal sealed partial class CompactNotificationEvents
             }
             if (policy.DebtEnabled && policy.DebtWindowDays is > 0)
             {
-                var invoices = await NativeInvoicePersistence.ReadAsync(db, db.Set<Native.Invoice>().AsNoTracking()
-                    .Where(i => i.LocationId == location && i.Status == (short)InvoiceStatus.Final && i.DueDate < billingToday).OrderBy(i => i.Id), t, false);
+                var invoices = await NativeInvoicePersistence.ReadAsync(db, db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking()
+                    .Where(i => i.LocationId == location && i.Status == InvoiceStatus.Final && i.DueDate < billingToday).OrderBy(i => i.Id), t, false);
                 foreach (var invoice in invoices)
                 {
                     var key = $"overdue:{invoice.Id}:{billingToday.DayNumber / policy.DebtWindowDays}";
@@ -56,8 +56,8 @@ internal sealed partial class CompactNotificationEvents
             if (policy.TaskEnabled && policy.TaskWindowHours is > 0)
             {
                 var window = sql.Now.ToUnixTimeSeconds() / (policy.TaskWindowHours.Value * 3600L);
-                var tasks = await NativeOperationalTaskPersistence.Roots(db).Where(x => x.LocationId == location &&
-                    x.DueAt <= sql.Now && x.Status != "2" && x.Status != "3").ToArrayAsync(t);
+                var tasks = await NativeOperationalTaskPersistence.Roots(db).Where(x => x.StoredLocationId == location &&
+                    x.DueAt <= sql.Now && x.StoredStatus != "2" && x.StoredStatus != "3").ToArrayAsync(t);
                 foreach (var row in tasks)
                 {
                     var task = NativeCaptureReads.Task(row);
@@ -97,8 +97,8 @@ internal sealed partial class CompactNotificationEvents
             }
             if (policy.EmergencyEnabled && policy.EmergencyFirstEscalationMinutes is > 0 && policy.EmergencyOverdueMinutes > policy.EmergencyFirstEscalationMinutes)
             {
-                var incidents = await db.Set<Native.IncidentReport>().AsNoTracking()
-                    .Where(r => r.LocationId == location && r.Severity == "EMERGENCY" && (r.Status == "Submitted" || r.Status == "InProgress")).ToArrayAsync(t);
+                var incidents = await db.Set<IncidentReport>().AsNoTracking()
+                    .Where(r => r.LocationId == location && r.Severity == IncidentSeverity.Emergency && (r.Status == IncidentStatus.Submitted || r.Status == IncidentStatus.InProgress)).ToArrayAsync(t);
                 foreach (var row in incidents)
                 {
                     var incident = NativeIncidentSession.Read(row);

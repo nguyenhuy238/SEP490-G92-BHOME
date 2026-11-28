@@ -34,8 +34,8 @@ public sealed class NativeResidentLinkTests(Compact24Fixture fixture) : IClassFi
         await repo.LinkTenantAsync(resident, tenant, actor, now, default);
         await repo.LinkTenantAsync(resident, tenant, actor, now, default);
         Assert.Equal(409, (await Assert.ThrowsAsync<ContractException>(() => repo.LinkTenantAsync(resident, other, actor, now, default))).Status);
-        var row = await db.Set<Native.Resident>().AsNoTracking().SingleAsync(r => r.Id == resident);
-        Assert.Equal(tenant, row.UserId);
+        var row = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().SingleAsync(r => r.Id == resident);
+        Assert.Equal(tenant, row.TenantUserId);
         Assert.Equal(1, row.History.GetArrayLength());
         var archive = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var projected = await archive.Set<Resident>().AsNoTracking().SingleAsync(r => r.Id == resident);

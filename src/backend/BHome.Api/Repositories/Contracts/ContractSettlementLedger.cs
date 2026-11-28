@@ -39,8 +39,8 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
             SELECT id AS "Value" FROM versions
             """).ToArrayAsync(t);
         if (!members.Any(id => id != c.Id && id != root.Id) && anchor == root.Id) return (root, false);
-        var otherOpen = await db.Set<Native.Contract>().AnyAsync(other => members.Contains(other.Id) && other.Id != c.Id &&
-            (other.Status == (short)ContractStatus.Active || other.Status == (short)ContractStatus.Expired || other.Status == (short)ContractStatus.PendingActivation), t);
+        var otherOpen = await db.Set<BHome.Domain.TenantContracts.Contract>().AnyAsync(other => members.Contains(other.Id) && other.Id != c.Id &&
+            (other.Status == ContractStatus.Active || other.Status == ContractStatus.Expired || other.Status == ContractStatus.PendingActivation), t);
         var lastCompleted = c.Status == ContractStatus.Terminated
             ? (await NativeContractMoveOutPersistence.MoveHistoryAsync((Compact24DbContext)db, members, t)).Where(h => h.Action == "Completed")
                 .OrderByDescending(h => h.OccurredAt).ThenByDescending(h => h.Id).Select(h => (Guid?)h.ContractId).FirstOrDefault()
@@ -90,7 +90,7 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
         foreach (var charge in charges)
         {
             var paid = db is Compact24DbContext
-                ? await db.Set<Native.PaymentAllocation>().Where(a => a.TargetSettlementContractId == id && a.SettlementReceivableId == charge.Id).SumAsync(a => (decimal?)a.Amount, t) ?? 0
+                ? await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Where(a => a.TargetSettlementContractId == id && a.SettlementReceivableId == charge.Id).SumAsync(a => (decimal?)a.Amount, t) ?? 0
                 : await db.Set<PaymentAllocation>().Where(a => a.TargetSettlementContractId == id && a.SettlementReceivableId == charge.Id).SumAsync(a => (decimal?)a.Amount, t) ?? 0;
             if (paid < 0 || paid > charge.Amount) throw ContractException.Conflict("settlement_ledger_integrity_failed");
             chargeBalances.Add(new(charge, paid, charge.Amount - paid, paid == charge.Amount ? "Paid" : paid == 0 ? "Unpaid" : "PartiallyPaid"));
@@ -129,16 +129,16 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
         if (!depositDeferred && depositRoot.HoldingContractId is { } holding)
         {
             var applied = db is Compact24DbContext
-                ? await db.Set<Native.PaymentAllocation>().Where(a => a.SourceDepositContractId == holding && a.TargetDepositContractId == depositRoot.Id).SumAsync(a => (decimal?)a.Amount, t) ?? 0
+                ? await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Where(a => a.SourceDepositContractId == holding && a.TargetDepositContractId == depositRoot.Id).SumAsync(a => (decimal?)a.Amount, t) ?? 0
                 : await db.Set<PaymentAllocation>().Where(a => a.SourceDepositContractId == holding && a.TargetDepositContractId == depositRoot.Id).SumAsync(a => (decimal?)a.Amount, t) ?? 0;
             if (applied != holdingCredit) blockers.Add("holding_allocation_settlement_required");
         }
         else if (holdingCredit > 0) blockers.Add("holding_allocation_settlement_required");
         var chainIds = chain.Select(v => v.Id).ToArray();
         var invoiceEntities = db is Compact24DbContext native
-            ? await NativeInvoicePersistence.ReadAsync(native, native.Set<Native.Invoice>().AsNoTracking()
+            ? await NativeInvoicePersistence.ReadAsync(native, native.Set<BHome.Domain.Billing.Invoice>().AsNoTracking()
                 .Where(i => i.RoomId == c.RoomId && i.BillingPeriod >= start && i.BillingPeriod <= through &&
-                    (i.InvoiceType == "PERIODIC" || chainIds.Contains(i.ContractId))).OrderBy(i => i.BillingPeriod).ThenBy(i => i.Id).Take(251), t)
+                    (i.Type == "PERIODIC" || chainIds.Contains(i.RepresentativeContractId))).OrderBy(i => i.BillingPeriod).ThenBy(i => i.Id).Take(251), t)
             : await db.Set<Invoice>().AsNoTracking().Include(i => i.Lines).Where(i => i.RoomId == c.RoomId && i.BillingPeriod >= start && i.BillingPeriod <= through).OrderBy(i => i.BillingPeriod).ToArrayAsync(t);
         if (invoiceEntities.Length > 250) throw ContractException.Conflict("settlement_period_review_required");
         var ids = invoiceEntities.Select(i => i.Id).ToArray();
@@ -159,11 +159,11 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
         }
         if (db is Compact24DbContext)
         {
-            if (await db.Set<Native.InvoiceAdjustment>().AnyAsync(r => ids.Contains(r.InvoiceId) && r.DecisionSnapshot == null, t)) blockers.Add("invoice_adjustment_pending");
+            if (await db.Set<InvoiceAdjustmentRequest>().AnyAsync(r => ids.Contains(r.InvoiceId) && r.DecisionSnapshot == null, t)) blockers.Add("invoice_adjustment_pending");
             var reviews = PaymentLedgerQueries.Reviews(db);
             if (await reviews.AnyAsync(r => r.InvoiceId != null && ids.Contains(r.InvoiceId.Value) && r.Decision == "PendingReview" &&
                 !reviews.Any(n => n.TransferId == r.TransferId && n.Sequence > r.Sequence) &&
-                !db.Set<Native.PaymentAllocation>().Any(a => a.SourcePaymentId == r.TransferId), t)) blockers.Add("bank_transfer_pending_review");
+                !db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Any(a => a.TransferId == r.TransferId), t)) blockers.Add("bank_transfer_pending_review");
         }
         else
         {
@@ -188,7 +188,7 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
         }
         else blockers.Add("final_meter_readings_required");
         var other = db is Compact24DbContext
-            ? await db.Set<Native.Contract>().AnyAsync(o => o.RoomId == c.RoomId && o.Id != id && o.Status == (short)ContractStatus.Active, t)
+            ? await db.Set<BHome.Domain.TenantContracts.Contract>().AnyAsync(o => o.RoomId == c.RoomId && o.Id != id && o.Status == ContractStatus.Active, t)
             : await db.Set<Contract>().AnyAsync(o => o.RoomId == c.RoomId && o.Id != id && o.Status == ContractStatus.Active, t);
         // Obligation reference excludes this workflow's refund reservations/completions: reserving the
         // approved return must not invalidate its own approval. All charge/payment/inspection inputs remain bound.
@@ -228,7 +228,7 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
         var approvedOffsets = new List<DepositOffsetApproval>();
         foreach (var version in chain) approvedOffsets.AddRange(await SettlementChargeRecords.ReadAsync<DepositOffsetApproval>(db, version.Id, SettlementChargeRecords.OffsetKind, t));
         var offsetIds = approvedOffsets.Where(o => o.SourceDepositContractId == depositRoot.Id).Select(o => o.Id).ToArray();
-        var canonicalOffsets = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext ? await db.Set<Native.PaymentAllocation>().Where(a => a.SourceDepositContractId == depositRoot.Id && a.DepositOffsetApprovalId != null && offsetIds.Contains(a.DepositOffsetApprovalId.Value))
+        var canonicalOffsets = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext ? await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Where(a => a.SourceDepositContractId == depositRoot.Id && a.DepositOffsetApprovalId != null && offsetIds.Contains(a.DepositOffsetApprovalId.Value))
             .SumAsync(a => (decimal?)a.Amount, t) ?? 0 : 0;
         if (canonicalOffsets != approvedOffsets.Where(o => o.SourceDepositContractId == depositRoot.Id).Sum(o => o.Amount)) blockers.Add("deposit_offset_reconciliation_required");
         if (position is not null && position.Allocated != canonicalOffsets) blockers.Add("deposit_offset_reconciliation_required");

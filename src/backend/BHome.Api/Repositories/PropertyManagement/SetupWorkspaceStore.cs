@@ -44,7 +44,7 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
         if (db.Database.CurrentTransaction is not null) return await work();
         await using var tx = await db.Database.BeginTransactionAsync(t);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({locationId.ToString()},0))", t);
-        if (!await db.Set<Native.Location>().AsNoTracking().AnyAsync(l => l.Id == locationId && l.IsActive, t)) throw new PropertyException(409, "location_inactive_or_missing");
+        if (!await db.Set<BHome.Domain.Locations.Location>().AsNoTracking().AnyAsync(l => l.Id == locationId && l.IsActive, t)) throw new PropertyException(409, "location_inactive_or_missing");
         try
         {
             var value = await work(); await db.SaveChangesAsync(t); await tx.CommitAsync(t); return value;
@@ -177,13 +177,13 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
     }
     public async Task<Guid?> RoomLocationAsync(Guid roomId, CancellationToken t)
     {
-        return await db.Set<Native.Room>().AsNoTracking().Where(r => r.Id == roomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t);
+        return await db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(r => r.Id == roomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t);
     }
     public async Task<(Guid LocationId, BHome.Domain.Billing.UtilityType Type)?> MeterScopeAsync(Guid meterId, CancellationToken t)
     {
         // The physical meters.room_id FK guarantees the room exists; one query retains the same scope.
-        var meter = await (from m in db.Set<Native.Meter>().AsNoTracking()
-                           join r in db.Set<Native.Room>().AsNoTracking() on m.RoomId equals r.Id
+        var meter = await (from m in db.Set<BHome.Domain.Billing.Meter>().AsNoTracking()
+                           join r in db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking() on m.RoomId equals r.Id
                            where m.Id == meterId
                            select new { r.LocationId, m.UtilityType }).SingleOrDefaultAsync(t);
         return meter is null ? null : (meter.LocationId, (BHome.Domain.Billing.UtilityType)meter.UtilityType);
@@ -202,24 +202,24 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
     }
     public async Task<IReadOnlyList<Guid>> RoomsAsync(Guid locationId, CancellationToken t)
     {
-        return await db.Set<Native.Room>().AsNoTracking().Where(r => r.LocationId == locationId).OrderBy(r => r.Id).Select(r => r.Id).ToArrayAsync(t);
+        return await db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(r => r.LocationId == locationId).OrderBy(r => r.Id).Select(r => r.Id).ToArrayAsync(t);
     }
     public async Task<IReadOnlyList<Room>> ReviewRoomsAsync(Guid locationId, CancellationToken t) =>
-        (await db.Set<Native.Room>().AsNoTracking().Where(r => r.LocationId == locationId)
+        (await db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(r => r.LocationId == locationId)
             .OrderBy(r => r.RoomNumber).ThenBy(r => r.Id).ToArrayAsync(t))
         .Select(NativeRoomLocationPersistence.Read).ToArray();
     public async Task<IReadOnlyList<RoomInventoryPhysicalAsset>> ReviewRoomAssetsAsync(Guid locationId, CancellationToken t)
     {
-        var rows = await db.Set<Native.Asset>().AsNoTracking()
-            .Where(a => a.LocationId == locationId && a.RoomId != null && a.Status != (short)AssetStatus.Retired)
+        var rows = await db.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking()
+            .Where(a => a.LocationId == locationId && a.RoomId != null && a.Status != AssetStatus.Retired)
             .OrderBy(a => a.Id).ToArrayAsync(t);
         return rows.Select(row => new RoomInventoryPhysicalAsset(NativeAssetPersistence.Read(row),
             NativeAssetPersistence.Metadata(row))).ToArray();
     }
     public async Task<IReadOnlyList<RoomInventoryPhysicalAsset>> ReviewCommonAssetsAsync(Guid locationId, CancellationToken t)
     {
-        var rows = await db.Set<Native.Asset>().AsNoTracking()
-            .Where(a => a.LocationId == locationId && a.RoomId == null && a.CommonArea != null && a.Status != (short)AssetStatus.Retired)
+        var rows = await db.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking()
+            .Where(a => a.LocationId == locationId && a.RoomId == null && a.CommonArea != null && a.Status != AssetStatus.Retired)
             .OrderBy(a => a.Id).ToArrayAsync(t);
         return rows.Select(row => new RoomInventoryPhysicalAsset(NativeAssetPersistence.Read(row),
             NativeAssetPersistence.Metadata(row))).ToArray();
@@ -265,7 +265,7 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
         await using var tx = db.Database.CurrentTransaction is null ? await db.Database.BeginTransactionAsync(t) : null;
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({locationId.ToString()},0))", t);
         var codes = assets.Select(x => x.Asset.Code!.Trim().ToUpper()).ToArray();
-        if (await db.Set<Native.Asset>().AsNoTracking().AnyAsync(a => a.LocationId == locationId && a.AssetCode != null && codes.Contains(a.AssetCode.Trim().ToUpper()), t))
+        if (await db.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking().AnyAsync(a => a.LocationId == locationId && a.Code != null && codes.Contains(a.Code.Trim().ToUpper()), t))
             throw new PropertyException(409, "duplicate_asset_code");
         // Previous SaveChanges also flushed pending caller changes. Flush before
         // staging native rows so no mixed native/projection batch is submitted.
@@ -292,41 +292,41 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
     }
     public async Task<string?> RoomConfigurationLockReasonAsync(Guid roomId, CancellationToken t)
     {
-        var room = await (from r in db.Set<Native.Room>().AsNoTracking()
-                          join l in db.Set<Native.Location>().AsNoTracking() on r.LocationId equals l.Id
+        var room = await (from r in db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking()
+                          join l in db.Set<BHome.Domain.Locations.Location>().AsNoTracking() on r.LocationId equals l.Id
                           where r.Id == roomId
                           select new { Status = (RoomStatus)r.Status, Active = l.IsActive }).SingleOrDefaultAsync(t);
         if (room is null) return "resource_not_found";
         if (!room.Active) return "location_inactive";
-        if (await db.Set<Native.Contract>().AsNoTracking().AnyAsync(c => c.RoomId == roomId &&
-            (c.Status == (short)ContractStatus.Draft || c.Status == (short)ContractStatus.PendingSigning ||
-             c.Status == (short)ContractStatus.PendingActivation || c.Status == (short)ContractStatus.Active), t))
+        if (await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().AnyAsync(c => c.RoomId == roomId &&
+            (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning ||
+             c.Status == ContractStatus.PendingActivation || c.Status == ContractStatus.Active), t))
             return "room_configuration_locked_by_contract";
         if (room.Status is RoomStatus.Occupied or RoomStatus.OnHold ||
-            await PostgresPropertyRepository.NativeUnresolvedResidents(db).AnyAsync(r => r.CurrentRoomId == roomId, t))
+            await PostgresPropertyRepository.NativeUnresolvedResidents(db).AnyAsync(r => r.RoomId == roomId, t))
             return "room_has_obligations";
         return null;
     }
     public async Task<bool> EligibleRoomAsync(Guid roomId, CancellationToken t)
     {
-        if (!await (from r in db.Set<Native.Room>().AsNoTracking()
-                    join l in db.Set<Native.Location>().AsNoTracking() on r.LocationId equals l.Id
-                    where r.Id == roomId && r.Status == (short)RoomStatus.Available && l.IsActive
+        if (!await (from r in db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking()
+                    join l in db.Set<BHome.Domain.Locations.Location>().AsNoTracking() on r.LocationId equals l.Id
+                    where r.Id == roomId && r.Status == RoomStatus.Available && l.IsActive
                     select r.Id).AnyAsync(t)) return false;
         if (await RoomConfigurationLockReasonAsync(roomId, t) is not null) return false;
         return (await new PropertyLifecycleChecks(db).RoomBlockersAsync(roomId, t)).Count == 0;
     }
     public async Task<Asset?> AssetAsync(Guid id, CancellationToken t)
     {
-        var row = await db.Set<Native.Asset>().AsNoTracking().SingleOrDefaultAsync(a => a.Id == id, t);
+        var row = await db.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking().SingleOrDefaultAsync(a => a.Id == id, t);
         if (row is null) return null;
         var asset = NativeAssetPersistence.Read(row);
         assetVersions[asset] = asset.Version;
         return asset;
     }
     public Task<bool> HasOpenAssetWorkAsync(Guid id, CancellationToken t) =>
-        db.Set<Native.OperationalTask>().AsNoTracking().AnyAsync(w => w.TaskType == "WORK_ORDER" && w.AssetId == id &&
-            w.Status != "Verified" && w.Status != "Cancelled", t);
+        db.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking().AnyAsync(w => w.TaskType == "WORK_ORDER" && w.AssetId == id &&
+            w.StoredStatus != "Verified" && w.StoredStatus != "Cancelled", t);
     public async Task<IReadOnlyList<AssetHistoryEntry>> AssetHistoryAsync(Guid assetId, CancellationToken t)
     {
         var changes = await db.Database.SqlQuery<AssetHistoryEntry>($"""
@@ -359,7 +359,7 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
             .Take(1000).ToArray();
     }
     public async Task<IReadOnlyList<Asset>> AssetsAsync(Guid roomId, CancellationToken t) =>
-        (await db.Set<Native.Asset>().AsNoTracking().Where(a => a.RoomId == roomId).OrderBy(a => a.Id).Take(1000).ToArrayAsync(t))
+        (await db.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking().Where(a => a.RoomId == roomId).OrderBy(a => a.Id).Take(1000).ToArrayAsync(t))
         .Select(NativeAssetPersistence.Read).ToArray();
     public async Task SaveAssetMetadataAsync(Guid assetId, AssetMetadata metadata, CancellationToken t)
     {
@@ -376,8 +376,18 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
         var tracked = db.ChangeTracker.Entries<Asset>().SingleOrDefault(e => e.Entity.Id == assetId);
         if (tracked is not null)
         {
-            var property = tracked.Property<string>("PurchaseInfo");
-            property.CurrentValue = merged; property.OriginalValue = merged; property.IsModified = false;
+            if (tracked.Metadata.FindProperty(nameof(Asset.PurchaseMetadata)) is not null)
+            {
+                using var document = JsonDocument.Parse(merged);
+                var value = document.RootElement.Clone();
+                var property = tracked.Property(a => a.PurchaseMetadata);
+                property.CurrentValue = value; property.OriginalValue = value; property.IsModified = false;
+            }
+            else
+            {
+                var property = tracked.Property<string>("PurchaseInfo");
+                property.CurrentValue = merged; property.OriginalValue = merged; property.IsModified = false;
+            }
         }
     }
     public async Task<IReadOnlyDictionary<Guid, AssetMetadata>> AssetMetadataAsync(Guid[] assetIds, CancellationToken t)
@@ -395,7 +405,7 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
     {
         await using var tx = db.Database.CurrentTransaction is null ? await db.Database.BeginTransactionAsync(t) : null;
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({asset.LocationId.ToString()},0))", t);
-        if (!string.IsNullOrWhiteSpace(asset.Code) && await db.Set<Native.Asset>().AsNoTracking().AnyAsync(a => a.LocationId == asset.LocationId && a.Id != asset.Id && a.AssetCode != null && a.AssetCode.Trim().ToUpper() == asset.Code.Trim().ToUpper(), t))
+        if (!string.IsNullOrWhiteSpace(asset.Code) && await db.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking().AnyAsync(a => a.LocationId == asset.LocationId && a.Id != asset.Id && a.Code != null && a.Code.Trim().ToUpper() == asset.Code.Trim().ToUpper(), t))
             throw new PropertyException(409, "duplicate_asset_code");
         if (asset.Status == AssetStatus.Retired && await HasOpenAssetWorkAsync(asset.Id, t))
             throw new PropertyException(409, "asset_workflow_controlled");
@@ -432,10 +442,10 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
     }
     public async Task NotifyPolicyPublicationAsync(Guid locationId, Guid policyId, CancellationToken t)
     {
-        var recipients = await (from c in db.Set<Native.Contract>().AsNoTracking()
-                                join r in db.Set<Native.Room>().AsNoTracking() on c.RoomId equals r.Id
-                                where r.LocationId == locationId && c.Status == (short)ContractStatus.Active &&
-                                    (c.ContractType == "MAIN" || c.ContractType == "RENEWAL" || c.ContractType == "ADDENDUM") &&
+        var recipients = await (from c in db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking()
+                                join r in db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking() on c.RoomId equals r.Id
+                                where r.LocationId == locationId && c.Status == ContractStatus.Active &&
+                                    (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal || c.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum) &&
                                     c.TenantUserId != null
                                 select new { c.Id, c.TenantUserId }).ToArrayAsync(t);
         foreach (var recipient in recipients)

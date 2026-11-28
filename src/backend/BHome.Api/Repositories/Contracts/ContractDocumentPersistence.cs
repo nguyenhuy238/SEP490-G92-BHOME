@@ -20,7 +20,7 @@ internal static class ContractDocumentPersistence
     {
         if (db is not Compact24DbContext)
             return await db.Set<ContractDocumentFile>().AsNoTracking().Where(f => f.ContractId == contractId).ToArrayAsync(token);
-        var row = await db.Set<Native.Contract>().AsNoTracking().Where(c => c.Id == contractId)
+        var row = await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => c.Id == contractId)
             .Select(c => c.Documents).SingleOrDefaultAsync(token);
         if (row.ValueKind != JsonValueKind.Array) return [];
         return row.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.Object)

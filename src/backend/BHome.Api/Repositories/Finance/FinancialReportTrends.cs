@@ -13,8 +13,8 @@ public sealed partial class FinancialReportRepository
     // totals. Query count is independent of the number of requested months.
     private async Task<IReadOnlyList<FinanceTrendPoint>> ReadTrendAsync(ReportFilter filter, DateOnly today, CancellationToken token)
     {
-        var invoices = db.Financials(db.Set<Native.Invoice>().AsNoTracking().Where(i =>
-            i.Status == (short)InvoiceStatus.Final && i.BillingPeriod >= filter.From && i.BillingPeriod <= filter.To &&
+        var invoices = db.Financials(db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking().Where(i =>
+            i.Status == InvoiceStatus.Final && i.BillingPeriod >= filter.From && i.BillingPeriod <= filter.To &&
             (filter.LocationId == null || i.LocationId == filter.LocationId) &&
             (filter.RoomId == null || i.RoomId == filter.RoomId)));
         var invoiceAmounts = await invoices.GroupBy(i => new { i.BillingPeriod.Year, i.BillingPeriod.Month })

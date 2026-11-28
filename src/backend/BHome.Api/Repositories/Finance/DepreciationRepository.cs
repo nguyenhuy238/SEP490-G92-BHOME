@@ -2,6 +2,7 @@ using System.Text.Json;
 using BHome.Application.Finance;
 using BHome.Domain.IncidentMaintenance;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
 using Native = BHome.Domain.Entities;
 
@@ -45,6 +46,43 @@ public sealed class DepreciationRepository(BHomePersistenceContext db) : IDeprec
         {
             var end = new DateTimeOffset(disposal.Input.DisposedOn.ToDateTime(TimeOnly.MaxValue), TimeSpan.FromHours(7)).ToUniversalTime();
             if (end < through) through = end;
+        }
+        if (db is Compact24DbContext)
+        {
+            // BF-07 append-only repair evidence lives in incident/work-order history;
+            // official maintenance expense amounts remain authoritative in expenses.
+            var evidence = await db.Database.SqlQuery<DepreciationRepairRow>($"""
+                WITH repairs AS (
+                    SELECT latest.h->'state' AS state
+                    FROM (SELECT history FROM incident_reports
+                          UNION ALL SELECT history FROM operational_tasks WHERE task_type='WORK_ORDER') parents
+                    CROSS JOIN LATERAL (
+                        SELECT DISTINCT ON (h->>'recordKey') h
+                        FROM jsonb_array_elements(parents.history) WITH ORDINALITY a(h,n)
+                        WHERE h->>'recordType'='MaintenanceHistory'
+                        ORDER BY h->>'recordKey',n DESC
+                    ) latest
+                    WHERE COALESCE(latest.h->>'deleted','false')<>'true'
+                )
+                SELECT count(DISTINCT (state->>'activityId')::uuid)::int AS "Count",
+                       max((state->>'verifiedAt')::timestamptz) AS "Latest"
+                FROM repairs WHERE (state->>'assetId')::uuid={lot.AssetId}
+                    AND (state->>'locationId')::uuid={lot.LocationId}
+                    AND (state->>'verifiedAt')::timestamptz BETWEEN {start} AND {through}
+                """).SingleAsync(token);
+            var officialCost = await db.Database.SqlQuery<decimal>($"""
+                SELECT COALESCE(sum(e.amount),0) AS "Value"
+                FROM expenses e
+                CROSS JOIN LATERAL (
+                    SELECT h->'state' AS state FROM jsonb_array_elements(e.history) WITH ORDINALITY a(h,n)
+                    WHERE h->>'recordType'='MaintenanceExpense' ORDER BY n DESC LIMIT 1
+                ) latest
+                WHERE e.expense_type='OPERATING' AND e.category='Maintenance'
+                    AND e.asset_id={lot.AssetId} AND e.location_id={lot.LocationId}
+                    AND (latest.state->>'sourceId')::uuid<>{Guid.Empty}
+                    AND (latest.state->>'confirmedAt')::timestamptz BETWEEN {start} AND {through}
+                """).SingleAsync(token);
+            return new(evidence.Count, officialCost, evidence.Latest);
         }
         var rows = db.Set<MaintenanceHistory>().AsNoTracking().Where(h => h.AssetId == lot.AssetId &&
             h.LocationId == lot.LocationId && h.VerifiedAt >= start && h.VerifiedAt <= through);
@@ -211,6 +249,12 @@ public sealed class DepreciationRepository(BHomePersistenceContext db) : IDeprec
         expense.History = history;
         await db.SaveChangesAsync(token);
     }
+}
+
+public sealed class DepreciationRepairRow
+{
+    public int Count { get; set; }
+    public DateTimeOffset? Latest { get; set; }
 }
 
 public sealed class DepreciationRow

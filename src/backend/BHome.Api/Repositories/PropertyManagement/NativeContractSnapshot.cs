@@ -43,27 +43,17 @@ internal static class NativeContractSnapshot
     private static string HistoryJson<T>(string kind, string key, T state) =>
         JsonSerializer.Serialize(new[] { new History<T>(1, kind, key, false, state) }, Json);
 
-    internal static Contract Read(Native.Contract row)
+    internal static Contract Read(Contract row)
     {
         var data = LastState(row.History, "Contract");
         var state = data.ValueKind == JsonValueKind.Object ? data.Deserialize<ContractState>(Json) : null;
         DateTimeOffset At(string name) => data.ValueKind == JsonValueKind.Object &&
             data.TryGetProperty(name, out var value) && value.ValueKind != JsonValueKind.Null
             ? value.GetDateTimeOffset().ToUniversalTime() : DateTimeOffset.UnixEpoch;
-        var contract = Contract.Rehydrate(row.Id, At("createdAt"), At("updatedAt"));
-        contract.RoomId = row.RoomId;
-        contract.OwnerSignerId = row.OwnerSignerId;
-        contract.TenantUserId = row.TenantUserId;
-        contract.DraftMetadata = row.DraftMetadata.GetRawText();
-        contract.DraftVersion = row.Version;
-        contract.RepresentativeResidentId = row.RepresentativeResidentId;
-        contract.PreviousContractId = row.PreviousContractId;
-        contract.ParentContractId = row.ParentContractId;
-        contract.HoldingContractId = row.SourceHoldingContractId;
-        contract.AppliedHoldingDeposit = row.AppliedHoldingDeposit;
+        var contract = row;
+        contract.CreatedAt = At("createdAt");
+        contract.UpdatedAt = At("updatedAt");
         contract.HoldingAllocationReference = state?.HoldingAllocationReference;
-        contract.HoldingExpiryAt = row.HoldingExpiryAt;
-        contract.ReservedCapacity = row.ReservedCapacity;
         contract.ApprovedByUserId = state?.ApprovedByUserId;
         contract.ApprovedAt = state?.ApprovedAt;
         contract.ApprovalReason = state?.ApprovalReason;
@@ -74,67 +64,27 @@ internal static class NativeContractSnapshot
         contract.LifecycleActorId = state?.LifecycleActorId;
         contract.LifecycleAt = state?.LifecycleAt;
         contract.LifecycleReason = state?.LifecycleReason;
-        contract.Kind = row.ContractType switch
-        {
-            "HOLDING" => ContractKind.Holding,
-            "RENEWAL" => ContractKind.Renewal,
-            "ADDENDUM" => ContractKind.Addendum,
-            _ => ContractKind.Main
-        };
-        contract.Status = (ContractStatus)row.Status;
-        contract.StartDate = row.StartDate;
-        contract.EndDate = row.EndDate;
-        contract.MonthlyRent = row.MonthlyRent ?? 0;
-        contract.RequiredDeposit = row.DepositRequired;
-        contract.Terms = row.Terms;
-        contract.SnapshotHash = row.SnapshotHash ?? "";
         contract.IsDevelopmentDemo = state?.IsDevelopmentDemo ?? false;
         contract.SigningMode = state?.SigningMode ?? "";
         contract.InternalAcceptance = state?.InternalAcceptance ?? "{}";
         contract.InitialPaymentRequired = state?.InitialPaymentRequired ?? false;
         contract.PaymentMode = state?.PaymentMode;
         contract.OperatingPolicySnapshot = state?.OperatingPolicySnapshot ?? "";
-        contract.ActivatedByUserId = row.ActivatedByUserId;
-        contract.ActivatedAt = row.ActivatedAt;
-        contract.ActualEndDate = row.ActualEndDate;
         return contract;
     }
 
-    internal static ContractResident Read(Native.ContractResident row) => new()
-    {
-        ContractId = row.ContractId,
-        ResidentId = row.ResidentId,
-        Role = (ResidentType)row.ResidentRole,
-        ResidenceFrom = row.ResidenceFrom,
-        ResidenceTo = row.ResidenceTo
-    };
-
-    internal static ContractSignature Read(Native.ContractSigning row)
+    internal static ContractSignature Read(ContractSignature row)
     {
         var state = row.SigningData.TryGetProperty("compactState", out var value) ? value : default;
         string Text(string key) => state.ValueKind == JsonValueKind.Object && state.TryGetProperty(key, out var field) &&
             field.ValueKind == JsonValueKind.String ? field.GetString()! : "";
-        var signature = ContractSignature.RestoreDetachedAttempt(row.Id);
-        signature.ContractId = row.ContractId;
-        signature.SignerUserId = row.SignerUserId;
-        signature.CertificateId = row.CertificateId;
-        signature.Status = (SignatureStatus)row.SigningStatus;
-        signature.SnapshotHash = row.SnapshotHash;
-        signature.SourceHash = row.SourceHash ?? "";
-        signature.PreparedHash = row.PreparedHash ?? "";
-        signature.PreparedObjectKey = row.PreparedObjectKey ?? "";
+        var signature = row;
         signature.FieldName = Text("fieldName");
         signature.DocumentDigest = Text("documentDigest");
         signature.DataToSignDigest = Text("dataToSignDigest");
         signature.CertificateChain = Text("certificateChain");
         signature.ProviderUserId = Text("providerUserId");
         signature.CredentialId = Text("credentialId");
-        signature.ProviderReference = row.ProviderReference;
-        signature.SignedObjectKey = row.SignedObjectKey;
-        signature.SignedHash = row.SignedHash;
-        signature.SignedAt = row.SignedAt;
-        signature.ExpiresAt = row.ExpiresAt;
-        signature.CreatedAt = row.RequestedAt;
         signature.UpdatedAt = state.ValueKind == JsonValueKind.Object && state.TryGetProperty("updatedAt", out var at) &&
             at.ValueKind != JsonValueKind.Null ? at.GetDateTimeOffset().ToUniversalTime() : DateTimeOffset.UnixEpoch;
         return signature;
@@ -142,17 +92,17 @@ internal static class NativeContractSnapshot
 
     internal static async Task<Contract?> LoadAsync(Compact24DbContext db, Guid id, CancellationToken token)
     {
-        var row = await db.Set<Native.Contract>().AsNoTracking().SingleOrDefaultAsync(c => c.Id == id, token);
-        if (row is null || row.ContractType is not ("MAIN" or "RENEWAL" or "HOLDING" or "ADDENDUM")) return null;
+        var row = await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().SingleOrDefaultAsync(c => c.Id == id, token);
+        if (row is null || !Enum.IsDefined(row.Kind)) return null;
         var contract = Read(row);
-        var room = await db.Set<Native.Room>().AsNoTracking().SingleAsync(r => r.Id == row.RoomId, token);
-        var location = await db.Set<Native.Location>().AsNoTracking().SingleAsync(l => l.Id == room.LocationId, token);
+        var room = await db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().SingleAsync(r => r.Id == row.RoomId, token);
+        var location = await db.Set<BHome.Domain.Locations.Location>().AsNoTracking().SingleAsync(l => l.Id == room.LocationId, token);
         contract.Room = NativeRoomLocationPersistence.Read(room);
         contract.Room.Location = NativeRoomLocationPersistence.Read(location);
         RestoreRoomType(contract.Room, location.OperatingSettings);
-        contract.Residents = (await db.Set<Native.ContractResident>().AsNoTracking().Where(r => r.ContractId == id)
-            .ToArrayAsync(token)).Select(Read).ToList();
-        contract.Signatures = (await db.Set<Native.ContractSigning>().AsNoTracking().Where(s => s.ContractId == id)
+        contract.Residents = (await db.Set<BHome.Domain.TenantContracts.ContractResident>().AsNoTracking().Where(r => r.ContractId == id)
+            .ToArrayAsync(token)).ToList();
+        contract.Signatures = (await db.Set<BHome.Domain.TenantContracts.ContractSignature>().AsNoTracking().Where(s => s.ContractId == id)
             .ToArrayAsync(token)).Select(Read).ToList();
         return contract;
     }

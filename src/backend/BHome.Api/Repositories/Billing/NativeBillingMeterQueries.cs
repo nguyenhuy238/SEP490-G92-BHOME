@@ -24,11 +24,11 @@ internal static class NativeBillingMeterQueries
 
     internal sealed record ReadingWithEvidence(MeterReading Reading, OperationalTask Task, MeterEvidence Evidence);
 
-    internal static IQueryable<Native.MeterReading> Confirmed(Compact24DbContext db) =>
-        db.Set<Native.MeterReading>().FromSqlRaw(ConfirmedWithEvidence).AsNoTracking();
+    internal static IQueryable<BHome.Domain.Billing.MeterReading> Confirmed(Compact24DbContext db) =>
+        db.Set<BHome.Domain.Billing.MeterReading>().FromSqlRaw(ConfirmedWithEvidence).AsNoTracking();
 
-    internal static IQueryable<Native.MeterReading> TenantVisible(Compact24DbContext db, Guid actor) =>
-        db.Set<Native.MeterReading>().FromSqlInterpolated($"""
+    internal static IQueryable<BHome.Domain.Billing.MeterReading> TenantVisible(Compact24DbContext db, Guid actor) =>
+        db.Set<BHome.Domain.Billing.MeterReading>().FromSqlInterpolated($"""
             SELECT r.* FROM meter_readings r
             JOIN operational_tasks t ON t.id=r.operational_task_id
             JOIN meters m ON m.id=r.meter_id
@@ -56,9 +56,8 @@ internal static class NativeBillingMeterQueries
                     WHERE li.meter_reading_id=r.id AND {actor}=ANY(i.recipient_user_ids)))
             """).AsNoTracking();
 
-    internal static ReadingWithEvidence Read(Native.MeterReading row, Native.OperationalTask task)
+    internal static ReadingWithEvidence Read(MeterReading reading, BHome.Domain.Billing.OperationalTask task)
     {
-        var reading = NativeCaptureReads.Reading(row);
         var evidence = NativeCaptureReads.Evidence(task, reading.EvidenceId)
             ?? throw new InvalidOperationException("Confirmed meter evidence was not found.");
         return new(reading, NativeCaptureReads.Task(task), evidence);

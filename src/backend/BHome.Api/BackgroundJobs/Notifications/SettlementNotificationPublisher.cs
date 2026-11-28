@@ -57,8 +57,8 @@ internal sealed partial class NotificationEventPublisher
             foreach (var member in consent.Members.Where(m => m.UserId != change.ActorId).DistinctBy(m => m.UserId))
             {
                 var linked = db is Compact24DbContext compact
-                    ? await compact.Set<Native.Contract>().AnyAsync(c => c.Id == member.ContractId && c.RoomId == contract.RoomId &&
-                        c.Status == (short)ContractStatus.Active && compact.Set<Native.ContractResident>().Any(r => r.ContractId == c.Id && r.ResidentId == member.ResidentId), token)
+                    ? await compact.Set<BHome.Domain.TenantContracts.Contract>().AnyAsync(c => c.Id == member.ContractId && c.RoomId == contract.RoomId &&
+                        c.Status == ContractStatus.Active && compact.Set<BHome.Domain.TenantContracts.ContractResident>().Any(r => r.ContractId == c.Id && r.ResidentId == member.ResidentId), token)
                     : await db.Set<Contract>().AsNoTracking().AnyAsync(c => c.Id == member.ContractId &&
                     c.RoomId == contract.RoomId && c.Status == ContractStatus.Active &&
                     c.Residents.Any(r => r.ResidentId == member.ResidentId), token);

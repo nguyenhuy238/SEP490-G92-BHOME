@@ -36,7 +36,7 @@ public partial class Compact24DbContext(DbContextOptions<Compact24DbContext> opt
         ConfigurePhysicalModel(model);
     }
 
-    protected static void ConfigurePhysicalModel(ModelBuilder model)
+    protected static void ConfigurePhysicalModel(ModelBuilder model, bool archive = false)
     {
         var user = model.Entity<ApplicationUser>();
         user.ToTable("users", t => t.ExcludeFromMigrations()); user.HasKey(x => x.Id);
@@ -77,7 +77,7 @@ public partial class Compact24DbContext(DbContextOptions<Compact24DbContext> opt
         refresh.Property(x => x.SecurityStamp).HasMaxLength(256);
         refresh.Property(x => x.DeviceLabel).HasMaxLength(256);
         refresh.Property(x => x.RevocationReason).HasMaxLength(50);
-        Compact24NativeModel.Configure(model);
+        Compact24NativeModel.Configure(model, archive);
     }
 
     public override void PrepareUserRole(ApplicationUser user, string role)

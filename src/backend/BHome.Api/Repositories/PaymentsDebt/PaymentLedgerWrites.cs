@@ -103,8 +103,8 @@ internal static class PaymentLedgerWrites
             """, token);
     }
 
-    internal static IQueryable<Native.PaymentAllocation> Allocations(BHomePersistenceContext db) =>
-        db.Set<Native.PaymentAllocation>().AsNoTracking().Where(a => a.TargetInvoiceId != null ||
+    internal static IQueryable<BHome.Domain.PaymentsDebt.PaymentAllocation> Allocations(BHomePersistenceContext db) =>
+        db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AsNoTracking().Where(a => a.InvoiceId != null ||
             a.TargetDepositContractId != null || a.TargetSettlementContractId != null || a.TargetInitialContractId != null);
 
     internal static IQueryable<string> ClaimedReferences(BHomePersistenceContext db) => db.Database.SqlQueryRaw<string>("""
@@ -186,16 +186,15 @@ internal static class PaymentLedgerWrites
             var holding = await PaymentObligationQueries.Contracts(db).SingleAsync(c => c.Id == source, token);
             var main = await PaymentObligationQueries.Contracts(db).SingleOrDefaultAsync(c => c.Id == target, token);
             var received = await allocations.Where(x => x.TargetDepositContractId == source).SumAsync(x => (decimal?)x.Amount, token) ?? 0m;
-            if (holding.ContractType != "HOLDING" || holding.Status != (short)ContractStatus.Active || main is null || main.ContractType != "MAIN" ||
-                main.SourceHoldingContractId != source || main.RoomId != holding.RoomId || main.TenantUserId != holding.TenantUserId ||
-                a.Amount != Math.Min(received, main.DepositRequired)) throw Conflict();
+            if (holding.Kind != BHome.Domain.TenantContracts.ContractKind.Holding || holding.Status != ContractStatus.Active || main is null || main.Kind != BHome.Domain.TenantContracts.ContractKind.Main ||
+                main.HoldingContractId != source || main.RoomId != holding.RoomId || main.TenantUserId != holding.TenantUserId ||
+                a.Amount != Math.Min(received, main.RequiredDeposit)) throw Conflict();
             return;
         }
         if (a.SourceDepositContractId is not null ||
             (a.TargetDepositContractId is null ? 0 : 1) + (a.InvoiceId is null ? 0 : 1) + (a.TargetSettlementContractId is null ? 0 : 1) != 1 ||
-            await allocations.AnyAsync(x => x.SourcePaymentId == receipt, token)) throw Conflict();
-        var transfer = await db.Set<Native.Payment>().AsNoTracking().Where(p => p.Id == receipt &&
-            EF.Functions.JsonExists(p.VerificationData, "compactState"))
+            await allocations.AnyAsync(x => x.TransferId == receipt, token)) throw Conflict();
+        var transfer = await PaymentLedgerQueries.ReceiptEntities(db).Where(p => p.Id == receipt)
             .Select(p => new { p.Amount, Reference = p.VerificationData.GetProperty("compactState").GetProperty("normalizedReference").GetString() ?? "" })
             .SingleAsync(token);
         var claimed = ClaimedReferences(db);
@@ -227,9 +226,9 @@ internal static class PaymentLedgerWrites
                 await claimed.AnyAsync(c => c == transfer.Reference, token)) throw Conflict();
             return;
         }
-        var invoice = await db.Set<Native.Invoice>().AsNoTracking().SingleAsync(i => i.Id == a.InvoiceId, token);
-        var financial = await db.Financials(db.Set<Native.Invoice>().AsNoTracking().Where(i => i.Id == invoice.Id)).SingleAsync(token);
-        if (invoice.Status != (short)InvoiceStatus.Final || a.Amount <= 0 ||
+        var invoice = await db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking().SingleAsync(i => i.Id == a.InvoiceId, token);
+        var financial = await db.Financials(db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking().Where(i => i.Id == invoice.Id)).SingleAsync(token);
+        if (invoice.Status != InvoiceStatus.Final || a.Amount <= 0 ||
             a.Amount != Math.Min(transfer.Amount, financial.Original + financial.Adjustments - financial.Paid) ||
             await claimed.AnyAsync(c => c == transfer.Reference, token)) throw Conflict();
     }

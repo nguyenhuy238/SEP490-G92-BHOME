@@ -20,7 +20,7 @@ internal sealed partial class SharedConfigurationStore(Compact24DbContext db, Co
             await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({location.ToString()},0))", t);
             if (validateActiveLocations)
             {
-                if (!await db.Set<Native.Location>().AsNoTracking().AnyAsync(l => l.Id == location && l.IsActive, t)) throw new PropertyException(409, "location_inactive_or_missing");
+                if (!await db.Set<BHome.Domain.Locations.Location>().AsNoTracking().AnyAsync(l => l.Id == location && l.IsActive, t)) throw new PropertyException(409, "location_inactive_or_missing");
             }
         }
         var value = await work(); await db.SaveChangesAsync(t); await tx.CommitAsync(t); return value;

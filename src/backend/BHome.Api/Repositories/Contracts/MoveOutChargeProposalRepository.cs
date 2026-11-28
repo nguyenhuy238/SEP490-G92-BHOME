@@ -225,8 +225,8 @@ internal sealed partial class SettlementReceivablesRepository
             feedback, feedback.TenantUserId, feedback.RespondedAt, token,
             feedback.Confirmed ? "MoveOutChargeProposalAccepted" : "MoveOutChargeProposalDisputed");
         await db.SaveChangesAsync(token);
-        var contract = await (from c in db.Set<BHome.Domain.Entities.Contract>().AsNoTracking()
-                              join r in db.Set<BHome.Domain.Entities.Room>() on c.RoomId equals r.Id
+        var contract = await (from c in db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking()
+                              join r in db.Set<BHome.Domain.PropertyManagement.Room>() on c.RoomId equals r.Id
                               where c.Id == feedback.ContractId
                               select new { c.OwnerSignerId, r.LocationId }).SingleAsync(token);
         var writer = new BHome.Infrastructure.Modules.Notifications.CompactNotificationWriter((Compact24DbContext)db, clock);

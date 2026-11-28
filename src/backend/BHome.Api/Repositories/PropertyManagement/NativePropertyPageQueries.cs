@@ -53,7 +53,7 @@ internal static class NativePropertyPageQueries
     internal static async Task<PagedResult<LocationDto>> LocationsAsync(Compact24DbContext db,
         PropertyQuery q, Guid? staffId, DateOnly today, CancellationToken token)
     {
-        var rows = db.Set<Native.Location>().AsNoTracking().Where(x =>
+        var rows = db.Set<BHome.Domain.Locations.Location>().AsNoTracking().Where(x =>
             (!q.IsActive.HasValue || x.IsActive == q.IsActive) &&
             (q.Search == null || x.Name.Contains(q.Search) || x.Address.Contains(q.Search)));
         if (staffId is { } staff)
@@ -68,8 +68,8 @@ internal static class NativePropertyPageQueries
     internal static async Task<PagedResult<RoomDto>> RoomsAsync(Compact24DbContext db,
         PropertyQuery q, Guid? staffId, DateOnly today, CancellationToken token)
     {
-        short? status = q.RoomStatus is { } value ? (short)value : null;
-        var rows = db.Set<Native.Room>().AsNoTracking().Where(x =>
+        var status = q.RoomStatus;
+        var rows = db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(x =>
             (!q.LocationId.HasValue || x.LocationId == q.LocationId) &&
             (!q.RoomId.HasValue || x.Id == q.RoomId) && (!status.HasValue || x.Status == status) &&
             (q.Search == null || x.RoomNumber.Contains(q.Search)));
@@ -85,13 +85,13 @@ internal static class NativePropertyPageQueries
     internal static async Task<PagedResult<AssetDto>> AssetsAsync(Compact24DbContext db,
         PropertyQuery q, Guid? staffId, DateOnly today, CancellationToken token)
     {
-        short? status = q.AssetStatus is { } value ? (short)value : null;
-        var rows = db.Set<Native.Asset>().AsNoTracking().Where(x =>
+        var status = q.AssetStatus;
+        var rows = db.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking().Where(x =>
             (!q.LocationId.HasValue || x.LocationId == q.LocationId) &&
             (!q.CommonAreaOnly || x.RoomId == null && x.CommonArea != null) &&
             (!q.RoomAssetsOnly || x.RoomId != null) &&
             (!q.RoomId.HasValue || x.RoomId == q.RoomId) && (!status.HasValue || x.Status == status) &&
-            (q.Search == null || x.Name.Contains(q.Search) || x.AssetCode != null && x.AssetCode.Contains(q.Search)));
+            (q.Search == null || x.Name.Contains(q.Search) || x.Code != null && x.Code.Contains(q.Search)));
         if (staffId is { } staff)
         {
             var locations = StaffLocations(db, staff, today);

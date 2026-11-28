@@ -57,9 +57,9 @@ internal sealed partial class RefundRepository
             """).SingleAsync(t);
         if (allReserved != requests.Where(r => r.Status is "REQUESTED" or "APPROVED" or "COMPLETED").Sum(r => r.Amount))
             blockers.Add("refund_source_requires_manual_review");
-        var people = await db.Set<Native.Resident>().AsNoTracking().Where(r =>
-            r.UserId != null && r.VerificationStatus == (short)IdentityVerificationStatus.Verified &&
-            db.Set<Native.ContractResident>().Any(cr => cr.ContractId == contractId && cr.ResidentId == r.Id))
+        var people = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r =>
+            r.TenantUserId != null && r.VerificationStatus == IdentityVerificationStatus.Verified &&
+            db.Set<BHome.Domain.TenantContracts.ContractResident>().Any(cr => cr.ContractId == contractId && cr.ResidentId == r.Id))
             .OrderBy(r => r.Id).Select(r => new RefundPerson(r.Id, r.DisplayLabel)).ToArrayAsync(t);
         // BR-30: the Owner confirms the recipient under the Contract agreement. These choices
         // are eligible Residents, not an inference about who originally paid the deposit.

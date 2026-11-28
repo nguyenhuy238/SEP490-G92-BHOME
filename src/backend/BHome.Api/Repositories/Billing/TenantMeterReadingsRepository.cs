@@ -43,10 +43,10 @@ internal sealed class TenantMeterReadingsRepository(BHomePersistenceContext db) 
         if (db is Compact24DbContext compact)
         {
             var nativeQuery = from reading in NativeBillingMeterQueries.TenantVisible(compact, actor)
-                              join task in compact.Set<Native.OperationalTask>().AsNoTracking() on reading.OperationalTaskId equals task.Id
-                              join meter in compact.Set<Native.Meter>().AsNoTracking() on reading.MeterId equals meter.Id
-                              join nativeRoom in compact.Set<Native.Room>().AsNoTracking() on meter.RoomId equals nativeRoom.Id
-                              join location in compact.Set<Native.Location>().AsNoTracking() on nativeRoom.LocationId equals location.Id
+                              join task in compact.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking() on reading.TaskId equals task.Id
+                              join meter in compact.Set<BHome.Domain.Billing.Meter>().AsNoTracking() on reading.MeterId equals meter.Id
+                              join nativeRoom in compact.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking() on meter.RoomId equals nativeRoom.Id
+                              join location in compact.Set<BHome.Domain.Locations.Location>().AsNoTracking() on nativeRoom.LocationId equals location.Id
                               where (room == null || nativeRoom.Id == room) && (period == null || task.BillingPeriod == period)
                               select new { reading, task, meter, nativeRoom, location.Name };
             var nativeTotal = await nativeQuery.CountAsync(t);
@@ -56,7 +56,7 @@ internal sealed class TenantMeterReadingsRepository(BHomePersistenceContext db) 
             {
                 var value = NativeBillingMeterQueries.Read(r.reading, r.task);
                 return new TenantMeterReading(value.Reading.Id, r.nativeRoom.Id, r.nativeRoom.RoomNumber, r.Name,
-                    r.meter.MeterCode, ((UtilityType)r.meter.UtilityType).ToString(), value.Task.Purpose.ToString(),
+                    r.meter.Code, ((UtilityType)r.meter.UtilityType).ToString(), value.Task.Purpose.ToString(),
                     value.Task.ReadingDate, value.Task.BillingPeriod, value.Reading.PreviousValue, value.Reading.ConfirmedValue,
                     value.Reading.Consumption, value.Reading.ConfirmedAt, value.Reading.Status.ToString());
             }).ToArray();
@@ -80,7 +80,7 @@ internal sealed class TenantMeterReadingsRepository(BHomePersistenceContext db) 
         if (db is Compact24DbContext compact)
         {
             var row = await (from reading in NativeBillingMeterQueries.TenantVisible(compact, actor)
-                             join task in compact.Set<Native.OperationalTask>().AsNoTracking() on reading.OperationalTaskId equals task.Id
+                             join task in compact.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking() on reading.TaskId equals task.Id
                              where reading.Id == id
                              select new { reading, task }).SingleOrDefaultAsync(t);
             if (row is null) return null;

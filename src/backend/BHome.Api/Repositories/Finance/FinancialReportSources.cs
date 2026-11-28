@@ -14,12 +14,12 @@ public sealed partial class FinancialReportRepository
     {
         await using var snapshot = db.Database.CurrentTransaction is null
             ? await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token) : null;
-        var rooms = db.Set<Native.Room>().AsNoTracking().Where(r =>
+        var rooms = db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(r =>
             (filter.RoomId == null || r.Id == filter.RoomId) &&
             (filter.LocationId == null || r.LocationId == filter.LocationId));
         if (filter.RoomId is not null && !await rooms.AnyAsync(token))
             throw new FinanceException(404, "finance_scope_not_found");
-        var locations = await db.Set<Native.Location>().AsNoTracking().Where(l =>
+        var locations = await db.Set<BHome.Domain.Locations.Location>().AsNoTracking().Where(l =>
             (filter.LocationId == null || l.Id == filter.LocationId) &&
             (filter.RoomId == null || rooms.Any(r => r.LocationId == l.Id)))
             .Select(l => l.Id).ToArrayAsync(token);
@@ -60,8 +60,8 @@ public sealed partial class FinancialReportRepository
         ReportFilter filter, string kind, int page, int pageSize, CancellationToken token)
     {
         await using var snapshot = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
-        if (filter.LocationId is { } location && !await db.Set<Native.Location>().AsNoTracking().AnyAsync(l => l.Id == location, token) ||
-            filter.RoomId is { } room && !await db.Set<Native.Room>().AsNoTracking().AnyAsync(r => r.Id == room &&
+        if (filter.LocationId is { } location && !await db.Set<BHome.Domain.Locations.Location>().AsNoTracking().AnyAsync(l => l.Id == location, token) ||
+            filter.RoomId is { } room && !await db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().AnyAsync(r => r.Id == room &&
                 (filter.LocationId == null || r.LocationId == filter.LocationId), token))
             throw new FinanceException(404, "finance_scope_not_found");
         var start = new DateTimeOffset(filter.From.ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7)).ToUniversalTime();
@@ -84,7 +84,7 @@ public sealed partial class FinancialReportRepository
         {
             // Same invoice financial projection and settlement integrity guard as the report.
             _ = await SettlementSourcesAsync(filter, start, end, token);
-            var invoices = db.Financials(db.Set<Native.Invoice>().AsNoTracking().Where(i => i.Status == (short)InvoiceStatus.Final &&
+            var invoices = db.Financials(db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking().Where(i => i.Status == InvoiceStatus.Final &&
                 (filter.LocationId == null || i.LocationId == filter.LocationId) && (filter.RoomId == null || i.RoomId == filter.RoomId)));
             var settlement = SettlementSourceRows(filter);
             if (kind != "debt")

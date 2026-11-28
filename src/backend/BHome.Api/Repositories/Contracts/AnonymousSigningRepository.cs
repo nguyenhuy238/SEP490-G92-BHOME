@@ -35,17 +35,17 @@ internal sealed class AnonymousSigningRepository(BHomePersistenceContext db) : I
             await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"bhome-signing-email:" + email},0))", t);
         if (db is Compact24DbContext native)
         {
-            if (await db.Set<Native.Resident>().AsNoTracking().AnyAsync(r => r.Id != residentId &&
+            if (await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().AnyAsync(r => r.Id != residentId &&
                 r.ContactEmail != null && r.ContactEmail.Trim().ToLower() == email, t)) return true;
             if (await db.Users.AsNoTracking().AnyAsync(u => EF.Property<string[]>(u, "roles").Contains(Roles.Staff) &&
                 u.Email != null && u.Email.Trim().ToLower() == email, t)) return true;
-            if (await (from c in db.Set<Native.Contract>().AsNoTracking()
-                       join cr in db.Set<Native.ContractResident>().AsNoTracking() on c.Id equals cr.ContractId
-                       join r in db.Set<Native.Resident>().AsNoTracking() on cr.ResidentId equals r.Id
-                       where c.ContractType == "MAIN" && (c.Id != contractId && c.Status == (short)ContractStatus.Active || r.Id != residentId) &&
+            if (await (from c in db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking()
+                       join cr in db.Set<BHome.Domain.TenantContracts.ContractResident>().AsNoTracking() on c.Id equals cr.ContractId
+                       join r in db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking() on cr.ResidentId equals r.Id
+                       where c.Kind == BHome.Domain.TenantContracts.ContractKind.Main && (c.Id != contractId && c.Status == ContractStatus.Active || r.Id != residentId) &&
                          (r.ContactEmail != null && r.ContactEmail.Trim().ToLower() == email ||
                           db.Users.Any(u => u.Email != null && u.Email.Trim().ToLower() == email &&
-                              (u.Id == r.UserId || r.Id == c.RepresentativeResidentId && u.Id == c.TenantUserId)))
+                              (u.Id == r.TenantUserId || r.Id == c.RepresentativeResidentId && u.Id == c.TenantUserId)))
                        select c.Id).AnyAsync(t)) return true;
             return await NativeInvitationPersistence.AcceptedEmailInUseAsync(native, contractId, residentId, email, t);
         }

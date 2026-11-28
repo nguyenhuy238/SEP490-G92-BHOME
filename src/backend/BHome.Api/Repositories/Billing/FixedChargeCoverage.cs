@@ -9,7 +9,6 @@ using BHome.Infrastructure.Contracts;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
-using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Billing;
 
@@ -19,23 +18,23 @@ internal sealed class FixedChargeCoverageRepository(BHomePersistenceContext db) 
     {
         var result = new List<FixedChargeCoverage>();
         if (db is not Compact24DbContext compact) return result;
-        var nativeLines = await (from line in compact.Set<Native.InvoiceItem>().AsNoTracking()
-                                 join invoice in compact.Set<Native.Invoice>().AsNoTracking() on line.InvoiceId equals invoice.Id
-                                 join contract in compact.Set<Native.Contract>().AsNoTracking() on invoice.ContractId equals contract.Id
+        var nativeLines = await (from line in compact.Set<BHome.Domain.Billing.InvoiceLine>().AsNoTracking()
+                                 join invoice in compact.Set<BHome.Domain.Billing.Invoice>().AsNoTracking() on line.InvoiceId equals invoice.Id
+                                 join contract in compact.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking() on invoice.RepresentativeContractId equals contract.Id
                                  where invoice.RoomId == roomId && (invoice.BillingPeriod == period ||
                                      code == "RENT" && invoice.BillingPeriod == period.AddMonths(-1)) &&
-                                     invoice.Status == (short)InvoiceStatus.Final && line.ChargeCode == code
-                                 select new { line, invoice.BillingPeriod, invoice.BillingSnapshot, contract.SnapshotHash }).ToArrayAsync(token);
+                                     invoice.Status == InvoiceStatus.Final && line.ChargeCode == code
+                                 select new { line, invoice.BillingPeriod, invoice.BillingSnapshot, SnapshotHash = contract.StoredSnapshotHash }).ToArrayAsync(token);
         var lines = nativeLines.Select(r => new
         {
-            line = NativeInvoicePersistence.ReadLine(r.line),
+            line = r.line,
             r.BillingPeriod,
             SnapshotHash = r.SnapshotHash ?? "",
             ScheduleSnapshot = r.BillingSnapshot.TryGetProperty("compactState", out var state) &&
                 state.TryGetProperty("scheduleSnapshot", out var snapshot) ? snapshot.GetString() ?? "" : ""
         }).ToArray();
         var invoiceIds = lines.Select(r => r.line.InvoiceId).Distinct().ToArray();
-        var adjustmentRows = await compact.Set<Native.InvoiceAdjustment>().FromSqlInterpolated($"""
+        var adjustmentRows = await compact.Set<InvoiceAdjustmentRequest>().FromSqlInterpolated($"""
             SELECT * FROM invoice_adjustments WHERE decision_snapshot->>'chargeCode'={code}
                 AND COALESCE((decision_snapshot->>'invoiceStatus')::integer,0)=1 AND decision_snapshot->>'outcome'='Approved'
             """).AsNoTracking().Where(d => invoiceIds.Contains(d.InvoiceId)).Take(501).ToArrayAsync(token);

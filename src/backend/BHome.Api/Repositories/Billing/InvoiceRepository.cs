@@ -40,11 +40,11 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
     {
         if (db is Compact24DbContext compact)
         {
-            return await (from c in compact.Set<Native.Contract>().AsNoTracking()
-                          join r in compact.Set<Native.Room>().AsNoTracking() on c.RoomId equals r.Id
-                          join l in compact.Set<Native.Location>().AsNoTracking() on r.LocationId equals l.Id
-                          where c.TenantUserId == tenantId && c.Status == (short)ContractStatus.Active &&
-                              (c.ContractType == "MAIN" || c.ContractType == "RENEWAL") && c.ActivatedAt != null && l.IsActive
+            return await (from c in compact.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking()
+                          join r in compact.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking() on c.RoomId equals r.Id
+                          join l in compact.Set<BHome.Domain.Locations.Location>().AsNoTracking() on r.LocationId equals l.Id
+                          where c.TenantUserId == tenantId && c.Status == ContractStatus.Active &&
+                              (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal) && c.ActivatedAt != null && l.IsActive
                           select r.LocationId).Distinct().ToArrayAsync(t);
         }
         return await db.Set<Contract>().AsNoTracking().Where(c => c.TenantUserId == tenantId && c.Status == ContractStatus.Active &&
@@ -55,8 +55,8 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
     {
         if (db is Compact24DbContext compact)
         {
-            var pair = await (from room in compact.Set<Native.Room>().AsNoTracking()
-                              join location in compact.Set<Native.Location>().AsNoTracking() on room.LocationId equals location.Id
+            var pair = await (from room in compact.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking()
+                              join location in compact.Set<BHome.Domain.Locations.Location>().AsNoTracking() on room.LocationId equals location.Id
                               where room.Id == roomId
                               select new { room, location }).SingleOrDefaultAsync(t);
             if (pair is null) return null;
@@ -73,7 +73,7 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
         return await WithLocationLockAsync(locationId, async () =>
         {
             if (db is Compact24DbContext compact)
-                await compact.Set<Native.Room>().FromSqlInterpolated($"SELECT * FROM rooms WHERE id={roomId} FOR UPDATE").AsNoTracking().SingleAsync(t);
+                await compact.Set<BHome.Domain.PropertyManagement.Room>().FromSqlInterpolated($"SELECT * FROM rooms WHERE id={roomId} FOR UPDATE").AsNoTracking().SingleAsync(t);
             else await db.Locked<Room>(roomId).SingleAsync(t);
             return await action();
         }, t);
@@ -82,7 +82,7 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
     {
         if (db is Compact24DbContext compact)
         {
-            return await compact.Set<Native.Room>().AsNoTracking().Where(r => r.Id == roomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t);
+            return await compact.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(r => r.Id == roomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t);
         }
         return await db.Set<Room>().AsNoTracking().Where(r => r.Id == roomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t);
     }
@@ -123,7 +123,7 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
     {
         if (db is Compact24DbContext compact)
         {
-            return await compact.Set<Native.Location>().AsNoTracking().AnyAsync(l => l.Id == locationId, t);
+            return await compact.Set<BHome.Domain.Locations.Location>().AsNoTracking().AnyAsync(l => l.Id == locationId, t);
         }
         return await db.Locations.AnyAsync(l => l.Id == locationId, t);
     }
@@ -146,8 +146,8 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
     public async Task<Invoice?> ForPeriodAsync(Guid roomId, DateOnly period, CancellationToken t)
     {
         if (db is Compact24DbContext compact)
-            return TrackNative((await NativeInvoicePersistence.ReadAsync(compact, compact.Set<Native.Invoice>().AsNoTracking()
-                .Where(i => i.InvoiceType == "PERIODIC" && i.RoomId == roomId && i.BillingPeriod == period), t)).SingleOrDefault());
+            return TrackNative((await NativeInvoicePersistence.ReadAsync(compact, compact.Set<BHome.Domain.Billing.Invoice>().AsNoTracking()
+                .Where(i => i.Type == "PERIODIC" && i.RoomId == roomId && i.BillingPeriod == period), t)).SingleOrDefault());
         var invoices = db.PeriodicInvoices().Where(i => i.RoomId == roomId && i.BillingPeriod == period);
         return await Detail(invoices).SingleOrDefaultAsync(t);
     }
@@ -158,7 +158,7 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
             var rows = NativeInvoicePersistence.Visible(compact, scope).Where(i => roomId == null || i.RoomId == roomId);
             if (filter?.LocationId is { } nativeLocation) rows = rows.Where(i => i.LocationId == nativeLocation);
             if (filter?.BillingPeriod is { } nativePeriod) rows = rows.Where(i => i.BillingPeriod == nativePeriod);
-            if (filter?.Status is { } nativeStatus) rows = rows.Where(i => i.Status == (short)nativeStatus);
+            if (filter?.Status is { } nativeStatus) rows = rows.Where(i => i.Status == nativeStatus);
             var total = await rows.CountAsync(t);
             var result = await NativeInvoicePersistence.ReadAsync(compact, rows.OrderByDescending(i => i.BillingPeriod)
                 .ThenBy(i => i.Id).Skip((page - 1) * pageSize).Take(pageSize), t);
@@ -177,19 +177,19 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
         Contract[] contracts;
         if (db is Compact24DbContext compact)
         {
-            var rows = await compact.Set<Native.Contract>().AsNoTracking().Where(c => c.RoomId == roomId &&
-                (c.ContractType == "MAIN" || c.ContractType == "RENEWAL") &&
-                (c.Status == (short)ContractStatus.Active || c.Status == (short)ContractStatus.Terminated ||
-                    c.Status == (short)ContractStatus.Superseded || c.Status == (short)ContractStatus.Expired) &&
+            var rows = await compact.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => c.RoomId == roomId &&
+                (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal) &&
+                (c.Status == ContractStatus.Active || c.Status == ContractStatus.Terminated ||
+                    c.Status == ContractStatus.Superseded || c.Status == ContractStatus.Expired) &&
                 c.ActivatedAt != null && c.StartDate <= to && (c.ActualEndDate ?? c.EndDate) >= from).Take(501).ToArrayAsync(t);
             if (rows.Length > 500) throw new InvoiceException(409, "billing_occupancy_review_required");
             var ids = rows.Select(r => r.Id).ToArray();
-            var residents = (await compact.Set<Native.ContractResident>().AsNoTracking().Where(r => ids.Contains(r.ContractId))
+            var residents = (await compact.Set<BHome.Domain.TenantContracts.ContractResident>().AsNoTracking().Where(r => ids.Contains(r.ContractId))
                 .ToArrayAsync(t)).ToLookup(r => r.ContractId);
             contracts = rows.Select(r =>
             {
                 var contract = NativeContractSnapshot.Read(r);
-                contract.Residents = residents[r.Id].Select(NativeContractSnapshot.Read).ToList();
+                contract.Residents = residents[r.Id].ToList();
                 return contract;
             }).ToArray();
         }
@@ -200,8 +200,8 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
         if (contracts.Length > 500) throw new InvoiceException(409, "billing_occupancy_review_required");
         var residentIds = contracts.SelectMany(c => c.Residents.Where(r => r.ResidenceFrom <= to && (r.ResidenceTo == null || r.ResidenceTo >= from)).Select(r => r.ResidentId)).Distinct().ToArray();
         var links = db is Compact24DbContext native
-            ? await native.Set<Native.Resident>().AsNoTracking().Where(r => residentIds.Contains(r.Id) && r.UserId != null)
-                .ToDictionaryAsync(r => r.Id, r => r.UserId!.Value, t)
+            ? await native.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => residentIds.Contains(r.Id) && r.TenantUserId != null)
+                .ToDictionaryAsync(r => r.Id, r => r.TenantUserId!.Value, t)
             : await db.Set<Resident>().AsNoTracking().Where(r => residentIds.Contains(r.Id) && r.TenantUserId != null).ToDictionaryAsync(r => r.Id, r => r.TenantUserId!.Value, t);
         var linkedUsers = links.Values.Concat(contracts.Where(c => c.TenantUserId != null).Select(c => c.TenantUserId!.Value)).Distinct().ToArray();
         var emails = await db.Users.AsNoTracking().Where(u => linkedUsers.Contains(u.Id)).Select(u => new { u.Id, u.Email }).ToArrayAsync(t);
@@ -216,10 +216,10 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
         if (db is Compact24DbContext compact)
         {
             var rows = await (from reading in NativeBillingMeterQueries.Confirmed(compact)
-                              join task in compact.Set<Native.OperationalTask>().AsNoTracking() on reading.OperationalTaskId equals task.Id
-                              join meter in compact.Set<Native.Meter>().AsNoTracking() on reading.MeterId equals meter.Id
-                              where meter.RoomId == roomId && meter.UtilityType == (short)type &&
-                                reading.ReadingPurpose == (short)ReadingPurpose.Periodic && task.BillingPeriod == period
+                              join task in compact.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking() on reading.TaskId equals task.Id
+                              join meter in compact.Set<BHome.Domain.Billing.Meter>().AsNoTracking() on reading.MeterId equals meter.Id
+                              where meter.RoomId == roomId && meter.UtilityType == type &&
+                                reading.ReadingPurpose == ReadingPurpose.Periodic && task.BillingPeriod == period
                               select new { reading, task }).Take(2).ToArrayAsync(t);
             if (rows.Length != 1) return null;
             var nativeValue = NativeBillingMeterQueries.Read(rows[0].reading, rows[0].task);
@@ -262,7 +262,7 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
     {
         if (db is Compact24DbContext compact)
         {
-            var unused = await compact.Set<Native.BillingPolicy>().AsNoTracking()
+            var unused = await compact.Set<BHome.Domain.PropertyManagement.BillingPolicy>().AsNoTracking()
                 .Where(p => ids.Contains(p.Id) && p.FirstUsedAt == null).ToArrayAsync(t);
             foreach (var row in unused)
             {
@@ -289,13 +289,13 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
     }
     public Task<bool> HasPendingAdjustmentsAsync(Guid invoiceId, CancellationToken t) =>
         db is Compact24DbContext compact
-            ? compact.Set<Native.InvoiceAdjustment>().AsNoTracking().AnyAsync(r => r.InvoiceId == invoiceId && r.DecisionSnapshot == null, t)
+            ? compact.Set<InvoiceAdjustmentRequest>().AsNoTracking().AnyAsync(r => r.InvoiceId == invoiceId && r.DecisionSnapshot == null, t)
             : db.Set<InvoiceAdjustmentRequest>().AnyAsync(r => r.InvoiceId == invoiceId && r.Decision == null, t);
     public async Task<IReadOnlyList<InvoiceAdjustmentDecision>> DraftCorrectionsAsync(Guid invoiceId, CancellationToken t)
     {
         if (db is Compact24DbContext compact)
         {
-            var rows = await compact.Set<Native.InvoiceAdjustment>().FromSqlInterpolated($"""
+            var rows = await compact.Set<InvoiceAdjustmentRequest>().FromSqlInterpolated($"""
                 SELECT * FROM invoice_adjustments WHERE invoice_id={invoiceId} AND decision_snapshot->>'outcome'='Approved'
                     AND COALESCE((decision_snapshot->>'invoiceStatus')::integer,0)=0
                 """).AsNoTracking().ToArrayAsync(t);

@@ -119,7 +119,7 @@ public sealed partial class SePayIntegrationTests
         Assert.Null(after.PriceLockTrigger);
         Assert.Equal(before.AgreedPriceSnapshot, after.AgreedPriceSnapshot);
         Assert.Equal(before.Status, after.Status);
-        Assert.Equal((short)RoomStatus.Available, await runtime.Set<Native.Room>().AsNoTracking()
+        Assert.Equal(RoomStatus.Available, await runtime.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking()
             .Where(r => r.Id == room.Id).Select(r => r.Status).SingleAsync());
         Assert.Equal(100000m, (await payments.AllocationAsync(manual.Id, default))!.Amount);
 

@@ -93,7 +93,7 @@ internal sealed class ReceiptExcessRepository(BHomePersistenceContext db, IContr
     private async Task<Guid> RoomAsync(ReceiptExcessTarget target, CancellationToken token)
     {
         if (target.InvoiceId is { } invoice)
-            return await db.Set<Native.Invoice>().Where(i => i.Id == invoice).Select(i => (Guid?)i.RoomId).SingleOrDefaultAsync(token) ?? throw new PaymentException(404, "payment_invoice_not_found");
+            return await db.Set<BHome.Domain.Billing.Invoice>().Where(i => i.Id == invoice).Select(i => (Guid?)i.RoomId).SingleOrDefaultAsync(token) ?? throw new PaymentException(404, "payment_invoice_not_found");
         var contractId = target.SettlementContractId ?? target.HoldingContractId ?? target.DepositContractId;
         return await PaymentObligationQueries.Contracts(db).Where(c => c.Id == contractId).Select(c => (Guid?)c.RoomId).SingleOrDefaultAsync(token) ?? throw new PaymentException(404, "contract_not_found");
     }
@@ -125,8 +125,8 @@ internal sealed class ReceiptExcessRepository(BHomePersistenceContext db, IContr
         Guid[] users = []; Guid[] residents = []; decimal outstanding; string reference;
         if (target.InvoiceId is { } invoiceId)
         {
-            var invoice = await db.Set<Native.Invoice>().AsNoTracking().SingleAsync(i => i.Id == invoiceId, token);
-            if (invoice.Status != (short)InvoiceStatus.Final) problems.Add("final_invoice_required");
+            var invoice = await db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking().SingleAsync(i => i.Id == invoiceId, token);
+            if (invoice.Status != InvoiceStatus.Final) problems.Add("final_invoice_required");
             outstanding = (await db.FinancialsAsync(invoiceId, token)).OutstandingAmount;
             users = invoice.RecipientUserIds;
             reference = PaymentRules.InvoiceReference(invoiceId);
@@ -142,18 +142,18 @@ internal sealed class ReceiptExcessRepository(BHomePersistenceContext db, IContr
         else
         {
             var holding = await PaymentObligationQueries.Contracts(db).AsNoTracking().SingleAsync(c => c.Id == (target.HoldingContractId ?? target.DepositContractId), token);
-            if (target.HoldingContractId is not null ? holding.ContractType != "HOLDING" : holding.ContractType is not ("MAIN" or "HOLDING") || holding.PreviousContractId is not null)
+            if (target.HoldingContractId is not null ? holding.Kind != ContractKind.Holding : holding.Kind is not (ContractKind.Main or ContractKind.Holding) || holding.PreviousContractId is not null)
                 throw new PaymentException(404, "deposit_contract_not_found");
             var received = await PaymentLedgerWrites.Allocations(db).Where(a => a.TargetDepositContractId == holding.Id).SumAsync(a => (decimal?)a.Amount, token) ?? 0;
-            outstanding = (ContractStatus)holding.Status is ContractStatus.Cancelled or ContractStatus.Expired or ContractStatus.Converted or ContractStatus.Terminated or ContractStatus.Superseded or ContractStatus.Applied ? 0 : Math.Max(0, holding.DepositRequired - received);
-            residents = await db.Set<Native.ContractResident>().Where(r => r.ContractId == holding.Id).Select(r => r.ResidentId).ToArrayAsync(token);
+            outstanding = (ContractStatus)holding.Status is ContractStatus.Cancelled or ContractStatus.Expired or ContractStatus.Converted or ContractStatus.Terminated or ContractStatus.Superseded or ContractStatus.Applied ? 0 : Math.Max(0, holding.RequiredDeposit - received);
+            residents = await db.Set<BHome.Domain.TenantContracts.ContractResident>().Where(r => r.ContractId == holding.Id).Select(r => r.ResidentId).ToArrayAsync(token);
             reference = PaymentRules.DepositReference(holding.Id);
         }
         if (outstanding != 0) problems.Add("receipt_target_not_settled");
-        var people = await db.Set<Native.Resident>().AsNoTracking().Where(r => r.VerificationStatus == (short)IdentityVerificationStatus.Verified &&
-            (residents.Contains(r.Id) || r.UserId != null && users.Contains(r.UserId.Value) &&
-                db.Set<Native.ContractResident>().Any(cr => cr.ResidentId == r.Id && PaymentObligationQueries.Contracts(db).Any(c => c.Id == cr.ContractId && c.RoomId == room))))
-            .OrderBy(r => r.Id).Select(r => new ReceiptExcessPayer(r.Id, r.UserId, r.DisplayLabel)).ToArrayAsync(token);
+        var people = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => r.VerificationStatus == IdentityVerificationStatus.Verified &&
+            (residents.Contains(r.Id) || r.TenantUserId != null && users.Contains(r.TenantUserId.Value) &&
+                db.Set<BHome.Domain.TenantContracts.ContractResident>().Any(cr => cr.ResidentId == r.Id && PaymentObligationQueries.Contracts(db).Any(c => c.Id == cr.ContractId && c.RoomId == room))))
+            .OrderBy(r => r.Id).Select(r => new ReceiptExcessPayer(r.Id, r.TenantUserId, r.DisplayLabel)).ToArrayAsync(token);
         var existing = await GetAsync(id, token);
         var verified = await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM payments WHERE id={id} AND status='VERIFIED') AS \"Value\"").SingleAsync(token);
         if (!verified || transfer.Currency != "VND" || !PaymentRules.ValidMoney(transfer.Amount)) problems.Add("verified_bank_receipt_required");
@@ -162,7 +162,7 @@ internal sealed class ReceiptExcessRepository(BHomePersistenceContext db, IContr
         if (codes is not null && obligation is { } obligationId && await codes.MatchesAsync(codeKind, obligationId, transfer.TransferDescription, token))
             reference = transfer.TransferDescription.Trim();
         if (!string.Equals(transfer.TransferDescription.Trim(), reference, StringComparison.OrdinalIgnoreCase)) problems.Add("invoice_transfer_reference_mismatch");
-        if (await PaymentLedgerWrites.Allocations(db).AnyAsync(a => a.SourcePaymentId == id, token)) problems.Add("bank_transaction_already_allocated");
+        if (await PaymentLedgerWrites.Allocations(db).AnyAsync(a => a.TransferId == id, token)) problems.Add("bank_transaction_already_allocated");
         if (await payments.ReferenceClaimedAsync(transfer.NormalizedReference, token)) problems.Add("bank_reference_already_credited");
         if ((await payments.LatestReviewAsync(id, token))?.Decision == "Rejected") problems.Add("bank_transfer_rejected");
         if (await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM refund_requests WHERE source_payment_id={id} AND status IN ('REQUESTED','APPROVED','COMPLETED')) AS \"Value\"").SingleAsync(token))

@@ -16,29 +16,29 @@ internal sealed partial class NotificationEventPublisher
 {
     private async Task<Invoice> LoadInvoice(Guid id, CancellationToken t) =>
         db is Compact24DbContext compact
-            ? (await NativeInvoicePersistence.ReadAsync(compact, compact.Set<Native.Invoice>().AsNoTracking().Where(i => i.Id == id), t, false)).Single()
+            ? (await NativeInvoicePersistence.ReadAsync(compact, compact.Set<BHome.Domain.Billing.Invoice>().AsNoTracking().Where(i => i.Id == id), t, false)).Single()
             : await db.Set<Invoice>().AsNoTracking().SingleAsync(i => i.Id == id, t);
 
     private Task<Guid[]> RecipientIds(Guid id, CancellationToken t) =>
         db is Compact24DbContext compact
-            ? compact.Set<Native.Invoice>().Where(i => i.Id == id).Select(i => i.RecipientUserIds).SingleAsync(t)
+            ? compact.Set<BHome.Domain.Billing.Invoice>().Where(i => i.Id == id).Select(i => i.RecipientUserIds).SingleAsync(t)
             : db.Set<InvoiceRecipient>().Where(r => r.InvoiceId == id).Select(r => r.TenantUserId).ToArrayAsync(t);
 
     private Task<bool> PendingAdjustment(Guid id, CancellationToken t) =>
         db is Compact24DbContext compact
-            ? compact.Set<Native.InvoiceAdjustment>().AnyAsync(r => r.InvoiceId == id && r.DecisionSnapshot == null, t)
+            ? compact.Set<InvoiceAdjustmentRequest>().AnyAsync(r => r.InvoiceId == id && r.DecisionSnapshot == null, t)
             : db.Set<InvoiceAdjustmentRequest>().AnyAsync(r => r.InvoiceId == id && r.Decision == null, t);
 
     private Task<bool> HasPeriodicInvoice(Guid room, DateOnly period, CancellationToken t) =>
         db is Compact24DbContext compact
-            ? compact.Set<Native.Invoice>().AnyAsync(i => i.RoomId == room && i.BillingPeriod == period && i.InvoiceType == "PERIODIC", t)
+            ? compact.Set<BHome.Domain.Billing.Invoice>().AnyAsync(i => i.RoomId == room && i.BillingPeriod == period && i.Type == "PERIODIC", t)
             : db.PeriodicInvoices().AnyAsync(i => i.RoomId == room && i.BillingPeriod == period, t);
 
     private async Task<Room?> LoadRoom(Guid room, Guid location, CancellationToken t)
     {
         if (db is not Compact24DbContext compact)
             return await db.Set<Room>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == room && r.LocationId == location, t);
-        var row = await compact.Set<Native.Room>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == room && r.LocationId == location, t);
+        var row = await compact.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == room && r.LocationId == location, t);
         return row is null ? null : NativeRoomLocationPersistence.Read(row);
     }
 
@@ -68,15 +68,15 @@ internal sealed partial class NotificationEventPublisher
     {
         if (db is Compact24DbContext compact)
         {
-            var contracts = compact.Set<Native.Contract>().AsNoTracking().Where(c => c.RoomId == room && c.ActivatedAt != null &&
-                (c.ContractType == "MAIN" || c.ContractType == "RENEWAL") &&
-                (c.Status == (short)ContractStatus.Active || c.Status == (short)ContractStatus.Terminated || c.Status == (short)ContractStatus.Superseded) &&
+            var contracts = compact.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => c.RoomId == room && c.ActivatedAt != null &&
+                (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal) &&
+                (c.Status == ContractStatus.Active || c.Status == ContractStatus.Terminated || c.Status == ContractStatus.Superseded) &&
                 c.StartDate <= end && (c.ActualEndDate ?? c.EndDate) >= start);
-            var occupants = from cr in compact.Set<Native.ContractResident>()
+            var occupants = from cr in compact.Set<BHome.Domain.TenantContracts.ContractResident>()
                             join c in contracts on cr.ContractId equals c.Id
-                            join r in compact.Set<Native.Resident>() on cr.ResidentId equals r.Id
-                            where cr.ResidenceFrom <= end && (cr.ResidenceTo == null || cr.ResidenceTo >= start) && r.UserId != null
-                            select r.UserId!.Value;
+                            join r in compact.Set<BHome.Domain.TenantContracts.Resident>() on cr.ResidentId equals r.Id
+                            where cr.ResidenceFrom <= end && (cr.ResidenceTo == null || cr.ResidenceTo >= start) && r.TenantUserId != null
+                            select r.TenantUserId!.Value;
             return await occupants.Union(contracts.Where(c => c.TenantUserId != null).Select(c => c.TenantUserId!.Value)).ToArrayAsync(t);
         }
         var legacy = await db.Set<Contract>().AsNoTracking().Include(c => c.Residents).Where(c => c.RoomId == room && c.ActivatedAt != null &&

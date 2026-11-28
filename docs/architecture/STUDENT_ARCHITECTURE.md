@@ -11,7 +11,7 @@ Giữ Modular Monolith .NET 8 + PostgreSQL. Bốn project backend trước đây
 | `Controllers/<Nghiệp vụ>`          | HTTP route, binding DTO, policy, gọi service                                      | Tự tính tiền hoặc truy vấn DB        |
 | `Services/<Nghiệp vụ>`             | Use case, quyền tài nguyên, trạng thái, transaction qua repository, calculator    | EF mapping, SQL, giao diện           |
 | `DTOs/`, `Interfaces/`             | DTO/contract types và interface riêng; một số kiểu liên quan vẫn nằm cùng service | Logic HTTP hoặc persistence          |
-| `Domain/Entities/<Nghiệp vụ>`, `Domain/<Nghiệp vụ>` | Entity lưu trữ sát 24 bảng và model nghiệp vụ, enum, quy tắc/công thức thuần | HTTP, SQL, dependency injection |
+| `Entities/<Nghiệp vụ>`, `Enums/`, `Models/`, `Common/` | Entity chuẩn của 24 bảng, bản ghi JSONB có kiểu, trạng thái và giá trị dùng chung | HTTP, SQL, dependency injection |
 | `Repositories/`, `Data/`           | Repository thực, EF mapping, Compact24, migrations                                | Tự thay đổi giá hoặc quy tắc đã chốt |
 | `Integrations/`, `BackgroundJobs/` | Adapter OCR/storage/provider, worker và lịch nền                                  | Thay đổi nghiệp vụ qua đường tắt     |
 | `Configuration/`                   | Đăng ký DI, cấu hình ứng dụng                                                     | Nghiệp vụ trong composition root     |
@@ -20,7 +20,7 @@ Giữ Modular Monolith .NET 8 + PostgreSQL. Bốn project backend trước đây
 
 ### Entity và Database Compact24
 
-Mô hình vật lý gồm đúng 24 Entity được cấu hình trong một `Compact24DbContext` runtime, không có EF `ToSqlQuery`. Repository đọc/ghi trực tiếp bảng và snapshot có kiểu, giữ các class nghiệp vụ thuần để thực thi quy tắc. Projection/writer cũ nằm trong `Data/Compact24/Legacy/` và chỉ dành cho import/fixture offline qua `Compact24ArchiveContext`, không đăng ký trong DI API. Xem [bản đồ Entity và phạm vi chuyển đổi](COMPACT24_ENTITY_MAPPING.md), không suy luận mọi Domain class là một bảng.
+Mô hình vật lý gồm đúng 24 Entity được cấu hình trong một `Compact24DbContext` runtime, không có EF `ToSqlQuery`. Repository và service dùng chung entity chuẩn, đọc/ghi trực tiếp bảng và snapshot có kiểu. Không còn thư mục Domain hoặc 17 lớp entity lưu trữ trùng với entity nghiệp vụ; giữ namespace CLR cũ vì migration và serializer. Projection/writer cũ nằm trong `Data/Compact24/Legacy/` và chỉ dành cho import/fixture offline qua `Compact24ArchiveContext`, không đăng ký trong DI API. Không xóa công cụ kiểm tra migration lịch sử chỉ để giảm số file. Xem [bản đồ Entity và phạm vi chuyển đổi](COMPACT24_ENTITY_MAPPING.md), không suy luận mọi model nghiệp vụ là một bảng.
 
 ### Quy ước tổ chức
 
@@ -42,9 +42,10 @@ BHome.Api/Services/Billing/
   BillingAutomationService.cs       # Cấu hình lịch tự động
   BillingAutomationOperations.cs    # Preview, queue, chạy thủ công
 BHome.Api/DTOs/Billing/InvoiceContracts.cs # Request/response + repository interface
-BHome.Api/Domain/Billing/
-  Invoice.cs                        # Entity, trạng thái, dòng hóa đơn
-  InvoiceMath.cs                    # Amount, CalendarDate
+BHome.Api/Entities/Billing/
+  Invoice.cs                        # Entity hóa đơn chuẩn
+  InvoiceLine.cs                    # Entity dòng hóa đơn chuẩn
+BHome.Api/Services/Billing/InvoiceMath.cs # Công thức thuần
 BHome.Api/Repositories/Billing/
   InvoiceRepository.cs              # Đọc/ghi và khóa dữ liệu
   MeterBillingCoverage.cs           # Chỉ số và phần đã thu

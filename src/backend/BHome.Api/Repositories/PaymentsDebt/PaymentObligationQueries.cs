@@ -9,9 +9,9 @@ namespace BHome.Infrastructure.PaymentsDebt;
 
 internal static class PaymentObligationQueries
 {
-    internal static IQueryable<Native.Contract> Contracts(BHomePersistenceContext db) =>
-        db.Set<Native.Contract>().AsNoTracking().Where(c => c.ContractType == "MAIN" || c.ContractType == "RENEWAL" ||
-            c.ContractType == "HOLDING" || c.ContractType == "ADDENDUM");
+    internal static IQueryable<BHome.Domain.TenantContracts.Contract> Contracts(BHomePersistenceContext db) =>
+        db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal ||
+            c.Kind == BHome.Domain.TenantContracts.ContractKind.Holding || c.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum);
 
     // Payment mode is frozen on the historical contract, not the current owner setting.
     internal static IQueryable<ContractPaymentModeRow> ContractModes(BHomePersistenceContext db) =>
@@ -26,35 +26,23 @@ internal static class PaymentObligationQueries
 
     internal static async Task<Invoice?> InvoiceAsync(BHomePersistenceContext db, Guid id, Guid? recipient, CancellationToken token)
     {
-        var row = await db.Set<Native.Invoice>().AsNoTracking().SingleOrDefaultAsync(i => i.Id == id &&
+        var row = await db.Set<Invoice>().AsNoTracking().SingleOrDefaultAsync(i => i.Id == id &&
             (recipient == null || i.RecipientUserIds.Contains(recipient.Value)), token);
         if (row is null) return null;
-        var state = row.BillingSnapshot.ValueKind == JsonValueKind.Object &&
-            row.BillingSnapshot.TryGetProperty("compactState", out var snapshot) ? snapshot : default;
-        string? Read(string name) => state.ValueKind == JsonValueKind.Object && state.TryGetProperty(name, out var value) &&
-            value.ValueKind != JsonValueKind.Null ? value.GetString() : null;
-        Guid? ReadId(string name) => Read(name) is { } value ? Guid.Parse(value) : null;
-        DateTimeOffset ReadDate(string name) => Read(name) is { } value ? DateTimeOffset.Parse(value,
-            System.Globalization.CultureInfo.InvariantCulture).ToUniversalTime() : DateTimeOffset.UnixEpoch;
-        var invoice = Invoice.RestoreIdentity(row.Id, ReadDate("createdAt"), ReadDate("updatedAt"));
-        invoice.Type = row.InvoiceType; invoice.RoomId = row.RoomId; invoice.LocationId = row.LocationId;
-        invoice.BillingPeriod = row.BillingPeriod; invoice.RepresentativeContractId = row.ContractId;
-        invoice.RepresentativeTenantUserId = row.RepresentativeTenantUserId; invoice.Status = (InvoiceStatus)row.Status;
-        invoice.Total = row.BaseTotalAmount; invoice.Version = row.Version; invoice.MissingInputs = row.MissingInputs;
-        invoice.ScheduledFinalDate = row.ScheduledFinalDate; invoice.DueDate = row.DueDate;
-        invoice.FinalizedAt = row.FinalizedAt; invoice.FinalizedByUserId = row.FinalizedByUserId;
-        invoice.LocationName = Read("locationName") ?? ""; invoice.RoomNumber = Read("roomNumber") ?? "";
-        invoice.AutomationPlanId = ReadId("automationPlanId"); invoice.AutomationFinalizationPlanId = ReadId("automationFinalizationPlanId");
-        invoice.CreatedByUserId = ReadId("createdByUserId") ?? Guid.Empty;
-        invoice.ScheduleSnapshot = Read("scheduleSnapshot") ?? "{}";
-        return invoice;
+        // Preserve the payment query's historical default for absent schedule metadata.
+        if (row.BillingSnapshot.ValueKind != JsonValueKind.Object ||
+            !row.BillingSnapshot.TryGetProperty("compactState", out var state) ||
+            state.ValueKind != JsonValueKind.Object ||
+            !state.TryGetProperty("scheduleSnapshot", out var schedule) || schedule.ValueKind == JsonValueKind.Null)
+            row.ScheduleSnapshot = "{}";
+        return row;
     }
 
     internal static async Task<Guid?> ReceivingOwnerAsync(BHomePersistenceContext db, Guid locationId, CancellationToken token)
     {
-        if (locationId == Guid.Empty || !await db.Set<Native.Location>().AnyAsync(l => l.Id == locationId, token)) return null;
+        if (locationId == Guid.Empty || !await db.Set<BHome.Domain.Locations.Location>().AnyAsync(l => l.Id == locationId, token)) return null;
         var owners = await (from c in Contracts(db)
-                            join room in db.Set<Native.Room>().AsNoTracking() on c.RoomId equals room.Id
+                            join room in db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking() on c.RoomId equals room.Id
                             where room.LocationId == locationId
                             select c.OwnerSignerId).Distinct().Take(2).ToArrayAsync(token);
         if (owners.Length == 1) return owners[0];

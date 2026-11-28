@@ -31,7 +31,7 @@ flowchart TD
     J[Background job] --> C
 ```
 
-Đây là hướng đi khi lần theo một request, không phải chiều dependency biên dịch. Backend chính dùng một project `BHome.Api.csproj`; Application/Domain/Infrastructure là các ranh giới logic, được tổ chức trong các thư mục `Services`, `Domain`, `DTOs`, `Interfaces`, `Repositories`, `Data`, `Integrations`, `BackgroundJobs`. DI vẫn chọn implementation và Application không tham chiếu trực tiếp Infrastructure. DigitalSigning vẫn riêng. Owner Web dùng React/TypeScript/MUI/Vite, Mobile dùng Expo/React Native, Public Web dùng React/Vite. Cả ba gọi API .NET 8. Database thực tế là Compact24; không mặc định mỗi entity tương ứng một bảng.
+Đây là hướng đi khi lần theo một request, không phải chiều dependency biên dịch. Backend chính dùng một project `BHome.Api.csproj`; Application/Domain/Infrastructure là các ranh giới logic, được tổ chức trong các thư mục `Services`, `Entities`, `Enums`, `Models`, `Common`, `DTOs`, `Interfaces`, `Repositories`, `Data`, `Integrations`, `BackgroundJobs`. DI vẫn chọn implementation và Application không tham chiếu trực tiếp Infrastructure. DigitalSigning vẫn riêng. Owner Web dùng React/TypeScript/MUI/Vite, Mobile dùng Expo/React Native, Public Web dùng React/Vite. Cả ba gọi API .NET 8. Database thực tế là Compact24; không mặc định mỗi entity tương ứng một bảng.
 
 ## 3. Thực hành đọc một nghiệp vụ
 

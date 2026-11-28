@@ -77,7 +77,7 @@ public sealed class DevelopmentOnboardingSeedService(
                 if (previous.Fingerprint != fingerprint) throw ContractException.Conflict("idempotency_key_reused");
                 var existing = await contracts.FindAsync(previous.ResultId, t) ?? throw ContractException.Missing();
                 var email = await db.Users.Where(u => u.Id == existing.TenantUserId).Select(u => u.Email).SingleAsync(t);
-                var name = await db.Set<Native.Resident>().Where(r => r.Id == existing.RepresentativeResidentId)
+                var name = await db.Set<BHome.Domain.TenantContracts.Resident>().Where(r => r.Id == existing.RepresentativeResidentId)
                     .Select(r => r.DisplayLabel).SingleAsync(t);
                 return new DevelopmentOnboardingSeedResult(existing.Id, room.Id, room.RoomNumber, room.Location.Name,
                     email!, null, name);
@@ -91,11 +91,11 @@ public sealed class DevelopmentOnboardingSeedService(
             // Re-read status and all overlapping live/draft obligations under the canonical
             // payment ledger, location advisory and room locks used by contract creation.
             if (room.Status != RoomStatus.Available || room.Capacity < 1 || room.RoomType is { IsActive: false } ||
-                await db.Set<Native.Contract>().AnyAsync(c => c.RoomId == room.Id &&
-                    (c.ContractType == "MAIN" || c.ContractType == "RENEWAL" || c.ContractType == "HOLDING" || c.ContractType == "ADDENDUM") &&
-                    (c.Status == (short)ContractStatus.Active || c.Status == (short)ContractStatus.Expired ||
-                     (c.Status == (short)ContractStatus.Draft || c.Status == (short)ContractStatus.PendingSigning ||
-                      c.Status == (short)ContractStatus.PendingActivation) && c.StartDate <= endDate && c.EndDate >= today), t))
+                await db.Set<BHome.Domain.TenantContracts.Contract>().AnyAsync(c => c.RoomId == room.Id &&
+                    (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal || c.Kind == BHome.Domain.TenantContracts.ContractKind.Holding || c.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum) &&
+                    (c.Status == ContractStatus.Active || c.Status == ContractStatus.Expired ||
+                     (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning ||
+                      c.Status == ContractStatus.PendingActivation) && c.StartDate <= endDate && c.EndDate >= today), t))
                 throw ContractException.Conflict("room_not_available");
             var blockers = await lifecycle.RoomBlockersAsync(room.Id, t);
             if (blockers.Count > 0) throw ContractException.Conflict(blockers[0]);
@@ -107,10 +107,10 @@ public sealed class DevelopmentOnboardingSeedService(
                 rent.Category != ChargeCategory.Rent || rent.Method != ChargingMethod.FixedPerRoomPerMonth ||
                 prices.Charges.Any(p => p.Rate < 0 || !PropertyRules.ValidCharge(p.Category, p.Method, p.ChargeCode)))
                 throw ContractException.Conflict("development_seed_pricing_required");
-            var meters = await db.Set<Native.Meter>().Where(m => m.RoomId == room.Id && m.IsActive)
+            var meters = await db.Set<BHome.Domain.Billing.Meter>().Where(m => m.RoomId == room.Id && m.IsActive)
                 .Select(m => new { m.UtilityType, m.InstalledOn }).ToArrayAsync(t);
             if (meters.Length != 2 || meters.Any(m => m.InstalledOn > today) ||
-                meters.Count(m => m.UtilityType == (short)UtilityType.Electricity) != 1 || meters.Count(m => m.UtilityType == (short)UtilityType.Water) != 1)
+                meters.Count(m => m.UtilityType == UtilityType.Electricity) != 1 || meters.Count(m => m.UtilityType == UtilityType.Water) != 1)
                 throw ContractException.Conflict("development_seed_meters_required");
             // Demo handover must exercise the actual room inventory. Resolve the same
             // canonical source used by EnsureMoveInTaskAsync under the Location lock;

@@ -520,7 +520,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
     private async Task NotifyAssignmentAsync(Guid locationId, Assignment assignment, string eventType,
         CancellationToken token, int? locationVersion = null, Guid? reconciliationEventId = null)
     {
-        var location = await db.Set<BHome.Domain.Entities.Location>().AsNoTracking().Where(l => l.Id == locationId)
+        var location = await db.Set<BHome.Domain.Locations.Location>().AsNoTracking().Where(l => l.Id == locationId)
             .Select(l => new { l.Name, l.Address }).SingleAsync(token);
         var staff = await db.Users.AsNoTracking().Where(u => u.Id == assignment.StaffUserId)
             .Select(u => new { u.Email, Name = EF.Property<string>(u, "full_name") }).SingleAsync(token);

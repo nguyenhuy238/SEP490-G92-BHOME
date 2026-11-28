@@ -61,7 +61,7 @@ internal sealed class IncidentNotificationDelivery(BHomePersistenceContext db, I
             row.DeliveryReference = null; row.DeliveryError = "delivery_pending";
             var attempts = compact is null
                 ? await db.BackgroundJobs.Where(j => j.Id == job.Id).Select(j => (int?)j.Attempts).SingleOrDefaultAsync(t)
-                : await compact.Set<BHome.Domain.Entities.OperationalTask>().AsNoTracking()
+                : await compact.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking()
                     .Where(j => j.Id == job.Id && j.TaskType == "SYSTEM_JOB")
                     .Select(j => (int?)j.AttemptCount).SingleOrDefaultAsync(t);
             row.DeliveryState = attempts >= BHome.Infrastructure.Jobs.PostgresJobWorker.MaxAttempts ? "Failed" : "Pending";

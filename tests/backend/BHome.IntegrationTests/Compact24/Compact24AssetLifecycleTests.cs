@@ -21,7 +21,7 @@ public sealed partial class Compact24OwnerSetupTests
         var created = await Read<AssetDto>(await owner.PostAsJsonAsync("/api/v1/assets", input));
         Assert.Equal(3, created.Quantity);
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE assets SET purchase_info=purchase_info||jsonb_build_object('legacyMarker',true)
             WHERE id={created.Id}
@@ -56,7 +56,7 @@ public sealed partial class Compact24OwnerSetupTests
                     AND event_data->>'recordType'='SecurityAuditRecord')=2) AS "Value"
             FROM assets a WHERE id={created.Id}
             """).SingleAsync());
-        Assert.Empty(db.ChangeTracker.Entries<BHome.Domain.Entities.Asset>());
+        Assert.Empty(db.ChangeTracker.Entries<BHome.Domain.PropertyManagement.Asset>());
     }
 
     private static AssetLifecyclePolicyWrite LifecyclePolicy() => new("Synthetic owner checklist", "FireSafetyEquipment", true,

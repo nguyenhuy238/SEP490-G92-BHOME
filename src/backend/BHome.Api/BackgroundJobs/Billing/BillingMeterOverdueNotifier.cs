@@ -18,14 +18,14 @@ internal sealed class BillingMeterOverdueNotifier(BHomePersistenceContext db, Ti
         var today = clock.BusinessToday();
         var owners = await db.Users.AsNoTracking().Where(u => u.IsActive && EF.Property<string[]>(u, "roles").Contains(Roles.Owner))
             .Select(u => u.Id).Distinct().ToArrayAsync(t);
-        var periodic = compact.Set<Native.OperationalTask>().FromSqlRaw("""
+        var periodic = compact.Set<BHome.Domain.Billing.OperationalTask>().FromSqlRaw("""
             SELECT * FROM operational_tasks WHERE task_type='METER_READ'
                 AND task_data->'state'->>'purpose'='1' AND status NOT IN ('2','3')
             """).AsNoTracking();
         var tasks = await (from task in periodic
-                           join location in compact.Set<Native.Location>().AsNoTracking() on task.LocationId equals location.Id
-                           join meter in compact.Set<Native.Meter>().AsNoTracking() on task.MeterId equals meter.Id
-                           join room in compact.Set<Native.Room>().AsNoTracking() on meter.RoomId equals room.Id
+                           join location in compact.Set<BHome.Domain.Locations.Location>().AsNoTracking() on task.StoredLocationId equals location.Id
+                           join meter in compact.Set<BHome.Domain.Billing.Meter>().AsNoTracking() on task.MeterId equals meter.Id
+                           join room in compact.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking() on meter.RoomId equals room.Id
                            where location.IsActive && task.BillingPeriod != null && task.DueAt < now
                            select new { task.Id, LocationId = location.Id, location.Name, meter.RoomId, room.RoomNumber, task.BillingPeriod, task.DueAt }).ToArrayAsync(t);
         foreach (var group in tasks.GroupBy(task => new { task.LocationId, task.Name, task.BillingPeriod }))

@@ -594,15 +594,15 @@ public sealed class LocationAssetHandoverService(
         if (inherited.Any(x => x.RoomId is null || x.SourceHandoverContractId is null))
             throw OperationalTaskException.Conflict("location_handover_inherited_evidence_changed");
         var sources = inherited.Select(x => x.SourceHandoverContractId!.Value).Distinct().ToArray();
-        var roomIds = db.Set<Native.Room>().AsNoTracking().Where(r => r.LocationId == task.LocationId).Select(r => r.Id);
-        var contracts = await db.Set<Native.Contract>().AsNoTracking()
+        var roomIds = db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(r => r.LocationId == task.LocationId).Select(r => r.Id);
+        var contracts = await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking()
             .Where(c => roomIds.Contains(c.RoomId))
             .Select(c => new
             {
                 c.Id,
                 c.RoomId,
-                Kind = c.ContractType == "RENEWAL" ? ContractKind.Renewal : c.ContractType == "HOLDING" ? ContractKind.Holding :
-                    c.ContractType == "ADDENDUM" ? ContractKind.Addendum : ContractKind.Main,
+                Kind = c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal ? ContractKind.Renewal : c.Kind == BHome.Domain.TenantContracts.ContractKind.Holding ? ContractKind.Holding :
+                    c.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum ? ContractKind.Addendum : ContractKind.Main,
                 Status = (ContractStatus)c.Status,
                 c.StartDate,
                 c.EndDate,
@@ -672,9 +672,9 @@ public sealed class LocationAssetHandoverService(
         // Asset identity still matters after Tenant evidence was inherited.
         var assets = inherited.Where(x => x.AssetId.HasValue).Select(x => x.AssetId!.Value).Distinct().ToArray();
         if (assets.Length == 0) return;
-        var live = (await db.Set<Native.Asset>().AsNoTracking()
+        var live = (await db.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking()
             .Where(a => assets.Contains(a.Id) && a.LocationId == task.LocationId &&
-                a.Status != (short)AssetStatus.Retired)
+                a.Status != AssetStatus.Retired)
             .Select(a => new { a.Id, a.RoomId }).ToArrayAsync(token))
             .ToDictionary(x => x.Id);
         if (inherited.Where(x => x.AssetId.HasValue)
@@ -752,9 +752,9 @@ public sealed class LocationAssetHandoverService(
         var incidentIds = items.Where(x => x.IncidentId.HasValue).Select(x => x.IncidentId!.Value).Distinct().ToArray();
         if (incidentIds.Length > 0)
         {
-            var resolved = await db.Set<Native.IncidentReport>().AsNoTracking()
+            var resolved = await db.Set<BHome.Domain.IncidentMaintenance.IncidentReport>().AsNoTracking()
                 .Where(x => incidentIds.Contains(x.Id) && x.LocationId == task.LocationId &&
-                    x.Status == "Resolved")
+                    x.Status == BHome.Domain.IncidentMaintenance.IncidentStatus.Resolved)
                 .Select(x => x.Id).ToArrayAsync(token);
             if (resolved.Length != incidentIds.Length && (exception?.Length ?? 0) < 10)
                 throw OperationalTaskException.Conflict("location_handover_unresolved_incident_requires_owner_decision");

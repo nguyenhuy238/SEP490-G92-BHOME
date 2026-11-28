@@ -18,8 +18,8 @@ namespace BHome.Infrastructure.Modules.StaffOperations.Persistence;
 internal static class NativeOperationalTaskPersistence
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-    internal static IQueryable<Native.OperationalTask> Roots(Compact24DbContext db) =>
-        db.Set<Native.OperationalTask>().AsNoTracking().Where(x => x.TaskType == "GENERAL" || x.TaskType == "METER_READ");
+    internal static IQueryable<BHome.Domain.Billing.OperationalTask> Roots(Compact24DbContext db) =>
+        db.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking().Where(x => x.TaskType == "GENERAL" || x.TaskType == "METER_READ");
 
     internal static async Task<OperationalTask?> FindAsync(Compact24DbContext db, Guid id, CancellationToken t)
     {
@@ -39,13 +39,13 @@ internal static class NativeOperationalTaskPersistence
             WHERE (a->>'startDate')::date<={date} AND (a->>'endDate')::date>={date}
             """).Where(a => StaffEmploymentEligibility.EligibleIds(db, date).Contains(a.StaffUserId));
 
-    internal static IQueryable<Native.OperationalTask> Visible(Compact24DbContext db, Guid? staffId, DateOnly date)
+    internal static IQueryable<BHome.Domain.Billing.OperationalTask> Visible(Compact24DbContext db, Guid? staffId, DateOnly date)
     {
         var rows = Roots(db);
         if (staffId is { } staff)
         {
             var allowed = Assignments(db, date).Where(a => a.IsActive && a.StaffUserId == staff).Select(a => a.LocationId);
-            rows = rows.Where(x => x.LocationId != null && allowed.Contains(x.LocationId.Value));
+            rows = rows.Where(x => x.StoredLocationId != null && allowed.Contains(x.StoredLocationId.Value));
         }
         return rows;
     }

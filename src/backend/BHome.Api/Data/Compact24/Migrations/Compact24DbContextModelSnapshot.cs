@@ -23,29 +23,31 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("BHome.Domain.Entities.Asset", b =>
+            modelBuilder.Entity("BHome.Domain.Billing.Invoice", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<string>("AssetCode")
-                        .HasColumnType("varchar(80)")
-                        .HasColumnName("asset_code");
+                    b.Property<DateOnly>("BillingPeriod")
+                        .HasColumnType("date")
+                        .HasColumnName("billing_period");
 
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasColumnType("varchar(80)")
-                        .HasColumnName("category");
+                    b.Property<JsonElement>("BillingSnapshot")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("billing_snapshot");
 
-                    b.Property<string>("CommonArea")
-                        .HasColumnType("varchar(200)")
-                        .HasColumnName("common_area");
+                    b.Property<DateOnly>("DueDate")
+                        .HasColumnType("date")
+                        .HasColumnName("due_date");
 
-                    b.Property<string>("Condition")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("condition");
+                    b.Property<DateTimeOffset?>("FinalizedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("finalized_at");
+
+                    b.Property<Guid?>("FinalizedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("finalized_by_user_id");
 
                     b.Property<JsonElement>("History")
                         .HasColumnType("jsonb")
@@ -55,22 +57,48 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("location_id");
 
-                    b.Property<string>("Name")
+                    b.Property<string[]>("MissingInputs")
                         .IsRequired()
-                        .HasColumnType("varchar(150)")
-                        .HasColumnName("name");
+                        .HasColumnType("text[]")
+                        .HasColumnName("missing_inputs");
 
-                    b.Property<JsonElement>("PurchaseInfo")
+                    b.Property<JsonElement>("PaymentRequests")
                         .HasColumnType("jsonb")
-                        .HasColumnName("purchase_info");
+                        .HasColumnName("payment_requests");
 
-                    b.Property<Guid?>("RoomId")
+                    b.Property<Guid[]>("RecipientUserIds")
+                        .IsRequired()
+                        .HasColumnType("uuid[]")
+                        .HasColumnName("recipient_user_ids");
+
+                    b.Property<Guid>("RepresentativeContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("contract_id");
+
+                    b.Property<Guid>("RepresentativeTenantUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("representative_tenant_user_id");
+
+                    b.Property<Guid>("RoomId")
                         .HasColumnType("uuid")
                         .HasColumnName("room_id");
+
+                    b.Property<DateOnly>("ScheduledFinalDate")
+                        .HasColumnType("date")
+                        .HasColumnName("scheduled_final_date");
 
                     b.Property<short>("Status")
                         .HasColumnType("smallint")
                         .HasColumnName("status");
+
+                    b.Property<decimal>("Total")
+                        .HasColumnType("numeric(18,0)")
+                        .HasColumnName("base_total_amount");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("varchar(12)")
+                        .HasColumnName("invoice_type");
 
                     b.Property<int>("Version")
                         .IsConcurrencyToken()
@@ -79,200 +107,429 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("FinalizedByUserId");
+
                     b.HasIndex("LocationId");
+
+                    b.HasIndex("RepresentativeContractId");
+
+                    b.HasIndex("RepresentativeTenantUserId");
 
                     b.HasIndex("RoomId", "LocationId");
 
-                    b.ToTable("assets", "public", t =>
+                    b.ToTable("invoices", "public", t =>
                         {
                             t.ExcludeFromMigrations();
                         });
                 });
 
-            modelBuilder.Entity("BHome.Domain.Entities.BillingPolicy", b =>
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustmentRequest", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<string>("CalculationMethod")
-                        .IsRequired()
-                        .HasColumnType("varchar(30)")
-                        .HasColumnName("calculation_method");
+                    b.Property<decimal?>("ApprovedDeltaAmount")
+                        .HasColumnType("numeric(18,0)")
+                        .HasColumnName("approved_delta_amount");
 
-                    b.Property<short>("Category")
-                        .HasColumnType("smallint")
-                        .HasColumnName("category");
+                    b.Property<DateTimeOffset?>("DecidedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("decided_at");
+
+                    b.Property<Guid?>("DecidedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("decided_by_user_id");
+
+                    b.Property<string>("DecisionReason")
+                        .HasColumnType("text")
+                        .HasColumnName("decision_reason");
+
+                    b.Property<JsonElement?>("DecisionSnapshot")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("decision_snapshot");
+
+                    b.Property<JsonElement>("History")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("history");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("invoice_id");
+
+                    b.Property<JsonElement>("ProposedChanges")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("proposed_changes");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<JsonElement>("RequestSnapshot")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("request_snapshot");
+
+                    b.Property<Guid>("RequesterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requested_by_user_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("varchar(12)")
+                        .HasColumnName("status");
+
+                    b.Property<JsonElement>("StoredEvidence")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("evidence");
+
+                    b.Property<DateTimeOffset>("SubmittedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("requested_at");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DecidedByUserId");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("RequesterId");
+
+                    b.ToTable("invoice_adjustments", "public", t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric(18,0)")
+                        .HasColumnName("amount");
+
+                    b.Property<JsonElement>("CalculationSnapshot")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("calculation_snapshot");
 
                     b.Property<string>("ChargeCode")
                         .IsRequired()
                         .HasColumnType("varchar(80)")
                         .HasColumnName("charge_code");
 
-                    b.Property<DateOnly>("EffectiveFrom")
-                        .HasColumnType("date")
-                        .HasColumnName("effective_from");
-
-                    b.Property<DateOnly?>("EffectiveTo")
-                        .HasColumnType("date")
-                        .HasColumnName("effective_to");
-
-                    b.Property<DateTimeOffset?>("FirstUsedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("first_used_at");
-
-                    b.Property<JsonElement>("History")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("history");
-
-                    b.Property<Guid>("LocationId")
+                    b.Property<Guid>("InvoiceId")
                         .HasColumnType("uuid")
-                        .HasColumnName("location_id");
+                        .HasColumnName("invoice_id");
 
-                    b.Property<JsonElement>("Parameters")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("parameters");
+                    b.Property<Guid?>("MeterReadingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("meter_reading_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("description");
+
+                    b.Property<Guid?>("PolicyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("billing_policy_id");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("quantity");
 
                     b.Property<decimal>("Rate")
                         .HasColumnType("numeric(18,4)")
-                        .HasColumnName("rate");
-
-                    b.Property<Guid?>("RoomId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("room_id");
-
-                    b.Property<int>("Version")
-                        .IsConcurrencyToken()
-                        .HasColumnType("integer")
-                        .HasColumnName("version");
+                        .HasColumnName("unit_price");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LocationId");
+                    b.HasIndex("InvoiceId");
 
-                    b.HasIndex("RoomId", "LocationId");
+                    b.HasIndex("MeterReadingId");
 
-                    b.ToTable("billing_policies", "public", t =>
+                    b.HasIndex("PolicyId");
+
+                    b.ToTable("invoice_items", "public", t =>
                         {
                             t.ExcludeFromMigrations();
                         });
                 });
 
-            modelBuilder.Entity("BHome.Domain.Entities.Contract", b =>
+            modelBuilder.Entity("BHome.Domain.Billing.Meter", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<DateTimeOffset?>("ActivatedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("activated_at");
-
-                    b.Property<Guid?>("ActivatedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("activated_by_user_id");
-
-                    b.Property<DateOnly?>("ActualEndDate")
-                        .HasColumnType("date")
-                        .HasColumnName("actual_end_date");
-
-                    b.Property<decimal>("AppliedHoldingDeposit")
-                        .HasColumnType("numeric(18,0)")
-                        .HasColumnName("applied_holding_deposit");
-
-                    b.Property<string>("ContractType")
+                    b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("varchar(12)")
-                        .HasColumnName("contract_type");
+                        .HasColumnType("varchar(80)")
+                        .HasColumnName("meter_code");
 
-                    b.Property<decimal>("DepositRequired")
-                        .HasColumnType("numeric(18,0)")
-                        .HasColumnName("deposit_required");
+                    b.Property<short>("DecimalPlaces")
+                        .HasColumnType("smallint")
+                        .HasColumnName("decimal_places");
 
-                    b.Property<JsonElement>("Documents")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("documents");
-
-                    b.Property<JsonElement>("DraftMetadata")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("draft_metadata");
-
-                    b.Property<DateOnly>("EndDate")
-                        .HasColumnType("date")
-                        .HasColumnName("end_date");
-
-                    b.Property<JsonElement>("Handover")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("handover");
+                    b.Property<short>("Display")
+                        .HasColumnType("smallint")
+                        .HasColumnName("display_type");
 
                     b.Property<JsonElement>("History")
                         .HasColumnType("jsonb")
                         .HasColumnName("history");
 
-                    b.Property<DateTimeOffset?>("HoldingExpiryAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("holding_expiry_at");
+                    b.Property<DateOnly>("InstalledOn")
+                        .HasColumnType("date")
+                        .HasColumnName("installed_on");
 
-                    b.Property<decimal?>("MonthlyRent")
-                        .HasColumnType("numeric(18,0)")
-                        .HasColumnName("monthly_rent");
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
 
-                    b.Property<JsonElement>("MoveOut")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("move_out");
-
-                    b.Property<Guid>("OwnerSignerId")
+                    b.Property<Guid?>("PreviousMeterId")
                         .HasColumnType("uuid")
-                        .HasColumnName("owner_signer_id");
+                        .HasColumnName("previous_meter_id");
 
-                    b.Property<Guid?>("ParentContractId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("parent_contract_id");
-
-                    b.Property<Guid?>("PreviousContractId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("previous_contract_id");
-
-                    b.Property<Guid>("RepresentativeResidentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("representative_resident_id");
-
-                    b.Property<short?>("ReservedCapacity")
-                        .HasColumnType("smallint")
-                        .HasColumnName("reserved_capacity");
+                    b.Property<DateOnly?>("RemovedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("removed_on");
 
                     b.Property<Guid>("RoomId")
                         .HasColumnType("uuid")
                         .HasColumnName("room_id");
 
-                    b.Property<JsonElement>("Settlement")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("settlement");
+                    b.Property<short>("UtilityType")
+                        .HasColumnType("smallint")
+                        .HasColumnName("utility_type");
 
-                    b.Property<string>("SnapshotHash")
-                        .HasColumnType("varchar(64)")
-                        .HasColumnName("snapshot_hash");
+                    b.HasKey("Id");
 
-                    b.Property<Guid?>("SourceHoldingContractId")
+                    b.HasIndex("PreviousMeterId");
+
+                    b.HasIndex("RoomId");
+
+                    b.ToTable("meters", "public", t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.MeterReading", b =>
+                {
+                    b.Property<Guid>("Id")
                         .HasColumnType("uuid")
-                        .HasColumnName("source_holding_contract_id");
+                        .HasColumnName("id");
 
-                    b.Property<DateOnly>("StartDate")
+                    b.Property<DateOnly?>("BillingPeriod")
                         .HasColumnType("date")
-                        .HasColumnName("start_date");
+                        .HasColumnName("billing_period");
+
+                    b.Property<DateTimeOffset>("ConfirmedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("confirmed_at");
+
+                    b.Property<Guid>("ConfirmedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("confirmed_by_user_id");
+
+                    b.Property<decimal>("ConfirmedValue")
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("confirmed_value");
+
+                    b.Property<decimal?>("Consumption")
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("consumption");
+
+                    b.Property<JsonElement>("Evidence")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("evidence");
+
+                    b.Property<JsonElement>("History")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("history");
+
+                    b.Property<Guid>("MeterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("meter_id");
+
+                    b.Property<decimal?>("OcrProposedValue")
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("ocr_proposed_value");
+
+                    b.Property<decimal?>("PreviousValue")
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("previous_value");
+
+                    b.Property<DateTimeOffset>("ReadingAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("reading_at");
+
+                    b.Property<short>("ReadingPurpose")
+                        .HasColumnType("smallint")
+                        .HasColumnName("reading_purpose");
 
                     b.Property<short>("Status")
                         .HasColumnType("smallint")
                         .HasColumnName("status");
 
-                    b.Property<Guid?>("TenantUserId")
+                    b.Property<Guid>("TaskId")
                         .HasColumnType("uuid")
-                        .HasColumnName("tenant_user_id");
+                        .HasColumnName("operational_task_id");
 
-                    b.Property<string>("Terms")
-                        .IsRequired()
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConfirmedByUserId");
+
+                    b.HasIndex("MeterId");
+
+                    b.HasIndex("TaskId")
+                        .IsUnique();
+
+                    b.ToTable("meter_readings", "public", t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.OperationalTask", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal?>("ApprovedCost")
+                        .HasColumnType("numeric(18,0)")
+                        .HasColumnName("approved_cost");
+
+                    b.Property<Guid?>("AssetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("asset_id");
+
+                    b.Property<DateTimeOffset?>("AssignedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("assigned_at");
+
+                    b.Property<Guid?>("AssignedUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("assigned_user_id");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_count");
+
+                    b.Property<DateOnly?>("BillingPeriod")
+                        .HasColumnType("date")
+                        .HasColumnName("billing_period");
+
+                    b.Property<Guid?>("ContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("contract_id");
+
+                    b.Property<DateTimeOffset?>("CostApprovedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("cost_approved_at");
+
+                    b.Property<Guid?>("CostApprovedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cost_approved_by_user_id");
+
+                    b.Property<string>("Description")
                         .HasColumnType("text")
-                        .HasColumnName("terms");
+                        .HasColumnName("description");
+
+                    b.Property<DateTimeOffset?>("DueAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("due_at");
+
+                    b.Property<DateTimeOffset?>("EndsAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("ends_at");
+
+                    b.Property<decimal?>("EstimatedCost")
+                        .HasColumnType("numeric(18,0)")
+                        .HasColumnName("estimated_cost");
+
+                    b.Property<JsonElement>("Evidence")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("evidence");
+
+                    b.Property<JsonElement>("History")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("history");
+
+                    b.Property<Guid?>("IncidentReportId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("incident_report_id");
+
+                    b.Property<Guid?>("LeaseToken")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lease_token");
+
+                    b.Property<DateTimeOffset?>("LockedUntil")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("locked_until");
+
+                    b.Property<Guid?>("MeterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("meter_id");
+
+                    b.Property<DateTimeOffset?>("NextRunAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("next_run_at");
+
+                    b.Property<Guid?>("RoomId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("room_id");
+
+                    b.Property<string>("SourceKey")
+                        .HasColumnType("varchar(250)")
+                        .HasColumnName("source_key");
+
+                    b.Property<DateTimeOffset?>("StartsAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("starts_at");
+
+                    b.Property<Guid?>("StoredLocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("location_id");
+
+                    b.Property<string>("StoredPriority")
+                        .HasColumnType("varchar(12)")
+                        .HasColumnName("priority");
+
+                    b.Property<string>("StoredStatus")
+                        .IsRequired()
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("StoredTitle")
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("title");
+
+                    b.Property<JsonElement>("TaskData")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("task_data");
+
+                    b.Property<string>("TaskType")
+                        .IsRequired()
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("task_type");
+
+                    b.Property<DateTimeOffset?>("VerifiedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("verified_at");
+
+                    b.Property<Guid?>("VerifiedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("verified_by_user_id");
 
                     b.Property<int>("Version")
                         .HasColumnType("integer")
@@ -280,181 +537,25 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ActivatedByUserId");
-
-                    b.HasIndex("OwnerSignerId");
-
-                    b.HasIndex("ParentContractId");
-
-                    b.HasIndex("PreviousContractId");
-
-                    b.HasIndex("RepresentativeResidentId");
-
-                    b.HasIndex("RoomId");
-
-                    b.HasIndex("SourceHoldingContractId");
-
-                    b.HasIndex("TenantUserId");
-
-                    b.ToTable("contracts", "public", t =>
-                        {
-                            t.ExcludeFromMigrations();
-                        });
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.ContractResident", b =>
-                {
-                    b.Property<Guid>("ContractId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("contract_id");
-
-                    b.Property<Guid>("ResidentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("resident_id");
-
-                    b.Property<DateOnly?>("ActualMoveOutDate")
-                        .HasColumnType("date")
-                        .HasColumnName("actual_move_out_date");
-
-                    b.Property<DateOnly?>("ActualResidenceFrom")
-                        .HasColumnType("date")
-                        .HasColumnName("actual_residence_from");
-
-                    b.Property<JsonElement>("History")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("history");
-
-                    b.Property<DateTimeOffset?>("OwnerConfirmedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("owner_confirmed_at");
-
-                    b.Property<Guid?>("OwnerConfirmedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("owner_confirmed_by_user_id");
-
-                    b.Property<string>("RegistrationEvidenceKey")
-                        .HasColumnType("varchar(250)")
-                        .HasColumnName("registration_evidence_key");
-
-                    b.Property<DateTimeOffset?>("RegistrationResultAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("registration_result_at");
-
-                    b.Property<string>("RegistrationStatus")
-                        .HasColumnType("varchar(25)")
-                        .HasColumnName("registration_status");
-
-                    b.Property<DateOnly>("ResidenceFrom")
-                        .HasColumnType("date")
-                        .HasColumnName("residence_from");
-
-                    b.Property<DateOnly?>("ResidenceTo")
-                        .HasColumnType("date")
-                        .HasColumnName("residence_to");
-
-                    b.Property<short>("ResidentRole")
-                        .HasColumnType("smallint")
-                        .HasColumnName("resident_role");
-
-                    b.HasKey("ContractId", "ResidentId");
-
-                    b.HasIndex("OwnerConfirmedByUserId");
-
-                    b.HasIndex("ResidentId");
-
-                    b.ToTable("contract_residents", "public", t =>
-                        {
-                            t.ExcludeFromMigrations();
-                        });
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.ContractSigning", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid>("CertificateId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("certificate_id");
-
-                    b.Property<JsonElement>("CertificateSnapshot")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("certificate_snapshot");
-
-                    b.Property<Guid>("ContractId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("contract_id");
-
-                    b.Property<DateTimeOffset>("ExpiresAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("expires_at");
-
-                    b.Property<JsonElement>("History")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("history");
-
-                    b.Property<string>("PreparedHash")
-                        .HasColumnType("varchar(64)")
-                        .HasColumnName("prepared_hash");
-
-                    b.Property<string>("PreparedObjectKey")
-                        .HasColumnType("varchar(250)")
-                        .HasColumnName("prepared_object_key");
-
-                    b.Property<string>("ProviderCode")
-                        .IsRequired()
-                        .HasColumnType("varchar(50)")
-                        .HasColumnName("provider_code");
-
-                    b.Property<string>("ProviderReference")
-                        .HasColumnType("varchar(200)")
-                        .HasColumnName("provider_reference");
-
-                    b.Property<DateTimeOffset>("RequestedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("requested_at");
-
-                    b.Property<DateTimeOffset?>("SignedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("signed_at");
-
-                    b.Property<string>("SignedHash")
-                        .HasColumnType("varchar(64)")
-                        .HasColumnName("signed_hash");
-
-                    b.Property<string>("SignedObjectKey")
-                        .HasColumnType("varchar(250)")
-                        .HasColumnName("signed_object_key");
-
-                    b.Property<Guid>("SignerUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("signer_user_id");
-
-                    b.Property<JsonElement>("SigningData")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("signing_data");
-
-                    b.Property<short>("SigningStatus")
-                        .HasColumnType("smallint")
-                        .HasColumnName("signing_status");
-
-                    b.Property<string>("SnapshotHash")
-                        .IsRequired()
-                        .HasColumnType("varchar(64)")
-                        .HasColumnName("snapshot_hash");
-
-                    b.Property<string>("SourceHash")
-                        .HasColumnType("varchar(64)")
-                        .HasColumnName("source_hash");
-
-                    b.HasKey("Id");
+                    b.HasIndex("AssignedUserId");
 
                     b.HasIndex("ContractId");
 
-                    b.HasIndex("SignerUserId");
+                    b.HasIndex("CostApprovedByUserId");
 
-                    b.ToTable("contract_signings", "public", t =>
+                    b.HasIndex("IncidentReportId");
+
+                    b.HasIndex("MeterId");
+
+                    b.HasIndex("StoredLocationId");
+
+                    b.HasIndex("VerifiedByUserId");
+
+                    b.HasIndex("AssetId", "StoredLocationId");
+
+                    b.HasIndex("RoomId", "StoredLocationId");
+
+                    b.ToTable("operational_tasks", "public", t =>
                         {
                             t.ExcludeFromMigrations();
                         });
@@ -609,532 +710,6 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         });
                 });
 
-            modelBuilder.Entity("BHome.Domain.Entities.IncidentReport", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid?>("AssetId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("asset_id");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("description");
-
-                    b.Property<Guid?>("DuplicateOfReportId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("duplicate_of_report_id");
-
-                    b.Property<JsonElement>("EmergencyActions")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("emergency_actions");
-
-                    b.Property<JsonElement>("Evidence")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("evidence");
-
-                    b.Property<JsonElement>("History")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("history");
-
-                    b.Property<Guid>("LocationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("location_id");
-
-                    b.Property<JsonElement>("OwnerDecision")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("owner_decision");
-
-                    b.Property<DateTimeOffset>("ReportedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("reported_at");
-
-                    b.Property<Guid>("ReporterUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("reporter_user_id");
-
-                    b.Property<DateTimeOffset?>("ResolvedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("resolved_at");
-
-                    b.Property<Guid?>("RoomId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("room_id");
-
-                    b.Property<string>("Severity")
-                        .IsRequired()
-                        .HasColumnType("varchar(12)")
-                        .HasColumnName("severity");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("varchar(30)")
-                        .HasColumnName("status");
-
-                    b.Property<string>("Summary")
-                        .IsRequired()
-                        .HasColumnType("varchar(250)")
-                        .HasColumnName("summary");
-
-                    b.Property<int>("Version")
-                        .HasColumnType("integer")
-                        .HasColumnName("version");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DuplicateOfReportId");
-
-                    b.HasIndex("LocationId");
-
-                    b.HasIndex("ReporterUserId");
-
-                    b.HasIndex("AssetId", "LocationId");
-
-                    b.HasIndex("RoomId", "LocationId");
-
-                    b.ToTable("incident_reports", "public", t =>
-                        {
-                            t.ExcludeFromMigrations();
-                        });
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.Invoice", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<decimal>("BaseTotalAmount")
-                        .HasColumnType("numeric(18,0)")
-                        .HasColumnName("base_total_amount");
-
-                    b.Property<DateOnly>("BillingPeriod")
-                        .HasColumnType("date")
-                        .HasColumnName("billing_period");
-
-                    b.Property<JsonElement>("BillingSnapshot")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("billing_snapshot");
-
-                    b.Property<Guid>("ContractId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("contract_id");
-
-                    b.Property<DateOnly>("DueDate")
-                        .HasColumnType("date")
-                        .HasColumnName("due_date");
-
-                    b.Property<DateTimeOffset?>("FinalizedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("finalized_at");
-
-                    b.Property<Guid?>("FinalizedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("finalized_by_user_id");
-
-                    b.Property<JsonElement>("History")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("history");
-
-                    b.Property<string>("InvoiceType")
-                        .IsRequired()
-                        .HasColumnType("varchar(12)")
-                        .HasColumnName("invoice_type");
-
-                    b.Property<Guid>("LocationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("location_id");
-
-                    b.Property<string[]>("MissingInputs")
-                        .IsRequired()
-                        .HasColumnType("text[]")
-                        .HasColumnName("missing_inputs");
-
-                    b.Property<JsonElement>("PaymentRequests")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("payment_requests");
-
-                    b.Property<Guid[]>("RecipientUserIds")
-                        .IsRequired()
-                        .HasColumnType("uuid[]")
-                        .HasColumnName("recipient_user_ids");
-
-                    b.Property<Guid>("RepresentativeTenantUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("representative_tenant_user_id");
-
-                    b.Property<Guid>("RoomId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("room_id");
-
-                    b.Property<DateOnly>("ScheduledFinalDate")
-                        .HasColumnType("date")
-                        .HasColumnName("scheduled_final_date");
-
-                    b.Property<short>("Status")
-                        .HasColumnType("smallint")
-                        .HasColumnName("status");
-
-                    b.Property<int>("Version")
-                        .HasColumnType("integer")
-                        .HasColumnName("version");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ContractId");
-
-                    b.HasIndex("FinalizedByUserId");
-
-                    b.HasIndex("LocationId");
-
-                    b.HasIndex("RepresentativeTenantUserId");
-
-                    b.HasIndex("RoomId", "LocationId");
-
-                    b.ToTable("invoices", "public", t =>
-                        {
-                            t.ExcludeFromMigrations();
-                        });
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.InvoiceAdjustment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<decimal?>("ApprovedDeltaAmount")
-                        .HasColumnType("numeric(18,0)")
-                        .HasColumnName("approved_delta_amount");
-
-                    b.Property<DateTimeOffset?>("DecidedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("decided_at");
-
-                    b.Property<Guid?>("DecidedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("decided_by_user_id");
-
-                    b.Property<string>("DecisionReason")
-                        .HasColumnType("text")
-                        .HasColumnName("decision_reason");
-
-                    b.Property<JsonElement?>("DecisionSnapshot")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("decision_snapshot");
-
-                    b.Property<JsonElement>("Evidence")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("evidence");
-
-                    b.Property<JsonElement>("History")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("history");
-
-                    b.Property<Guid>("InvoiceId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("invoice_id");
-
-                    b.Property<JsonElement>("ProposedChanges")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("proposed_changes");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("reason");
-
-                    b.Property<JsonElement>("RequestSnapshot")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("request_snapshot");
-
-                    b.Property<DateTimeOffset>("RequestedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("requested_at");
-
-                    b.Property<Guid>("RequestedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("requested_by_user_id");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("varchar(12)")
-                        .HasColumnName("status");
-
-                    b.Property<int>("Version")
-                        .HasColumnType("integer")
-                        .HasColumnName("version");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DecidedByUserId");
-
-                    b.HasIndex("InvoiceId");
-
-                    b.HasIndex("RequestedByUserId");
-
-                    b.ToTable("invoice_adjustments", "public", t =>
-                        {
-                            t.ExcludeFromMigrations();
-                        });
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.InvoiceItem", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("numeric(18,0)")
-                        .HasColumnName("amount");
-
-                    b.Property<Guid?>("BillingPolicyId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("billing_policy_id");
-
-                    b.Property<JsonElement>("CalculationSnapshot")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("calculation_snapshot");
-
-                    b.Property<string>("ChargeCode")
-                        .IsRequired()
-                        .HasColumnType("varchar(80)")
-                        .HasColumnName("charge_code");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("varchar(255)")
-                        .HasColumnName("description");
-
-                    b.Property<Guid>("InvoiceId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("invoice_id");
-
-                    b.Property<Guid?>("MeterReadingId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("meter_reading_id");
-
-                    b.Property<decimal>("Quantity")
-                        .HasColumnType("numeric(18,4)")
-                        .HasColumnName("quantity");
-
-                    b.Property<decimal>("UnitPrice")
-                        .HasColumnType("numeric(18,4)")
-                        .HasColumnName("unit_price");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BillingPolicyId");
-
-                    b.HasIndex("InvoiceId");
-
-                    b.HasIndex("MeterReadingId");
-
-                    b.ToTable("invoice_items", "public", t =>
-                        {
-                            t.ExcludeFromMigrations();
-                        });
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.Location", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("Address")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("address");
-
-                    b.Property<JsonElement>("History")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("history");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_active");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("varchar(200)")
-                        .HasColumnName("name");
-
-                    b.Property<JsonElement>("OperatingSettings")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("operating_settings");
-
-                    b.Property<JsonElement>("PublicProfile")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("public_profile");
-
-                    b.Property<DateTimeOffset?>("PublishedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("published_at");
-
-                    b.Property<Guid?>("PublishedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("published_by_user_id");
-
-                    b.Property<JsonElement>("StaffAssignments")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("staff_assignments");
-
-                    b.Property<int>("Version")
-                        .IsConcurrencyToken()
-                        .HasColumnType("integer")
-                        .HasColumnName("version");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PublishedByUserId");
-
-                    b.ToTable("locations", "public", t =>
-                        {
-                            t.ExcludeFromMigrations();
-                        });
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.Meter", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<short>("DecimalPlaces")
-                        .HasColumnType("smallint")
-                        .HasColumnName("decimal_places");
-
-                    b.Property<short>("DisplayType")
-                        .HasColumnType("smallint")
-                        .HasColumnName("display_type");
-
-                    b.Property<JsonElement>("History")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("history");
-
-                    b.Property<DateOnly>("InstalledOn")
-                        .HasColumnType("date")
-                        .HasColumnName("installed_on");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_active");
-
-                    b.Property<string>("MeterCode")
-                        .IsRequired()
-                        .HasColumnType("varchar(80)")
-                        .HasColumnName("meter_code");
-
-                    b.Property<Guid?>("PreviousMeterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("previous_meter_id");
-
-                    b.Property<DateOnly?>("RemovedOn")
-                        .HasColumnType("date")
-                        .HasColumnName("removed_on");
-
-                    b.Property<Guid>("RoomId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("room_id");
-
-                    b.Property<short>("UtilityType")
-                        .HasColumnType("smallint")
-                        .HasColumnName("utility_type");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PreviousMeterId");
-
-                    b.HasIndex("RoomId");
-
-                    b.ToTable("meters", "public", t =>
-                        {
-                            t.ExcludeFromMigrations();
-                        });
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.MeterReading", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateOnly?>("BillingPeriod")
-                        .HasColumnType("date")
-                        .HasColumnName("billing_period");
-
-                    b.Property<DateTimeOffset>("ConfirmedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("confirmed_at");
-
-                    b.Property<Guid>("ConfirmedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("confirmed_by_user_id");
-
-                    b.Property<decimal>("ConfirmedValue")
-                        .HasColumnType("numeric(18,4)")
-                        .HasColumnName("confirmed_value");
-
-                    b.Property<decimal?>("Consumption")
-                        .HasColumnType("numeric(18,4)")
-                        .HasColumnName("consumption");
-
-                    b.Property<JsonElement>("Evidence")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("evidence");
-
-                    b.Property<JsonElement>("History")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("history");
-
-                    b.Property<Guid>("MeterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("meter_id");
-
-                    b.Property<decimal?>("OcrProposedValue")
-                        .HasColumnType("numeric(18,4)")
-                        .HasColumnName("ocr_proposed_value");
-
-                    b.Property<Guid>("OperationalTaskId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("operational_task_id");
-
-                    b.Property<decimal?>("PreviousValue")
-                        .HasColumnType("numeric(18,4)")
-                        .HasColumnName("previous_value");
-
-                    b.Property<DateTimeOffset>("ReadingAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("reading_at");
-
-                    b.Property<short>("ReadingPurpose")
-                        .HasColumnType("smallint")
-                        .HasColumnName("reading_purpose");
-
-                    b.Property<short>("Status")
-                        .HasColumnType("smallint")
-                        .HasColumnName("status");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ConfirmedByUserId");
-
-                    b.HasIndex("MeterId");
-
-                    b.HasIndex("OperationalTaskId")
-                        .IsUnique();
-
-                    b.ToTable("meter_readings", "public", t =>
-                        {
-                            t.ExcludeFromMigrations();
-                        });
-                });
-
             modelBuilder.Entity("BHome.Domain.Entities.Notification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1225,349 +800,6 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.HasIndex("RecipientUserId");
 
                     b.ToTable("notifications", "public", t =>
-                        {
-                            t.ExcludeFromMigrations();
-                        });
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.OperationalTask", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<decimal?>("ApprovedCost")
-                        .HasColumnType("numeric(18,0)")
-                        .HasColumnName("approved_cost");
-
-                    b.Property<Guid?>("AssetId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("asset_id");
-
-                    b.Property<DateTimeOffset?>("AssignedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("assigned_at");
-
-                    b.Property<Guid?>("AssignedUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("assigned_user_id");
-
-                    b.Property<int>("AttemptCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("attempt_count");
-
-                    b.Property<DateOnly?>("BillingPeriod")
-                        .HasColumnType("date")
-                        .HasColumnName("billing_period");
-
-                    b.Property<Guid?>("ContractId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("contract_id");
-
-                    b.Property<DateTimeOffset?>("CostApprovedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("cost_approved_at");
-
-                    b.Property<Guid?>("CostApprovedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("cost_approved_by_user_id");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text")
-                        .HasColumnName("description");
-
-                    b.Property<DateTimeOffset?>("DueAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("due_at");
-
-                    b.Property<DateTimeOffset?>("EndsAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("ends_at");
-
-                    b.Property<decimal?>("EstimatedCost")
-                        .HasColumnType("numeric(18,0)")
-                        .HasColumnName("estimated_cost");
-
-                    b.Property<JsonElement>("Evidence")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("evidence");
-
-                    b.Property<JsonElement>("History")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("history");
-
-                    b.Property<Guid?>("IncidentReportId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("incident_report_id");
-
-                    b.Property<Guid?>("LeaseToken")
-                        .HasColumnType("uuid")
-                        .HasColumnName("lease_token");
-
-                    b.Property<Guid?>("LocationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("location_id");
-
-                    b.Property<DateTimeOffset?>("LockedUntil")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("locked_until");
-
-                    b.Property<Guid?>("MeterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("meter_id");
-
-                    b.Property<DateTimeOffset?>("NextRunAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("next_run_at");
-
-                    b.Property<string>("Priority")
-                        .HasColumnType("varchar(12)")
-                        .HasColumnName("priority");
-
-                    b.Property<Guid?>("RoomId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("room_id");
-
-                    b.Property<string>("SourceKey")
-                        .HasColumnType("varchar(250)")
-                        .HasColumnName("source_key");
-
-                    b.Property<DateTimeOffset?>("StartsAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("starts_at");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("varchar(30)")
-                        .HasColumnName("status");
-
-                    b.Property<JsonElement>("TaskData")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("task_data");
-
-                    b.Property<string>("TaskType")
-                        .IsRequired()
-                        .HasColumnType("varchar(20)")
-                        .HasColumnName("task_type");
-
-                    b.Property<string>("Title")
-                        .HasColumnType("varchar(200)")
-                        .HasColumnName("title");
-
-                    b.Property<DateTimeOffset?>("VerifiedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("verified_at");
-
-                    b.Property<Guid?>("VerifiedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("verified_by_user_id");
-
-                    b.Property<int>("Version")
-                        .HasColumnType("integer")
-                        .HasColumnName("version");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AssignedUserId");
-
-                    b.HasIndex("ContractId");
-
-                    b.HasIndex("CostApprovedByUserId");
-
-                    b.HasIndex("IncidentReportId");
-
-                    b.HasIndex("LocationId");
-
-                    b.HasIndex("MeterId");
-
-                    b.HasIndex("VerifiedByUserId");
-
-                    b.HasIndex("AssetId", "LocationId");
-
-                    b.HasIndex("RoomId", "LocationId");
-
-                    b.ToTable("operational_tasks", "public", t =>
-                        {
-                            t.ExcludeFromMigrations();
-                        });
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.Payment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("numeric(18,0)")
-                        .HasColumnName("amount");
-
-                    b.Property<Guid?>("BeneficiaryResidentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("beneficiary_resident_id");
-
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .HasColumnType("varchar(3)")
-                        .HasColumnName("currency");
-
-                    b.Property<string>("EffectKey")
-                        .HasColumnType("varchar(250)")
-                        .HasColumnName("effect_key");
-
-                    b.Property<JsonElement>("History")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("history");
-
-                    b.Property<string>("ProviderCode")
-                        .IsRequired()
-                        .HasColumnType("varchar(80)")
-                        .HasColumnName("provider_code");
-
-                    b.Property<DateTimeOffset>("ReceivedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("received_at");
-
-                    b.Property<string>("ReceivingAccountKey")
-                        .IsRequired()
-                        .HasColumnType("varchar(200)")
-                        .HasColumnName("receiving_account_key");
-
-                    b.Property<string>("RemittanceInfo")
-                        .HasColumnType("text")
-                        .HasColumnName("remittance_info");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("varchar(12)")
-                        .HasColumnName("status");
-
-                    b.Property<string>("TransactionReference")
-                        .IsRequired()
-                        .HasColumnType("varchar(150)")
-                        .HasColumnName("transaction_reference");
-
-                    b.Property<JsonElement>("VerificationData")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("verification_data");
-
-                    b.Property<string>("VerificationMethod")
-                        .HasColumnType("varchar(10)")
-                        .HasColumnName("verification_method");
-
-                    b.Property<DateTimeOffset?>("VerifiedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("verified_at");
-
-                    b.Property<Guid?>("VerifiedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("verified_by_user_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BeneficiaryResidentId");
-
-                    b.HasIndex("VerifiedByUserId");
-
-                    b.ToTable("payments", "public", t =>
-                        {
-                            t.ExcludeFromMigrations();
-                        });
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.PaymentAllocation", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTimeOffset>("AllocatedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("allocated_at");
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("numeric(18,0)")
-                        .HasColumnName("amount");
-
-                    b.Property<Guid?>("CreatedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by_user_id");
-
-                    b.Property<Guid?>("DepositOffsetApprovalId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("deposit_offset_approval_id");
-
-                    b.Property<short>("LineNumber")
-                        .HasColumnType("smallint")
-                        .HasColumnName("line_number");
-
-                    b.Property<Guid>("OperationKey")
-                        .HasColumnType("uuid")
-                        .HasColumnName("operation_key");
-
-                    b.Property<Guid?>("PaidByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("paid_by_user_id");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("reason");
-
-                    b.Property<Guid?>("ReversalOfAllocationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("reversal_of_allocation_id");
-
-                    b.Property<Guid?>("SettlementReceivableId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("settlement_receivable_id");
-
-                    b.Property<Guid?>("SourceDepositContractId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("source_deposit_contract_id");
-
-                    b.Property<Guid?>("SourcePaymentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("source_payment_id");
-
-                    b.Property<Guid?>("TargetDepositContractId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("target_deposit_contract_id");
-
-                    b.Property<Guid?>("TargetInitialContractId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("target_initial_contract_id");
-
-                    b.Property<Guid?>("TargetInvoiceId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("target_invoice_id");
-
-                    b.Property<Guid?>("TargetSettlementContractId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("target_settlement_contract_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedByUserId");
-
-                    b.HasIndex("PaidByUserId");
-
-                    b.HasIndex("ReversalOfAllocationId")
-                        .IsUnique();
-
-                    b.HasIndex("SourceDepositContractId");
-
-                    b.HasIndex("SourcePaymentId");
-
-                    b.HasIndex("TargetDepositContractId");
-
-                    b.HasIndex("TargetInitialContractId");
-
-                    b.HasIndex("TargetInvoiceId");
-
-                    b.HasIndex("TargetSettlementContractId");
-
-                    b.ToTable("payment_allocations", "public", t =>
                         {
                             t.ExcludeFromMigrations();
                         });
@@ -1676,78 +908,528 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         });
                 });
 
-            modelBuilder.Entity("BHome.Domain.Entities.Resident", b =>
+            modelBuilder.Entity("BHome.Domain.Entities.StaffEmployment", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<string>("ContactEmail")
-                        .HasColumnType("varchar(256)")
-                        .HasColumnName("contact_email");
+                    b.Property<decimal?>("BaseRate")
+                        .HasColumnType("numeric(18,0)")
+                        .HasColumnName("base_rate");
 
-                    b.Property<Guid?>("CurrentRoomId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("current_room_id");
+                    b.Property<string>("ContractNumber")
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("contract_number");
 
-                    b.Property<string>("DisplayLabel")
-                        .IsRequired()
-                        .HasColumnType("varchar(150)")
-                        .HasColumnName("display_label");
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date")
+                        .HasColumnName("end_date");
 
                     b.Property<JsonElement>("History")
                         .HasColumnType("jsonb")
                         .HasColumnName("history");
 
-                    b.Property<string>("HmacKeyVersion")
-                        .HasColumnType("varchar(32)")
-                        .HasColumnName("hmac_key_version");
-
-                    b.Property<JsonElement>("IdentityData")
+                    b.Property<JsonElement>("RewardPenaltyPolicy")
                         .HasColumnType("jsonb")
-                        .HasColumnName("identity_data");
+                        .HasColumnName("reward_penalty_policy");
 
-                    b.Property<string>("IdentityHmac")
-                        .HasColumnType("varchar(64)")
-                        .HasColumnName("identity_hmac");
+                    b.Property<string>("SalaryType")
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("salary_type");
 
-                    b.Property<Guid>("IdentityOwnerScopeId")
+                    b.Property<Guid>("StaffUserId")
                         .HasColumnType("uuid")
-                        .HasColumnName("identity_owner_scope_id");
+                        .HasColumnName("staff_user_id");
 
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date")
+                        .HasColumnName("start_date");
 
-                    b.Property<short>("VerificationStatus")
-                        .HasColumnType("smallint")
-                        .HasColumnName("verification_status");
-
-                    b.Property<DateTimeOffset?>("VerifiedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("verified_at");
-
-                    b.Property<Guid?>("VerifiedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("verified_by_user_id");
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("varchar(25)")
+                        .HasColumnName("status");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CurrentRoomId");
+                    b.HasIndex("StaffUserId");
 
-                    b.HasIndex("IdentityOwnerScopeId");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("VerifiedByUserId");
-
-                    b.ToTable("residents", "public", t =>
+                    b.ToTable("staff_employments", "public", t =>
                         {
                             t.ExcludeFromMigrations();
                         });
                 });
 
-            modelBuilder.Entity("BHome.Domain.Entities.Room", b =>
+            modelBuilder.Entity("BHome.Domain.IncidentMaintenance.IncidentReport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AssetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("asset_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("reported_at");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<Guid?>("DuplicateOfId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("duplicate_of_report_id");
+
+                    b.Property<JsonElement>("EmergencyActions")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("emergency_actions");
+
+                    b.Property<JsonElement>("Evidence")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("evidence");
+
+                    b.Property<JsonElement>("History")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("history");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("location_id");
+
+                    b.Property<JsonElement>("OwnerDecision")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("owner_decision");
+
+                    b.Property<Guid>("ReporterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reporter_user_id");
+
+                    b.Property<DateTimeOffset?>("ResolvedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("resolved_at");
+
+                    b.Property<Guid?>("RoomId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("room_id");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasColumnType("varchar(12)")
+                        .HasColumnName("severity");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasColumnType("varchar(250)")
+                        .HasColumnName("summary");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DuplicateOfId");
+
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex("ReporterId");
+
+                    b.HasIndex("AssetId", "LocationId");
+
+                    b.HasIndex("RoomId", "LocationId");
+
+                    b.ToTable("incident_reports", "public", t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.Locations.Location", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("address");
+
+                    b.Property<JsonElement>("History")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("history");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("name");
+
+                    b.Property<JsonElement>("OperatingSettings")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("operating_settings");
+
+                    b.Property<JsonElement>("PublicProfile")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("public_profile");
+
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("published_at");
+
+                    b.Property<Guid?>("PublishedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("published_by_user_id");
+
+                    b.Property<JsonElement>("StaffAssignments")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("staff_assignments");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublishedByUserId");
+
+                    b.ToTable("locations", "public", t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.PaymentsDebt.PaymentAllocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("AllocatedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("allocated_at");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric(18,0)")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<Guid?>("DepositOffsetApprovalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deposit_offset_approval_id");
+
+                    b.Property<Guid?>("InvoiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_invoice_id");
+
+                    b.Property<short>("LineNumber")
+                        .HasColumnType("smallint")
+                        .HasColumnName("line_number");
+
+                    b.Property<Guid>("OperationKey")
+                        .HasColumnType("uuid")
+                        .HasColumnName("operation_key");
+
+                    b.Property<Guid?>("PaidByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("paid_by_user_id");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<Guid?>("ReversalOfAllocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reversal_of_allocation_id");
+
+                    b.Property<Guid?>("SettlementReceivableId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("settlement_receivable_id");
+
+                    b.Property<Guid?>("SourceDepositContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_deposit_contract_id");
+
+                    b.Property<Guid?>("TargetDepositContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_deposit_contract_id");
+
+                    b.Property<Guid?>("TargetInitialContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_initial_contract_id");
+
+                    b.Property<Guid?>("TargetSettlementContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_settlement_contract_id");
+
+                    b.Property<Guid?>("TransferId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_payment_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("PaidByUserId");
+
+                    b.HasIndex("ReversalOfAllocationId")
+                        .IsUnique();
+
+                    b.HasIndex("SourceDepositContractId");
+
+                    b.HasIndex("TargetDepositContractId");
+
+                    b.HasIndex("TargetInitialContractId");
+
+                    b.HasIndex("TargetSettlementContractId");
+
+                    b.HasIndex("TransferId");
+
+                    b.ToTable("payment_allocations", "public", t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.PaymentsDebt.PaymentTransfer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric(18,0)")
+                        .HasColumnName("amount");
+
+                    b.Property<string>("BankReference")
+                        .IsRequired()
+                        .HasColumnType("varchar(150)")
+                        .HasColumnName("transaction_reference");
+
+                    b.Property<Guid?>("BeneficiaryResidentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("beneficiary_resident_id");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("varchar(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<string>("EffectKey")
+                        .HasColumnType("varchar(250)")
+                        .HasColumnName("effect_key");
+
+                    b.Property<JsonElement>("History")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("history");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("received_at");
+
+                    b.Property<string>("ProviderIdentity")
+                        .IsRequired()
+                        .HasColumnType("varchar(80)")
+                        .HasColumnName("provider_code");
+
+                    b.Property<string>("ReceivingAccountKey")
+                        .IsRequired()
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("receiving_account_key");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("varchar(12)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("StoredRemittanceInfo")
+                        .HasColumnType("text")
+                        .HasColumnName("remittance_info");
+
+                    b.Property<DateTimeOffset?>("StoredVerifiedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("verified_at");
+
+                    b.Property<Guid?>("StoredVerifiedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("verified_by_user_id");
+
+                    b.Property<JsonElement>("VerificationData")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("verification_data");
+
+                    b.Property<string>("VerificationMethod")
+                        .HasColumnType("varchar(10)")
+                        .HasColumnName("verification_method");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BeneficiaryResidentId");
+
+                    b.HasIndex("StoredVerifiedByUserId");
+
+                    b.ToTable("payments", "public", t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.PropertyManagement.Asset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("varchar(80)")
+                        .HasColumnName("category");
+
+                    b.Property<string>("Code")
+                        .HasColumnType("varchar(80)")
+                        .HasColumnName("asset_code");
+
+                    b.Property<string>("CommonArea")
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("common_area");
+
+                    b.Property<string>("Condition")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("condition");
+
+                    b.Property<JsonElement>("History")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("history");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("location_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("varchar(150)")
+                        .HasColumnName("name");
+
+                    b.Property<JsonElement>("PurchaseMetadata")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("purchase_info");
+
+                    b.Property<Guid?>("RoomId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("room_id");
+
+                    b.Property<short>("Status")
+                        .HasColumnType("smallint")
+                        .HasColumnName("status");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex("RoomId", "LocationId");
+
+                    b.ToTable("assets", "public", t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.PropertyManagement.BillingPolicy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<short>("Category")
+                        .HasColumnType("smallint")
+                        .HasColumnName("category");
+
+                    b.Property<string>("ChargeCode")
+                        .IsRequired()
+                        .HasColumnType("varchar(80)")
+                        .HasColumnName("charge_code");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date")
+                        .HasColumnName("effective_from");
+
+                    b.Property<DateOnly?>("EffectiveTo")
+                        .HasColumnType("date")
+                        .HasColumnName("effective_to");
+
+                    b.Property<DateTimeOffset?>("FirstUsedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("first_used_at");
+
+                    b.Property<JsonElement>("History")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("history");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("location_id");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("calculation_method");
+
+                    b.Property<JsonElement>("Parameters")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("parameters");
+
+                    b.Property<decimal>("Rate")
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("rate");
+
+                    b.Property<Guid?>("RoomId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("room_id");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex("RoomId", "LocationId");
+
+                    b.ToTable("billing_policies", "public", t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.PropertyManagement.Room", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
@@ -1811,54 +1493,376 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         });
                 });
 
-            modelBuilder.Entity("BHome.Domain.Entities.StaffEmployment", b =>
+            modelBuilder.Entity("BHome.Domain.TenantContracts.Contract", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<decimal?>("BaseRate")
+                    b.Property<DateTimeOffset?>("ActivatedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("activated_at");
+
+                    b.Property<Guid?>("ActivatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("activated_by_user_id");
+
+                    b.Property<DateOnly?>("ActualEndDate")
+                        .HasColumnType("date")
+                        .HasColumnName("actual_end_date");
+
+                    b.Property<decimal>("AppliedHoldingDeposit")
                         .HasColumnType("numeric(18,0)")
-                        .HasColumnName("base_rate");
+                        .HasColumnName("applied_holding_deposit");
 
-                    b.Property<string>("ContractNumber")
-                        .HasColumnType("varchar(100)")
-                        .HasColumnName("contract_number");
+                    b.Property<JsonElement>("Documents")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("documents");
 
-                    b.Property<DateOnly?>("EndDate")
+                    b.Property<string>("DraftMetadata")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("draft_metadata");
+
+                    b.Property<int>("DraftVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.Property<DateOnly>("EndDate")
                         .HasColumnType("date")
                         .HasColumnName("end_date");
+
+                    b.Property<JsonElement>("Handover")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("handover");
 
                     b.Property<JsonElement>("History")
                         .HasColumnType("jsonb")
                         .HasColumnName("history");
 
-                    b.Property<JsonElement>("RewardPenaltyPolicy")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("reward_penalty_policy");
-
-                    b.Property<string>("SalaryType")
-                        .HasColumnType("varchar(20)")
-                        .HasColumnName("salary_type");
-
-                    b.Property<Guid>("StaffUserId")
+                    b.Property<Guid?>("HoldingContractId")
                         .HasColumnType("uuid")
-                        .HasColumnName("staff_user_id");
+                        .HasColumnName("source_holding_contract_id");
+
+                    b.Property<DateTimeOffset?>("HoldingExpiryAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("holding_expiry_at");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("varchar(12)")
+                        .HasColumnName("contract_type");
+
+                    b.Property<JsonElement>("MoveOut")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("move_out");
+
+                    b.Property<Guid>("OwnerSignerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_signer_id");
+
+                    b.Property<Guid?>("ParentContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_contract_id");
+
+                    b.Property<Guid?>("PreviousContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("previous_contract_id");
+
+                    b.Property<Guid>("RepresentativeResidentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("representative_resident_id");
+
+                    b.Property<decimal>("RequiredDeposit")
+                        .HasColumnType("numeric(18,0)")
+                        .HasColumnName("deposit_required");
+
+                    b.Property<short?>("ReservedCapacity")
+                        .HasColumnType("smallint")
+                        .HasColumnName("reserved_capacity");
+
+                    b.Property<Guid>("RoomId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("room_id");
+
+                    b.Property<JsonElement>("Settlement")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("settlement");
 
                     b.Property<DateOnly>("StartDate")
                         .HasColumnType("date")
                         .HasColumnName("start_date");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("varchar(25)")
+                    b.Property<short>("Status")
+                        .HasColumnType("smallint")
                         .HasColumnName("status");
+
+                    b.Property<decimal?>("StoredMonthlyRent")
+                        .HasColumnType("numeric(18,0)")
+                        .HasColumnName("monthly_rent");
+
+                    b.Property<string>("StoredSnapshotHash")
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("snapshot_hash");
+
+                    b.Property<Guid?>("TenantUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_user_id");
+
+                    b.Property<string>("Terms")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("terms");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("StaffUserId");
+                    b.HasIndex("ActivatedByUserId");
 
-                    b.ToTable("staff_employments", "public", t =>
+                    b.HasIndex("HoldingContractId");
+
+                    b.HasIndex("OwnerSignerId");
+
+                    b.HasIndex("ParentContractId");
+
+                    b.HasIndex("PreviousContractId");
+
+                    b.HasIndex("RepresentativeResidentId");
+
+                    b.HasIndex("RoomId");
+
+                    b.HasIndex("TenantUserId");
+
+                    b.ToTable("contracts", "public", t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractResident", b =>
+                {
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("contract_id");
+
+                    b.Property<Guid>("ResidentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resident_id");
+
+                    b.Property<DateOnly?>("ActualMoveOutDate")
+                        .HasColumnType("date")
+                        .HasColumnName("actual_move_out_date");
+
+                    b.Property<DateOnly?>("ActualResidenceFrom")
+                        .HasColumnType("date")
+                        .HasColumnName("actual_residence_from");
+
+                    b.Property<JsonElement>("History")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("history");
+
+                    b.Property<DateTimeOffset?>("OwnerConfirmedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("owner_confirmed_at");
+
+                    b.Property<Guid?>("OwnerConfirmedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_confirmed_by_user_id");
+
+                    b.Property<string>("RegistrationEvidenceKey")
+                        .HasColumnType("varchar(250)")
+                        .HasColumnName("registration_evidence_key");
+
+                    b.Property<DateTimeOffset?>("RegistrationResultAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("registration_result_at");
+
+                    b.Property<string>("RegistrationStatus")
+                        .HasColumnType("varchar(25)")
+                        .HasColumnName("registration_status");
+
+                    b.Property<DateOnly>("ResidenceFrom")
+                        .HasColumnType("date")
+                        .HasColumnName("residence_from");
+
+                    b.Property<DateOnly?>("ResidenceTo")
+                        .HasColumnType("date")
+                        .HasColumnName("residence_to");
+
+                    b.Property<short>("Role")
+                        .HasColumnType("smallint")
+                        .HasColumnName("resident_role");
+
+                    b.HasKey("ContractId", "ResidentId");
+
+                    b.HasIndex("OwnerConfirmedByUserId");
+
+                    b.HasIndex("ResidentId");
+
+                    b.ToTable("contract_residents", "public", t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractSignature", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CertificateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("certificate_id");
+
+                    b.Property<JsonElement>("CertificateSnapshot")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("certificate_snapshot");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("contract_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("requested_at");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("expires_at");
+
+                    b.Property<JsonElement>("History")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("history");
+
+                    b.Property<string>("ProviderCode")
+                        .IsRequired()
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("provider_code");
+
+                    b.Property<string>("ProviderReference")
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("provider_reference");
+
+                    b.Property<DateTimeOffset?>("SignedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("signed_at");
+
+                    b.Property<string>("SignedHash")
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("signed_hash");
+
+                    b.Property<string>("SignedObjectKey")
+                        .HasColumnType("varchar(250)")
+                        .HasColumnName("signed_object_key");
+
+                    b.Property<Guid>("SignerUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("signer_user_id");
+
+                    b.Property<JsonElement>("SigningData")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("signing_data");
+
+                    b.Property<string>("SnapshotHash")
+                        .IsRequired()
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("snapshot_hash");
+
+                    b.Property<short>("Status")
+                        .HasColumnType("smallint")
+                        .HasColumnName("signing_status");
+
+                    b.Property<string>("StoredPreparedHash")
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("prepared_hash");
+
+                    b.Property<string>("StoredPreparedObjectKey")
+                        .HasColumnType("varchar(250)")
+                        .HasColumnName("prepared_object_key");
+
+                    b.Property<string>("StoredSourceHash")
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("source_hash");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContractId");
+
+                    b.HasIndex("SignerUserId");
+
+                    b.ToTable("contract_signings", "public", t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.Resident", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("ConfirmedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("verified_at");
+
+                    b.Property<Guid?>("ConfirmedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("verified_by_user_id");
+
+                    b.Property<string>("ContactEmail")
+                        .HasColumnType("varchar(256)")
+                        .HasColumnName("contact_email");
+
+                    b.Property<string>("DisplayLabel")
+                        .IsRequired()
+                        .HasColumnType("varchar(150)")
+                        .HasColumnName("display_label");
+
+                    b.Property<JsonElement>("History")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("history");
+
+                    b.Property<string>("HmacKeyVersion")
+                        .HasColumnType("varchar(32)")
+                        .HasColumnName("hmac_key_version");
+
+                    b.Property<string>("IdentityData")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("identity_data");
+
+                    b.Property<string>("IdentityHmac")
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("identity_hmac");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("identity_owner_scope_id");
+
+                    b.Property<Guid?>("RoomId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("current_room_id");
+
+                    b.Property<Guid?>("TenantUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<short>("VerificationStatus")
+                        .HasColumnType("smallint")
+                        .HasColumnName("verification_status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConfirmedByUserId");
+
+                    b.HasIndex("OwnerUserId");
+
+                    b.HasIndex("RoomId");
+
+                    b.HasIndex("TenantUserId");
+
+                    b.ToTable("residents", "public", t =>
                         {
                             t.ExcludeFromMigrations();
                         });
@@ -2065,125 +2069,171 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         });
                 });
 
-            modelBuilder.Entity("BHome.Domain.Entities.Asset", b =>
+            modelBuilder.Entity("BHome.Domain.Billing.Invoice", b =>
                 {
-                    b.HasOne("BHome.Domain.Entities.Location", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("FinalizedByUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Domain.Locations.Location", null)
                         .WithMany()
                         .HasForeignKey("LocationId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.HasOne("BHome.Domain.Entities.Room", null)
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
                         .WithMany()
-                        .HasForeignKey("RoomId", "LocationId")
-                        .HasPrincipalKey("Id", "LocationId")
-                        .OnDelete(DeleteBehavior.NoAction);
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.BillingPolicy", b =>
-                {
-                    b.HasOne("BHome.Domain.Entities.Location", null)
-                        .WithMany()
-                        .HasForeignKey("LocationId")
+                        .HasForeignKey("RepresentativeContractId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
-
-                    b.HasOne("BHome.Domain.Entities.Room", null)
-                        .WithMany()
-                        .HasForeignKey("RoomId", "LocationId")
-                        .HasPrincipalKey("Id", "LocationId")
-                        .OnDelete(DeleteBehavior.NoAction);
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.Contract", b =>
-                {
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("ActivatedByUserId")
-                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
-                        .HasForeignKey("OwnerSignerId")
+                        .HasForeignKey("RepresentativeTenantUserId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.HasOne("BHome.Domain.Entities.Contract", null)
+                    b.HasOne("BHome.Domain.PropertyManagement.Room", null)
                         .WithMany()
-                        .HasForeignKey("ParentContractId")
+                        .HasForeignKey("RoomId", "LocationId")
+                        .HasPrincipalKey("Id", "LocationId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustmentRequest", b =>
+                {
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("DecidedByUserId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("BHome.Domain.Entities.Contract", null)
+                    b.HasOne("BHome.Domain.Billing.Invoice", null)
                         .WithMany()
-                        .HasForeignKey("PreviousContractId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.Entities.Resident", null)
-                        .WithMany()
-                        .HasForeignKey("RepresentativeResidentId")
+                        .HasForeignKey("InvoiceId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.HasOne("BHome.Domain.Entities.Room", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RequesterId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceLine", b =>
+                {
+                    b.HasOne("BHome.Domain.Billing.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.Billing.MeterReading", null)
+                        .WithMany()
+                        .HasForeignKey("MeterReadingId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Domain.PropertyManagement.BillingPolicy", null)
+                        .WithMany()
+                        .HasForeignKey("PolicyId")
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.Meter", b =>
+                {
+                    b.HasOne("BHome.Domain.Billing.Meter", null)
+                        .WithMany()
+                        .HasForeignKey("PreviousMeterId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Domain.PropertyManagement.Room", null)
                         .WithMany()
                         .HasForeignKey("RoomId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
-
-                    b.HasOne("BHome.Domain.Entities.Contract", null)
-                        .WithMany()
-                        .HasForeignKey("SourceHoldingContractId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("TenantUserId")
-                        .OnDelete(DeleteBehavior.NoAction);
                 });
 
-            modelBuilder.Entity("BHome.Domain.Entities.ContractResident", b =>
+            modelBuilder.Entity("BHome.Domain.Billing.MeterReading", b =>
                 {
-                    b.HasOne("BHome.Domain.Entities.Contract", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ConfirmedByUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.Billing.Meter", null)
+                        .WithMany()
+                        .HasForeignKey("MeterId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.Billing.OperationalTask", null)
+                        .WithOne()
+                        .HasForeignKey("BHome.Domain.Billing.MeterReading", "TaskId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.Billing.OperationalTask", b =>
+                {
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("AssignedUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
                         .WithMany()
                         .HasForeignKey("ContractId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("OwnerConfirmedByUserId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("BHome.Domain.Entities.Resident", null)
-                        .WithMany()
-                        .HasForeignKey("ResidentId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.ContractSigning", b =>
-                {
-                    b.HasOne("BHome.Domain.Entities.Contract", null)
-                        .WithMany()
-                        .HasForeignKey("ContractId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
                     b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
-                        .HasForeignKey("SignerUserId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-                });
+                        .HasForeignKey("CostApprovedByUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
 
-            modelBuilder.Entity("BHome.Domain.Entities.Expense", b =>
-                {
-                    b.HasOne("BHome.Domain.Entities.IncidentReport", null)
+                    b.HasOne("BHome.Domain.IncidentMaintenance.IncidentReport", null)
                         .WithMany()
                         .HasForeignKey("IncidentReportId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("BHome.Domain.Entities.Location", null)
+                    b.HasOne("BHome.Domain.Billing.Meter", null)
+                        .WithMany()
+                        .HasForeignKey("MeterId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Domain.Locations.Location", null)
+                        .WithMany()
+                        .HasForeignKey("StoredLocationId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("VerifiedByUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Domain.PropertyManagement.Asset", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId", "StoredLocationId")
+                        .HasPrincipalKey("Id", "LocationId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Domain.PropertyManagement.Room", null)
+                        .WithMany()
+                        .HasForeignKey("RoomId", "StoredLocationId")
+                        .HasPrincipalKey("Id", "LocationId")
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
+            modelBuilder.Entity("BHome.Domain.Entities.Expense", b =>
+                {
+                    b.HasOne("BHome.Domain.IncidentMaintenance.IncidentReport", null)
+                        .WithMany()
+                        .HasForeignKey("IncidentReportId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Domain.Locations.Location", null)
                         .WithMany()
                         .HasForeignKey("LocationId")
                         .OnDelete(DeleteBehavior.NoAction)
@@ -2195,18 +2245,18 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.HasOne("BHome.Domain.Entities.OperationalTask", null)
+                    b.HasOne("BHome.Domain.Billing.OperationalTask", null)
                         .WithMany()
                         .HasForeignKey("TaskId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("BHome.Domain.Entities.Asset", null)
+                    b.HasOne("BHome.Domain.PropertyManagement.Asset", null)
                         .WithMany()
                         .HasForeignKey("AssetId", "LocationId")
                         .HasPrincipalKey("Id", "LocationId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("BHome.Domain.Entities.Room", null)
+                    b.HasOne("BHome.Domain.PropertyManagement.Room", null)
                         .WithMany()
                         .HasForeignKey("RoomId", "LocationId")
                         .HasPrincipalKey("Id", "LocationId")
@@ -2221,157 +2271,10 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.HasOne("BHome.Domain.Entities.Location", null)
+                    b.HasOne("BHome.Domain.Locations.Location", null)
                         .WithMany()
                         .HasForeignKey("LocationId")
                         .OnDelete(DeleteBehavior.NoAction);
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.IncidentReport", b =>
-                {
-                    b.HasOne("BHome.Domain.Entities.IncidentReport", null)
-                        .WithMany()
-                        .HasForeignKey("DuplicateOfReportId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.Entities.Location", null)
-                        .WithMany()
-                        .HasForeignKey("LocationId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("ReporterUserId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("BHome.Domain.Entities.Asset", null)
-                        .WithMany()
-                        .HasForeignKey("AssetId", "LocationId")
-                        .HasPrincipalKey("Id", "LocationId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.Entities.Room", null)
-                        .WithMany()
-                        .HasForeignKey("RoomId", "LocationId")
-                        .HasPrincipalKey("Id", "LocationId")
-                        .OnDelete(DeleteBehavior.NoAction);
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.Invoice", b =>
-                {
-                    b.HasOne("BHome.Domain.Entities.Contract", null)
-                        .WithMany()
-                        .HasForeignKey("ContractId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("FinalizedByUserId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.Entities.Location", null)
-                        .WithMany()
-                        .HasForeignKey("LocationId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("RepresentativeTenantUserId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("BHome.Domain.Entities.Room", null)
-                        .WithMany()
-                        .HasForeignKey("RoomId", "LocationId")
-                        .HasPrincipalKey("Id", "LocationId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.InvoiceAdjustment", b =>
-                {
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("DecidedByUserId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.Entities.Invoice", null)
-                        .WithMany()
-                        .HasForeignKey("InvoiceId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("RequestedByUserId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.InvoiceItem", b =>
-                {
-                    b.HasOne("BHome.Domain.Entities.BillingPolicy", null)
-                        .WithMany()
-                        .HasForeignKey("BillingPolicyId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.Entities.Invoice", null)
-                        .WithMany()
-                        .HasForeignKey("InvoiceId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("BHome.Domain.Entities.MeterReading", null)
-                        .WithMany()
-                        .HasForeignKey("MeterReadingId")
-                        .OnDelete(DeleteBehavior.NoAction);
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.Location", b =>
-                {
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("PublishedByUserId")
-                        .OnDelete(DeleteBehavior.NoAction);
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.Meter", b =>
-                {
-                    b.HasOne("BHome.Domain.Entities.Meter", null)
-                        .WithMany()
-                        .HasForeignKey("PreviousMeterId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.Entities.Room", null)
-                        .WithMany()
-                        .HasForeignKey("RoomId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.MeterReading", b =>
-                {
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("ConfirmedByUserId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("BHome.Domain.Entities.Meter", null)
-                        .WithMany()
-                        .HasForeignKey("MeterId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("BHome.Domain.Entities.OperationalTask", null)
-                        .WithOne()
-                        .HasForeignKey("BHome.Domain.Entities.MeterReading", "OperationalTaskId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("BHome.Domain.Entities.Notification", b =>
@@ -2381,7 +2284,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasForeignKey("ActorUserId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("BHome.Domain.Entities.Location", null)
+                    b.HasOne("BHome.Domain.Locations.Location", null)
                         .WithMany()
                         .HasForeignKey("LocationId")
                         .OnDelete(DeleteBehavior.NoAction);
@@ -2392,120 +2295,9 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .OnDelete(DeleteBehavior.NoAction);
                 });
 
-            modelBuilder.Entity("BHome.Domain.Entities.OperationalTask", b =>
-                {
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("AssignedUserId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.Entities.Contract", null)
-                        .WithMany()
-                        .HasForeignKey("ContractId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("CostApprovedByUserId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.Entities.IncidentReport", null)
-                        .WithMany()
-                        .HasForeignKey("IncidentReportId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.Entities.Location", null)
-                        .WithMany()
-                        .HasForeignKey("LocationId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.Entities.Meter", null)
-                        .WithMany()
-                        .HasForeignKey("MeterId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("VerifiedByUserId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.Entities.Asset", null)
-                        .WithMany()
-                        .HasForeignKey("AssetId", "LocationId")
-                        .HasPrincipalKey("Id", "LocationId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.Entities.Room", null)
-                        .WithMany()
-                        .HasForeignKey("RoomId", "LocationId")
-                        .HasPrincipalKey("Id", "LocationId")
-                        .OnDelete(DeleteBehavior.NoAction);
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.Payment", b =>
-                {
-                    b.HasOne("BHome.Domain.Entities.Resident", null)
-                        .WithMany()
-                        .HasForeignKey("BeneficiaryResidentId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("VerifiedByUserId")
-                        .OnDelete(DeleteBehavior.NoAction);
-                });
-
-            modelBuilder.Entity("BHome.Domain.Entities.PaymentAllocation", b =>
-                {
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("PaidByUserId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.Entities.PaymentAllocation", null)
-                        .WithOne()
-                        .HasForeignKey("BHome.Domain.Entities.PaymentAllocation", "ReversalOfAllocationId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.Entities.Contract", null)
-                        .WithMany()
-                        .HasForeignKey("SourceDepositContractId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.Entities.Payment", null)
-                        .WithMany()
-                        .HasForeignKey("SourcePaymentId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.Entities.Contract", null)
-                        .WithMany()
-                        .HasForeignKey("TargetDepositContractId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.Entities.Contract", null)
-                        .WithMany()
-                        .HasForeignKey("TargetInitialContractId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.Entities.Invoice", null)
-                        .WithMany()
-                        .HasForeignKey("TargetInvoiceId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.Entities.Contract", null)
-                        .WithMany()
-                        .HasForeignKey("TargetSettlementContractId")
-                        .OnDelete(DeleteBehavior.NoAction);
-                });
-
             modelBuilder.Entity("BHome.Domain.Entities.RefundRequest", b =>
                 {
-                    b.HasOne("BHome.Domain.Entities.Resident", null)
+                    b.HasOne("BHome.Domain.TenantContracts.Resident", null)
                         .WithMany()
                         .HasForeignKey("BeneficiaryResidentId")
                         .OnDelete(DeleteBehavior.NoAction);
@@ -2521,44 +2313,160 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.HasOne("BHome.Domain.Entities.Contract", null)
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
                         .WithMany()
                         .HasForeignKey("SourceDepositContractId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("BHome.Domain.Entities.Payment", null)
+                    b.HasOne("BHome.Domain.PaymentsDebt.PaymentTransfer", null)
                         .WithMany()
                         .HasForeignKey("SourcePaymentId")
                         .OnDelete(DeleteBehavior.NoAction);
                 });
 
-            modelBuilder.Entity("BHome.Domain.Entities.Resident", b =>
+            modelBuilder.Entity("BHome.Domain.Entities.StaffEmployment", b =>
                 {
-                    b.HasOne("BHome.Domain.Entities.Room", null)
-                        .WithMany()
-                        .HasForeignKey("CurrentRoomId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
                     b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
-                        .HasForeignKey("IdentityOwnerScopeId")
+                        .HasForeignKey("StaffUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.IncidentMaintenance.IncidentReport", b =>
+                {
+                    b.HasOne("BHome.Domain.IncidentMaintenance.IncidentReport", null)
+                        .WithMany()
+                        .HasForeignKey("DuplicateOfId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Domain.Locations.Location", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
-                        .HasForeignKey("UserId")
+                        .HasForeignKey("ReporterId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.PropertyManagement.Asset", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId", "LocationId")
+                        .HasPrincipalKey("Id", "LocationId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Domain.PropertyManagement.Room", null)
+                        .WithMany()
+                        .HasForeignKey("RoomId", "LocationId")
+                        .HasPrincipalKey("Id", "LocationId")
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
+            modelBuilder.Entity("BHome.Domain.Locations.Location", b =>
+                {
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("PublishedByUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
+            modelBuilder.Entity("BHome.Domain.PaymentsDebt.PaymentAllocation", b =>
+                {
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Domain.Billing.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
                         .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
-                        .HasForeignKey("VerifiedByUserId")
+                        .HasForeignKey("PaidByUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Domain.PaymentsDebt.PaymentAllocation", null)
+                        .WithOne()
+                        .HasForeignKey("BHome.Domain.PaymentsDebt.PaymentAllocation", "ReversalOfAllocationId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("SourceDepositContractId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("TargetDepositContractId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("TargetInitialContractId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("TargetSettlementContractId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Domain.PaymentsDebt.PaymentTransfer", null)
+                        .WithMany()
+                        .HasForeignKey("TransferId")
                         .OnDelete(DeleteBehavior.NoAction);
                 });
 
-            modelBuilder.Entity("BHome.Domain.Entities.Room", b =>
+            modelBuilder.Entity("BHome.Domain.PaymentsDebt.PaymentTransfer", b =>
                 {
-                    b.HasOne("BHome.Domain.Entities.Location", null)
+                    b.HasOne("BHome.Domain.TenantContracts.Resident", null)
+                        .WithMany()
+                        .HasForeignKey("BeneficiaryResidentId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("StoredVerifiedByUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
+            modelBuilder.Entity("BHome.Domain.PropertyManagement.Asset", b =>
+                {
+                    b.HasOne("BHome.Domain.Locations.Location", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.PropertyManagement.Room", null)
+                        .WithMany()
+                        .HasForeignKey("RoomId", "LocationId")
+                        .HasPrincipalKey("Id", "LocationId")
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
+            modelBuilder.Entity("BHome.Domain.PropertyManagement.BillingPolicy", b =>
+                {
+                    b.HasOne("BHome.Domain.Locations.Location", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.PropertyManagement.Room", null)
+                        .WithMany()
+                        .HasForeignKey("RoomId", "LocationId")
+                        .HasPrincipalKey("Id", "LocationId")
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
+            modelBuilder.Entity("BHome.Domain.PropertyManagement.Room", b =>
+                {
+                    b.HasOne("BHome.Domain.Locations.Location", null)
                         .WithMany()
                         .HasForeignKey("LocationId")
                         .OnDelete(DeleteBehavior.NoAction)
@@ -2570,13 +2478,109 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .OnDelete(DeleteBehavior.NoAction);
                 });
 
-            modelBuilder.Entity("BHome.Domain.Entities.StaffEmployment", b =>
+            modelBuilder.Entity("BHome.Domain.TenantContracts.Contract", b =>
                 {
                     b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
-                        .HasForeignKey("StaffUserId")
+                        .HasForeignKey("ActivatedByUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("HoldingContractId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerSignerId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
+
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ParentContractId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("PreviousContractId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Domain.TenantContracts.Resident", null)
+                        .WithMany()
+                        .HasForeignKey("RepresentativeResidentId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.PropertyManagement.Room", null)
+                        .WithMany()
+                        .HasForeignKey("RoomId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("TenantUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractResident", b =>
+                {
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerConfirmedByUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Domain.TenantContracts.Resident", null)
+                        .WithMany()
+                        .HasForeignKey("ResidentId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractSignature", b =>
+                {
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("SignerUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BHome.Domain.TenantContracts.Resident", b =>
+                {
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ConfirmedByUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Domain.PropertyManagement.Room", null)
+                        .WithMany()
+                        .HasForeignKey("RoomId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("TenantUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
                 });
 
             modelBuilder.Entity("BHome.Infrastructure.Persistence.Compact24.CompactRefreshRow", b =>

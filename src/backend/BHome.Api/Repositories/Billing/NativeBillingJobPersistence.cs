@@ -32,12 +32,12 @@ internal static class NativeBillingJobPersistence
             ORDER BY j.next_run_at DESC LIMIT 30
             """).ToArrayAsync(t);
 
-    private static BillingAutomationExecution Read(Native.OperationalTask row) =>
+    private static BillingAutomationExecution Read(BHome.Domain.Billing.OperationalTask row) =>
         row.TaskData.GetProperty("state").Deserialize<BillingAutomationExecution>(Json)
         ?? throw new InvalidOperationException("Invalid billing execution state.");
 
-    internal static IQueryable<Native.OperationalTask> Rows(Compact24DbContext db) =>
-        db.Set<Native.OperationalTask>().FromSqlRaw("""
+    internal static IQueryable<BHome.Domain.Billing.OperationalTask> Rows(Compact24DbContext db) =>
+        db.Set<BHome.Domain.Billing.OperationalTask>().FromSqlRaw("""
             SELECT * FROM operational_tasks WHERE task_type='SYSTEM_JOB'
               AND task_data->>'recordType'='BillingAutomationExecution'
               AND COALESCE(task_data->>'deleted','false')<>'true'
@@ -47,12 +47,12 @@ internal static class NativeBillingJobPersistence
         string phase, CancellationToken t, bool locked = false)
     {
         var key = Period(period);
-        var rows = locked ? db.Set<Native.OperationalTask>().FromSqlInterpolated($"""
+        var rows = locked ? db.Set<BHome.Domain.Billing.OperationalTask>().FromSqlInterpolated($"""
             SELECT * FROM operational_tasks WHERE task_type='SYSTEM_JOB' AND task_data->>'recordType'='BillingAutomationExecution'
               AND COALESCE(task_data->>'deleted','false')<>'true'
               AND task_data->'state'->>'planId'={plan.ToString()} AND task_data->'state'->>'billingPeriod'={key}
               AND task_data->'state'->>'phase'={phase} FOR UPDATE
-            """) : db.Set<Native.OperationalTask>().FromSqlInterpolated($"""
+            """) : db.Set<BHome.Domain.Billing.OperationalTask>().FromSqlInterpolated($"""
             SELECT * FROM operational_tasks WHERE task_type='SYSTEM_JOB' AND task_data->>'recordType'='BillingAutomationExecution'
               AND COALESCE(task_data->>'deleted','false')<>'true'
               AND task_data->'state'->>'planId'={plan.ToString()} AND task_data->'state'->>'billingPeriod'={key}
@@ -105,7 +105,7 @@ internal static class NativeBillingJobPersistence
             """).ToArrayAsync(t);
 
     internal static Task<Guid[]> LocationsAsync(Compact24DbContext db, Guid? after, CancellationToken t) =>
-        db.Set<Native.Location>().FromSqlRaw("""
+        db.Set<BHome.Domain.Locations.Location>().FromSqlRaw("""
             SELECT * FROM locations WHERE jsonb_array_length(COALESCE(operating_settings->'automationPlanVersions','[]'::jsonb))>0
             """).AsNoTracking().Where(l => after == null || l.Id.CompareTo(after.Value) > 0).OrderBy(l => l.Id)
             .Select(l => l.Id).Take(100).ToArrayAsync(t);
@@ -143,10 +143,10 @@ internal static class NativeBillingJobPersistence
     {
         var id = plan.ToString();
         return phase == "Meter"
-            ? db.Set<Native.OperationalTask>().FromSqlInterpolated($"""
+            ? db.Set<BHome.Domain.Billing.OperationalTask>().FromSqlInterpolated($"""
                 SELECT * FROM operational_tasks WHERE task_type='METER_READ' AND task_data->'state'->>'automationPlanId'={id}
                 """).AsNoTracking().CountAsync(task => task.BillingPeriod == period, t)
-            : db.Set<Native.Invoice>().FromSqlInterpolated($"""
+            : db.Set<BHome.Domain.Billing.Invoice>().FromSqlInterpolated($"""
                 SELECT * FROM invoices WHERE billing_snapshot->'compactState'->>{(phase == "Draft" ? "automationPlanId" : "automationFinalizationPlanId")}={id}
                 """).AsNoTracking().CountAsync(i => i.BillingPeriod == period, t);
     }
@@ -155,7 +155,7 @@ internal static class NativeBillingJobPersistence
 
     internal static async Task<StaffAssignment[]> AssignmentsAsync(Compact24DbContext db, Guid location, DateOnly date, CancellationToken t)
     {
-        var json = await db.Set<Native.Location>().AsNoTracking().Where(l => l.Id == location)
+        var json = await db.Set<BHome.Domain.Locations.Location>().AsNoTracking().Where(l => l.Id == location)
             .Select(l => l.StaffAssignments).SingleOrDefaultAsync(t);
         if (json.ValueKind != JsonValueKind.Array) return [];
         var assignments = (json.Deserialize<StaffAssignment[]>(Json) ?? [])
@@ -167,7 +167,7 @@ internal static class NativeBillingJobPersistence
 
     internal static async Task<OperationalTask?> PeriodicTaskAsync(Compact24DbContext db, Guid room, UtilityType type, DateOnly period, CancellationToken t)
     {
-        var row = await db.Set<Native.OperationalTask>().FromSqlInterpolated($"""
+        var row = await db.Set<BHome.Domain.Billing.OperationalTask>().FromSqlInterpolated($"""
             SELECT * FROM operational_tasks WHERE task_type='METER_READ'
                 AND task_data->'state'->>'billingRoomId'={room.ToString()}
                 AND (task_data->'state'->>'billingUtilityType')::integer={(int)type} AND billing_period={period}
@@ -178,7 +178,7 @@ internal static class NativeBillingJobPersistence
 
     internal static async Task<OperationalTask?> LockedMeterTaskAsync(Compact24DbContext db, Guid id, CancellationToken t)
     {
-        var row = await db.Set<Native.OperationalTask>().FromSqlInterpolated($"""
+        var row = await db.Set<BHome.Domain.Billing.OperationalTask>().FromSqlInterpolated($"""
             SELECT * FROM operational_tasks WHERE id={id} AND task_type='METER_READ' FOR UPDATE
             """).AsNoTracking().SingleOrDefaultAsync(t);
         return row is null ? null : NativeCaptureReads.Task(row);

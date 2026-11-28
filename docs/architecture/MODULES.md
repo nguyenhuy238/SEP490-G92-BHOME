@@ -26,7 +26,7 @@ transaction/Location locking and audit persistence. Legacy OCR configuration cre
 
 | Artifact                              | Location pattern                                                      |
 | ------------------------------------- | --------------------------------------------------------------------- |
-| Domain entity/value/rule              | `src/backend/BHome.Api/Domain/<Module>/`                              |
+| Domain entity/value/rule              | `src/backend/BHome.Api/Entities/<Module>/`, `Enums/`, `Models/`, `Services/`                              |
 | Application service/use-case          | `src/backend/BHome.Api/Services/<Module>/`                            |
 | Input/output DTO                      | `src/backend/BHome.Api/DTOs/<Module>/`                                |
 | Persistence query/command interface   | `src/backend/BHome.Api/Interfaces/<Module>/` or related contract file |

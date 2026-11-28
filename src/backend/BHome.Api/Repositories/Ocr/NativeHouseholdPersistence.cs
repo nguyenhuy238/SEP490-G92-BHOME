@@ -18,8 +18,8 @@ internal static class NativeHouseholdPersistence
     internal static async Task<Resident?> ResidentAsync(Compact24DbContext db, Guid id, CancellationToken t, bool locked = false)
     {
         var query = locked
-            ? db.Set<Native.Resident>().FromSqlInterpolated($"SELECT * FROM residents WHERE id={id} FOR UPDATE")
-            : db.Set<Native.Resident>();
+            ? db.Set<BHome.Domain.TenantContracts.Resident>().FromSqlInterpolated($"SELECT * FROM residents WHERE id={id} FOR UPDATE")
+            : db.Set<BHome.Domain.TenantContracts.Resident>();
         var row = await query.AsNoTracking().SingleOrDefaultAsync(r => r.Id == id, t);
         return row is null ? null : NativeResidentPersistence.Read(row);
     }
@@ -28,7 +28,7 @@ internal static class NativeHouseholdPersistence
     {
         var selected = ids ?? [];
         var household = ids is null;
-        var rows = await db.Set<Native.Resident>().FromSqlInterpolated($"""
+        var rows = await db.Set<BHome.Domain.TenantContracts.Resident>().FromSqlInterpolated($"""
             SELECT r.* FROM residents r
             LEFT JOIN LATERAL (SELECT h->'state' AS state FROM jsonb_array_elements(r.history) WITH ORDINALITY a(h,n)
                 WHERE h->>'recordType'='Resident' ORDER BY n DESC LIMIT 1) s ON TRUE
@@ -51,21 +51,21 @@ internal static class NativeHouseholdPersistence
             """).FirstOrDefaultAsync(t);
 
     internal static Task<int> OccupancyAsync(Compact24DbContext db, Guid room, CancellationToken t) =>
-        (from c in db.Set<Native.Contract>()
-         join r in db.Set<Native.ContractResident>() on c.Id equals r.ContractId
-         where c.RoomId == room && c.Status == (short)ContractStatus.Active && c.ContractType != "HOLDING"
+        (from c in db.Set<BHome.Domain.TenantContracts.Contract>()
+         join r in db.Set<BHome.Domain.TenantContracts.ContractResident>() on c.Id equals r.ContractId
+         where c.RoomId == room && c.Status == ContractStatus.Active && c.Kind != BHome.Domain.TenantContracts.ContractKind.Holding
          select r.ResidentId).Distinct().CountAsync(t);
 
     internal static async Task<Contract[]> BoundContractsAsync(Compact24DbContext db, Guid resident, CancellationToken t)
     {
-        var rows = await db.Set<Native.Contract>().FromSqlInterpolated($"""
+        var rows = await db.Set<BHome.Domain.TenantContracts.Contract>().FromSqlInterpolated($"""
             SELECT c.* FROM contracts c JOIN contract_residents r ON r.contract_id=c.id
             WHERE r.resident_id={resident} AND c.status NOT IN (6,7) ORDER BY c.id FOR UPDATE OF c
             """).AsNoTracking().ToArrayAsync(t);
         var ids = rows.Select(c => c.Id).ToArray();
-        var roster = (await db.Set<Native.ContractResident>().AsNoTracking().Where(r => ids.Contains(r.ContractId)).ToArrayAsync(t))
-            .ToLookup(r => r.ContractId, NativeContractSnapshot.Read);
-        var signatures = (await db.Set<Native.ContractSigning>().AsNoTracking().Where(s => ids.Contains(s.ContractId)).ToArrayAsync(t))
+        var roster = (await db.Set<BHome.Domain.TenantContracts.ContractResident>().AsNoTracking().Where(r => ids.Contains(r.ContractId)).ToArrayAsync(t))
+            .ToLookup(r => r.ContractId);
+        var signatures = (await db.Set<BHome.Domain.TenantContracts.ContractSignature>().AsNoTracking().Where(s => ids.Contains(s.ContractId)).ToArrayAsync(t))
             .ToLookup(s => s.ContractId, NativeContractSnapshot.Read);
         return rows.Select(row =>
         {

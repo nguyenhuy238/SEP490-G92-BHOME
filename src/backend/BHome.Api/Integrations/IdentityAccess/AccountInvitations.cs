@@ -176,7 +176,7 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
             user.PasswordHash = users.PasswordHasher.HashPassword(user, Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)) + "!aA1");
             user.NormalizedUserName = users.NormalizeName(user.UserName); user.NormalizedEmail = users.NormalizeEmail(user.Email);
             await db.SaveChangesAsync(t);
-            var resident = await db.Set<BHome.Domain.Entities.Resident>().AsNoTracking().SingleAsync(r => r.Id == residentId, t);
+            var resident = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().SingleAsync(r => r.Id == residentId, t);
             await NativeResidentPersistence.LinkAsync(db, NativeResidentPersistence.Read(resident), id, t);
         }
         delivery.ValidateInvitationRecipient(request.Email, automaticTenantSetup: dispatchJob is not null);

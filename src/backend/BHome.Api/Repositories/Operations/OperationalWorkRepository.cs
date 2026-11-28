@@ -128,14 +128,14 @@ internal sealed class OperationalWorkRepository(Compact24DbContext db) : IOperat
     {
         // Owner has the same chain-wide visibility as the existing task and incident queries.
         // Apply the shared location filter before the fixed number of projected reads.
-        var tasksQuery = db.Set<Native.OperationalTask>().AsNoTracking().Where(x => x.TaskType == "GENERAL");
-        var incidentsQuery = db.Set<Native.IncidentReport>().AsNoTracking();
-        var ordersQuery = db.Set<Native.OperationalTask>().AsNoTracking().Where(x => x.TaskType == "WORK_ORDER");
+        var tasksQuery = db.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking().Where(x => x.TaskType == "GENERAL");
+        var incidentsQuery = db.Set<IncidentReport>().AsNoTracking();
+        var ordersQuery = db.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking().Where(x => x.TaskType == "WORK_ORDER");
         if (query.LocationId is { } location)
         {
-            tasksQuery = tasksQuery.Where(x => x.LocationId == location);
+            tasksQuery = tasksQuery.Where(x => x.StoredLocationId == location);
             incidentsQuery = incidentsQuery.Where(x => x.LocationId == location);
-            ordersQuery = ordersQuery.Where(x => x.LocationId == location);
+            ordersQuery = ordersQuery.Where(x => x.StoredLocationId == location);
         }
         var reportsOnly = query.View == "reports";
         var workOnly = query.View == "work";
@@ -190,7 +190,7 @@ internal sealed class OperationalWorkRepository(Compact24DbContext db) : IOperat
 
         var locationsIds = tasks.Select(x => x.LocationId).Concat(incidents.Select(x => x.LocationId))
             .Concat(orders.Select(x => x.LocationId)).Distinct().ToArray();
-        var locations = await db.Set<Native.Location>().AsNoTracking().Where(x => locationsIds.Contains(x.Id))
+        var locations = await db.Set<BHome.Domain.Locations.Location>().AsNoTracking().Where(x => locationsIds.Contains(x.Id))
             .Select(x => new { x.Id, x.Name, x.IsActive }).ToDictionaryAsync(x => x.Id, token);
         var today = BillingAutomationDates.BusinessDate(now);
         var assignments = await NativeOperationalTaskPersistence.Assignments(db, today)
@@ -207,11 +207,11 @@ internal sealed class OperationalWorkRepository(Compact24DbContext db) : IOperat
             .ToDictionaryAsync(x => x.Id, x => x.Name, token);
         var roomIds = tasks.Select(x => x.TargetRoomId).Concat(incidents.Select(x => x.RoomId))
             .Concat(orders.Select(x => x.RoomId)).OfType<Guid>().Distinct().ToArray();
-        var rooms = await db.Set<Native.Room>().AsNoTracking().Where(x => roomIds.Contains(x.Id))
+        var rooms = await db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(x => roomIds.Contains(x.Id))
             .Select(x => new { x.Id, x.RoomNumber }).ToDictionaryAsync(x => x.Id, x => x.RoomNumber, token);
         var assetIds = tasks.Select(x => x.TargetAssetId).Concat(incidents.Select(x => x.AssetId))
             .Concat(orders.Select(x => x.AssetId)).OfType<Guid>().Distinct().ToArray();
-        var assets = await db.Set<Native.Asset>().AsNoTracking().Where(x => assetIds.Contains(x.Id))
+        var assets = await db.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking().Where(x => assetIds.Contains(x.Id))
             .Select(x => new { x.Id, x.Name }).ToDictionaryAsync(x => x.Id, x => x.Name, token);
 
         string? Name(Dictionary<Guid, string?> names, Guid? id) => id is { } key ? names.GetValueOrDefault(key) : null;

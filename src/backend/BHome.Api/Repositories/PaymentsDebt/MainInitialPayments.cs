@@ -65,9 +65,9 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
             {
                 var period = new DateOnly(c.StartDate.Year, c.StartDate.Month, 1);
                 var candidates = (await PaymentObligationQueries.Contracts(db)
-                    .Where(other => other.RoomId == c.RoomId && other.Id != id && other.ContractType == "MAIN" &&
-                        (other.Status == (short)ContractStatus.Active || other.Status == (short)ContractStatus.PendingActivation || other.Status == (short)ContractStatus.Expired ||
-                         other.Status == (short)ContractStatus.Terminated && other.StartDate >= period && other.StartDate < period.AddMonths(1)))
+                    .Where(other => other.RoomId == c.RoomId && other.Id != id && other.Kind == BHome.Domain.TenantContracts.ContractKind.Main &&
+                        (other.Status == ContractStatus.Active || other.Status == ContractStatus.PendingActivation || other.Status == ContractStatus.Expired ||
+                         other.Status == ContractStatus.Terminated && other.StartDate >= period && other.StartDate < period.AddMonths(1)))
                     .OrderBy(other => other.StartDate).ThenBy(other => other.Id).ToArrayAsync(token)).Select(NativeContractSnapshot.Read).ToArray();
                 Guid? depositSource = null;
                 Guid? rentSource = null;
@@ -112,11 +112,11 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
                             rentSource = previousOrder.SharedRentContractId ?? root.Id;
                     }
                 }
-                var invoices = await (from invoice in db.Set<Native.Invoice>().AsNoTracking()
-                                      join representative in PaymentObligationQueries.Contracts(db) on invoice.ContractId equals representative.Id
-                                      where invoice.RoomId == c.RoomId && invoice.BillingPeriod == period && invoice.InvoiceType == "PERIODIC" &&
-                                          invoice.Status == (short)BHome.Domain.Billing.InvoiceStatus.Final &&
-                                          db.Set<Native.InvoiceItem>().Any(line => line.InvoiceId == invoice.Id && line.ChargeCode == "RENT")
+                var invoices = await (from invoice in db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking()
+                                      join representative in PaymentObligationQueries.Contracts(db) on invoice.RepresentativeContractId equals representative.Id
+                                      where invoice.RoomId == c.RoomId && invoice.BillingPeriod == period && invoice.Type == "PERIODIC" &&
+                                          invoice.Status == BHome.Domain.Billing.InvoiceStatus.Final &&
+                                          db.Set<BHome.Domain.Billing.InvoiceLine>().Any(line => line.InvoiceId == invoice.Id && line.ChargeCode == "RENT")
                                       select new { invoice.Id, Representative = representative }).ToArrayAsync(token);
                 var invoiceId = rentSource is null
                     ? invoiceSource ?? invoices.Where(invoice => ContractPaymentModes.Of(NativeContractSnapshot.Read(invoice.Representative)) == roomScopeMode)

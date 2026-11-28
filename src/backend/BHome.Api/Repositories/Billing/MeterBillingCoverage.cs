@@ -40,7 +40,7 @@ internal static class MeterBillingCoverage
     {
         var compact = db as Compact24DbContext;
         var utilityType = compact is not null
-            ? (UtilityType)await compact.Set<Native.Meter>().AsNoTracking().Where(m => m.Id == meterId).Select(m => m.UtilityType).SingleAsync(token)
+            ? (UtilityType)await compact.Set<BHome.Domain.Billing.Meter>().AsNoTracking().Where(m => m.Id == meterId).Select(m => m.UtilityType).SingleAsync(token)
             : await db.Set<Meter>().AsNoTracking().Where(m => m.Id == meterId).Select(m => m.UtilityType).SingleAsync(token);
         var category = utilityType == UtilityType.Electricity ? ChargeCategory.Electricity : ChargeCategory.Water;
         var replacement = compact is not null
@@ -72,19 +72,19 @@ internal static class MeterBillingCoverage
         InvoicePoint[] rows;
         if (compact is not null)
         {
-            var items = compact.Set<Native.InvoiceItem>().FromSqlInterpolated($"""
+            var items = compact.Set<BHome.Domain.Billing.InvoiceLine>().FromSqlInterpolated($"""
                 SELECT * FROM invoice_items WHERE COALESCE((calculation_snapshot->'compactState'->>'category')::integer,0)={(int)category}
                 """).AsNoTracking();
             var nativeRows = await (from line in items
-                                    join invoice in compact.Set<Native.Invoice>().AsNoTracking() on line.InvoiceId equals invoice.Id
+                                    join invoice in compact.Set<BHome.Domain.Billing.Invoice>().AsNoTracking() on line.InvoiceId equals invoice.Id
                                     join reading in NativeBillingMeterQueries.Confirmed(compact) on line.MeterReadingId equals reading.Id
-                                    join task in compact.Set<Native.OperationalTask>().AsNoTracking() on reading.OperationalTaskId equals task.Id
-                                    where invoice.RoomId == roomId && invoice.Status == (short)InvoiceStatus.Final &&
+                                    join task in compact.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking() on reading.TaskId equals task.Id
+                                    where invoice.RoomId == roomId && invoice.Status == InvoiceStatus.Final &&
                                       invoice.BillingPeriod <= period && reading.MeterId == meterId
                                     select new { line, invoice, reading, task }).Take(501).ToArrayAsync(token);
             rows = nativeRows.Select(r =>
             {
-                var line = NativeInvoicePersistence.ReadLine(r.line);
+                var line = r.line;
                 var point = NativeBillingMeterQueries.Read(r.reading, r.task);
                 var schedule = r.invoice.BillingSnapshot.TryGetProperty("compactState", out var state) &&
                     state.TryGetProperty("scheduleSnapshot", out var snapshot) ? snapshot.GetString() ?? "" : "";
@@ -182,12 +182,12 @@ internal static class MeterBillingCoverage
         BillableMeterPoint? initialPoint;
         if (compact is not null)
         {
-            var initialTasks = compact.Set<Native.OperationalTask>().FromSqlInterpolated($"""
+            var initialTasks = compact.Set<BHome.Domain.Billing.OperationalTask>().FromSqlInterpolated($"""
                 SELECT * FROM operational_tasks WHERE task_type='METER_READ' AND task_data->'state'->>'purpose'='0'
                     AND (task_data->'state'->>'readingDate')::date<={target.Date}
                 """).AsNoTracking();
             var row = await (from reading in NativeBillingMeterQueries.Confirmed(compact)
-                             join task in initialTasks on reading.OperationalTaskId equals task.Id
+                             join task in initialTasks on reading.TaskId equals task.Id
                              where reading.MeterId == meterId && reading.ConfirmedAt <= confirmedAt
                              orderby reading.ReadingAt descending, reading.ConfirmedAt descending
                              select new { reading, task }).FirstOrDefaultAsync(token);

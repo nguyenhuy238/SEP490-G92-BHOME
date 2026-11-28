@@ -46,12 +46,12 @@ internal sealed class IdentityRetentionRepository(Compact24DbContext db, IContra
         var blockers = new List<string>(); var sources = new List<object>();
         if (person.RoomId is not null) blockers.Add("current_residence");
         if (holds.Length > 0) blockers.Add("identity_retention_hold_active");
-        var contracts = await db.Set<BHome.Domain.Entities.Contract>().AsNoTracking()
-            .Where(c => db.Set<BHome.Domain.Entities.ContractResident>().Any(r => r.ContractId == c.Id && r.ResidentId == id))
-            .OrderBy(c => c.Id).Select(c => new { c.Id, Status = (ContractStatus)c.Status, c.ContractType, c.TenantUserId }).ToArrayAsync(token);
+        var contracts = await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking()
+            .Where(c => db.Set<BHome.Domain.TenantContracts.ContractResident>().Any(r => r.ContractId == c.Id && r.ResidentId == id))
+            .OrderBy(c => c.Id).Select(c => new { c.Id, c.Status, c.Kind, c.TenantUserId }).ToArrayAsync(token);
         foreach (var contract in contracts)
         {
-            var kind = Enum.Parse<ContractKind>(contract.ContractType, true);
+            var kind = contract.Kind;
             if (contract.Status is ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation or ContractStatus.Active)
             { blockers.Add("contract_not_closed"); sources.Add(new { contract.Id, contract.Status, Kind = kind }); continue; }
             if (kind == ContractKind.Holding)

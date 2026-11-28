@@ -6,7 +6,6 @@ using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Billing;
 
@@ -25,11 +24,11 @@ internal sealed class AdjustmentRepository(BHomePersistenceContext db) : IAdjust
         await using var tx = await db.Database.BeginTransactionAsync(t);
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1', 0))", t);
         var room = (db is Compact24DbContext native
-            ? await native.Set<Native.Invoice>().AsNoTracking().Where(i => i.Id == invoiceId).Select(i => (Guid?)i.RoomId).SingleOrDefaultAsync(t)
+            ? await native.Set<BHome.Domain.Billing.Invoice>().AsNoTracking().Where(i => i.Id == invoiceId).Select(i => (Guid?)i.RoomId).SingleOrDefaultAsync(t)
             : await db.Set<Invoice>().Where(i => i.Id == invoiceId).Select(i => (Guid?)i.RoomId).SingleOrDefaultAsync(t))
             ?? throw new AdjustmentException(404, "adjustment_invoice_not_found");
         if (db is Compact24DbContext compact)
-            await compact.Set<Native.Room>().FromSqlInterpolated($"SELECT * FROM rooms WHERE id={room} FOR UPDATE").AsNoTracking().SingleAsync(t);
+            await compact.Set<BHome.Domain.PropertyManagement.Room>().FromSqlInterpolated($"SELECT * FROM rooms WHERE id={room} FOR UPDATE").AsNoTracking().SingleAsync(t);
         else await db.Locked<BHome.Domain.PropertyManagement.Room>(room).SingleAsync(t);
         try
         {
@@ -103,7 +102,7 @@ internal sealed class AdjustmentRepository(BHomePersistenceContext db) : IAdjust
     {
         if (db is Compact24DbContext compact)
         {
-            var invoices = compact.Set<Native.Invoice>().AsNoTracking();
+            var invoices = compact.Set<BHome.Domain.Billing.Invoice>().AsNoTracking();
             var rows = NativeAdjustmentPersistence.Visible(compact, scope)
                 .Where(r => q.InvoiceId == null || r.InvoiceId == q.InvoiceId)
                 .Where(r => invoices.Any(i => i.Id == r.InvoiceId &&
@@ -112,7 +111,7 @@ internal sealed class AdjustmentRepository(BHomePersistenceContext db) : IAdjust
             else if (q.Status is { } outcome)
                 rows = rows.Where(r => r.DecisionSnapshot != null && r.DecisionSnapshot.Value.GetProperty("outcome").GetString() == outcome);
             var total = await rows.CountAsync(t);
-            var items = await NativeAdjustmentPersistence.ReadAsync(compact, rows.OrderByDescending(r => r.RequestedAt)
+            var items = await NativeAdjustmentPersistence.ReadAsync(compact, rows.OrderByDescending(r => r.SubmittedAt)
                 .ThenBy(r => r.Id).Skip((q.Page - 1) * q.PageSize).Take(q.PageSize), t);
             return new(items, q.Page, q.PageSize, total);
         }
@@ -141,7 +140,7 @@ internal sealed class AdjustmentRepository(BHomePersistenceContext db) : IAdjust
     {
         if (db is Compact24DbContext compact)
         {
-            var rows = compact.Set<Native.InvoiceAdjustment>().AsNoTracking().Where(r => r.InvoiceId == invoiceId &&
+            var rows = compact.Set<InvoiceAdjustmentRequest>().AsNoTracking().Where(r => r.InvoiceId == invoiceId &&
                 r.DecisionSnapshot != null && r.DecisionSnapshot.Value.GetProperty("outcome").GetString() == "Approved");
             var total = await rows.CountAsync(t);
             var selected = await rows.OrderByDescending(r => r.DecisionSnapshot!.Value.GetProperty("sequence").GetInt64())

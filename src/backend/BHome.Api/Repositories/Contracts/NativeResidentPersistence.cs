@@ -2,12 +2,10 @@ using System.Text.Json;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
-using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Contracts;
 
-// The legacy Resident is a detached business value; the physical row and typed
-// historical snapshot are the persistence boundary.
+// Hydrate business metadata from the physical resident's typed history.
 internal static class NativeResidentPersistence
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -19,20 +17,16 @@ internal static class NativeResidentPersistence
         string? IdentityHmac, string? HmacKeyVersion, Guid? ConfirmedByUserId, DateTimeOffset? ConfirmedAt,
         DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
 
-    internal static Resident Read(Native.Resident row)
+    internal static Resident Read(Resident row)
     {
         var entry = row.History.EnumerateArray().Reverse().FirstOrDefault(h => h.ValueKind == JsonValueKind.Object &&
             h.TryGetProperty("recordType", out var type) && type.ValueKind == JsonValueKind.String && type.GetString() == "Resident");
         var state = entry.ValueKind == JsonValueKind.Object && entry.TryGetProperty("state", out var payload)
             ? payload.Deserialize<ResidentState>(Json) : null;
-        var resident = Resident.Rehydrate(row.Id, state?.CreatedAt is { } created && created != default ? created : DateTimeOffset.UnixEpoch,
-            state?.UpdatedAt is { } updated && updated != default ? updated : DateTimeOffset.UnixEpoch);
-        resident.RoomId = row.CurrentRoomId;
-        resident.DisplayLabel = row.DisplayLabel;
+        var resident = row;
+        resident.CreatedAt = state?.CreatedAt is { } created && created != default ? created : DateTimeOffset.UnixEpoch;
+        resident.UpdatedAt = state?.UpdatedAt is { } updated && updated != default ? updated : DateTimeOffset.UnixEpoch;
         resident.ResidentType = state?.ResidentType ?? ResidentType.Representative;
-        resident.VerificationStatus = (IdentityVerificationStatus)row.VerificationStatus;
-        resident.OwnerUserId = row.IdentityOwnerScopeId;
-        resident.TenantUserId = row.UserId;
         resident.HouseholdRepresentativeId = state?.HouseholdRepresentativeId;
         resident.HouseholdClientKey = state?.HouseholdClientKey;
         resident.HouseholdProfile = state?.HouseholdProfile ?? "";
@@ -41,12 +35,6 @@ internal static class NativeResidentPersistence
         resident.HouseholdVersion = state?.HouseholdVersion ?? 0;
         resident.HouseholdRequestKey = state?.HouseholdRequestKey;
         resident.HouseholdRequestHash = state?.HouseholdRequestHash;
-        resident.ContactEmail = row.ContactEmail;
-        resident.IdentityData = row.IdentityData.GetRawText();
-        resident.IdentityHmac = row.IdentityHmac;
-        resident.HmacKeyVersion = row.HmacKeyVersion;
-        resident.ConfirmedByUserId = row.VerifiedByUserId;
-        resident.ConfirmedAt = row.VerifiedAt;
         return resident;
     }
 

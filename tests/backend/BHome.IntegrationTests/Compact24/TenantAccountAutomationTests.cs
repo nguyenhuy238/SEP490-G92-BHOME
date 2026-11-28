@@ -34,7 +34,7 @@ public sealed partial class Compact24NotificationMvpTests
             await tx.CommitAsync();
         }
         Assert.Equal(count, await db.Users.CountAsync());
-        Assert.Equal(w.Tenants[0].Id, (await db.Set<BHome.Domain.Entities.Resident>().SingleAsync(r => r.Id == w.Residents[0])).UserId);
+        Assert.Equal(w.Tenants[0].Id, (await db.Set<BHome.Domain.TenantContracts.Resident>().SingleAsync(r => r.Id == w.Residents[0])).TenantUserId);
         Assert.Equal(HttpStatusCode.Unauthorized, (await previous.GetAsync("/api/v1/auth/me")).StatusCode);
         using var anonymous = fixture.Factory.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsJsonAsync("/api/v1/auth/login", new { email = w.Tenants[0].Email, password = Password })).StatusCode);

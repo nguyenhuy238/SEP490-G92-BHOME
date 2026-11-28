@@ -15,19 +15,19 @@ internal sealed class CompactTenantContractAccess(BHomePersistenceContext db) : 
     {
         if (db is Compact24DbContext)
         {
-            var memberships = db.Set<Native.ContractResident>().AsNoTracking();
-            var residents = db.Set<Native.Resident>().AsNoTracking();
+            var memberships = db.Set<BHome.Domain.TenantContracts.ContractResident>().AsNoTracking();
+            var residents = db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking();
             var nativeContracts =
                 from currentMember in memberships
                 join currentResident in residents on currentMember.ResidentId equals currentResident.Id
                 join representativeMember in memberships on currentMember.ContractId equals representativeMember.ContractId
                 join representative in residents on representativeMember.ResidentId equals representative.Id
-                join contract in db.Set<Native.Contract>().AsNoTracking() on currentMember.ContractId equals contract.Id
-                join room in db.Set<Native.Room>().AsNoTracking() on contract.RoomId equals room.Id
-                where currentResident.UserId == tenantUserId
-                    && representative.UserId == representativeUserId
+                join contract in db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking() on currentMember.ContractId equals contract.Id
+                join room in db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking() on contract.RoomId equals room.Id
+                where currentResident.TenantUserId == tenantUserId
+                    && representative.TenantUserId == representativeUserId
                     && room.LocationId == locationId
-                    && (contract.ContractType == "MAIN" || contract.ContractType == "RENEWAL" || contract.ContractType == "ADDENDUM")
+                    && (contract.Kind == BHome.Domain.TenantContracts.ContractKind.Main || contract.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal || contract.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum)
                     && currentMember.ResidentId != representativeMember.ResidentId
                 select currentMember.ContractId;
 

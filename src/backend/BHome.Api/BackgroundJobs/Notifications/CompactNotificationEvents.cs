@@ -212,7 +212,7 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
             }
             else if (e.Event == "InvoiceDraftGenerated")
             {
-                var invoice = (await NativeInvoicePersistence.ReadAsync(db, db.Set<Native.Invoice>().AsNoTracking()
+                var invoice = (await NativeInvoicePersistence.ReadAsync(db, db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking()
                     .Where(i => i.Id == e.Target), t, false)).SingleOrDefault();
                 if (invoice is not null) foreach (var user in invoice.Recipients.Select(r => r.TenantUserId))
                         count += await sql.Emit(user, "Tenant", invoice.LocationId, key, "INVOICE_DRAFT_CREATED", "Invoice", "Có hóa đơn nháp để kiểm tra",
@@ -267,9 +267,9 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
         {
             var n = await NativeIncidentSession.ReadNotificationAsync(db, id, t);
             if (n is null) continue;
-            var report = await db.Set<Native.IncidentReport>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == n.IncidentId, t);
-            var work = n.WorkOrderId is { } workId ? await db.Set<Native.OperationalTask>().AsNoTracking().SingleOrDefaultAsync(w => w.Id == workId && w.TaskType == "WORK_ORDER", t) : null;
-            var location = report?.LocationId ?? work?.LocationId ?? throw new InvalidOperationException("missing_maintenance_notification_scope");
+            var report = await db.Set<IncidentReport>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == n.IncidentId, t);
+            var work = n.WorkOrderId is { } workId ? await db.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking().SingleOrDefaultAsync(w => w.Id == workId && w.TaskType == "WORK_ORDER", t) : null;
+            var location = report?.LocationId ?? work?.StoredLocationId ?? throw new InvalidOperationException("missing_maintenance_notification_scope");
             foreach (var r in await Roles([n.RecipientId], t))
             {
                 if (r.Role == "Staff" && !(await Staff(location, t)).Contains(r.Id))
@@ -287,7 +287,7 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
     private async Task<int> MeterReadings(CancellationToken t)
     {
         var publicationKeys = NotificationPublications.Keys(db);
-        var rows = await db.Set<Native.MeterReading>().FromSqlRaw("""
+        var rows = await db.Set<BHome.Domain.Billing.MeterReading>().FromSqlRaw("""
             SELECT r.* FROM meter_readings r JOIN operational_tasks t ON t.id=r.operational_task_id
             WHERE t.task_type='METER_READ' AND t.status='2' AND t.meter_id=r.meter_id
               AND EXISTS(SELECT 1 FROM jsonb_array_elements(t.evidence) e
@@ -296,16 +296,16 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
                     WITH ORDINALITY a(h,n) WHERE h->>'recordType'='MeterReading' ORDER BY n DESC LIMIT 1)
                   AND e->>'isLinked'='true' AND e->>'isUploaded'='true')
             """).AsNoTracking().Where(r => r.ConfirmedAt != default &&
-            (r.Status == (short)MeterReadingStatus.Confirmed || r.Status == (short)MeterReadingStatus.Corrected) &&
+            (r.Status == MeterReadingStatus.Confirmed || r.Status == MeterReadingStatus.Corrected) &&
             !publicationKeys.Contains("meter-confirmed:" + r.Id.ToString()))
             .OrderBy(r => r.ConfirmedAt).Take(25).ToArrayAsync(t); var count = 0;
         foreach (var reading in rows)
         {
-            var meter = await db.Set<Native.Meter>().AsNoTracking().SingleAsync(m => m.Id == reading.MeterId, t);
-            var task = NativeCaptureReads.Task(await db.Set<Native.OperationalTask>().AsNoTracking().SingleAsync(x => x.Id == reading.OperationalTaskId, t));
+            var meter = await db.Set<BHome.Domain.Billing.Meter>().AsNoTracking().SingleAsync(m => m.Id == reading.MeterId, t);
+            var task = NativeCaptureReads.Task(await db.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking().SingleAsync(x => x.Id == reading.TaskId, t));
             var from = task.BillingPeriod ?? task.ReadingDate; var to = task.BillingPeriod.HasValue ? from.AddMonths(1).AddDays(-1) : from;
             var users = await Occupants(meter.RoomId, from, to, t);
-            var location = await db.Set<Native.Room>().Where(r => r.Id == meter.RoomId).Select(r => r.LocationId).SingleAsync(t);
+            var location = await db.Set<BHome.Domain.PropertyManagement.Room>().Where(r => r.Id == meter.RoomId).Select(r => r.LocationId).SingleAsync(t);
             foreach (var user in users) count += await sql.Emit(user, "Tenant", location, "meter-confirmed:" + reading.Id, "METER_READING_CONFIRMED", "Invoice",
                 "Chỉ số điện/nước đã được xác nhận", "Staff đã xác nhận chỉ số cho kỳ đo liên quan. Mở chỉ số điện nước để kiểm tra trước khi lập hóa đơn.", "MeterReading", reading.Id, t, "P2", ["IN_APP", "EMAIL"]);
             await Mark("meter-confirmed:" + reading.Id, t);
@@ -314,21 +314,21 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
     }
     private async Task<Guid[]> Occupants(Guid room, DateOnly periodStart, DateOnly periodEnd, CancellationToken t)
     {
-        return await (from cr in db.Set<Native.ContractResident>().AsNoTracking()
-                      join c in db.Set<Native.Contract>() on cr.ContractId equals c.Id
-                      join r in db.Set<Native.Resident>() on cr.ResidentId equals r.Id
-                      where c.RoomId == room && c.ActivatedAt != null && c.ContractType != "HOLDING" &&
-                        (c.Status == (short)ContractStatus.Active || c.Status == (short)ContractStatus.Terminated || c.Status == (short)ContractStatus.Superseded) &&
+        return await (from cr in db.Set<BHome.Domain.TenantContracts.ContractResident>().AsNoTracking()
+                      join c in db.Set<BHome.Domain.TenantContracts.Contract>() on cr.ContractId equals c.Id
+                      join r in db.Set<BHome.Domain.TenantContracts.Resident>() on cr.ResidentId equals r.Id
+                      where c.RoomId == room && c.ActivatedAt != null && c.Kind != BHome.Domain.TenantContracts.ContractKind.Holding &&
+                        (c.Status == ContractStatus.Active || c.Status == ContractStatus.Terminated || c.Status == ContractStatus.Superseded) &&
                         c.StartDate <= periodEnd && (c.ActualEndDate ?? c.EndDate) >= periodStart &&
-                        cr.ResidenceFrom <= periodEnd && (cr.ResidenceTo == null || cr.ResidenceTo >= periodStart) && r.UserId != null
-                      select r.UserId!.Value).Distinct().ToArrayAsync(t);
+                        cr.ResidenceFrom <= periodEnd && (cr.ResidenceTo == null || cr.ResidenceTo >= periodStart) && r.TenantUserId != null
+                      select r.TenantUserId!.Value).Distinct().ToArrayAsync(t);
     }
     private async Task<int> Unmatched(CancellationToken t)
     {
         var publicationKeys = NotificationPublications.Keys(db);
-        var rows = await db.Set<Native.Payment>().FromSqlRaw("SELECT * FROM payments WHERE verification_data ? 'compactState'").AsNoTracking()
-            .Where(x => !db.Set<Native.PaymentAllocation>().Any(a => a.SourcePaymentId == x.Id &&
-                (a.TargetInvoiceId != null || a.TargetDepositContractId != null || a.TargetSettlementContractId != null || a.TargetInitialContractId != null)) &&
+        var rows = await BHome.Infrastructure.PaymentsDebt.PaymentLedgerQueries.ReceiptEntities(db)
+            .Where(x => !db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Any(a => a.TransferId == x.Id &&
+                (a.InvoiceId != null || a.TargetDepositContractId != null || a.TargetSettlementContractId != null || a.TargetInitialContractId != null)) &&
                 !publicationKeys.Contains("unmatched:" + x.Id.ToString()))
             .OrderBy(x => x.Id).Take(25).ToArrayAsync(t); var count = 0;
         foreach (var transfer in rows)
@@ -345,11 +345,11 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
         var publicationKeys = NotificationPublications.Keys(db);
         var assignments = CurrentAssignments();
         var eligible = StaffEmploymentEligibility.EligibleIds(db, Today);
-        var periodic = db.Set<Native.OperationalTask>().FromSqlRaw("SELECT * FROM operational_tasks WHERE task_type='METER_READ' AND task_data->'state'->>'purpose'='1'").Select(x => x.Id);
-        var tasks = await NativeOperationalTaskPersistence.Roots(db).Where(x => x.Status != "2" && x.Status != "3" &&
+        var periodic = db.Set<BHome.Domain.Billing.OperationalTask>().FromSqlRaw("SELECT * FROM operational_tasks WHERE task_type='METER_READ' AND task_data->'state'->>'purpose'='1'").Select(x => x.Id);
+        var tasks = await NativeOperationalTaskPersistence.Roots(db).Where(x => x.StoredStatus != "2" && x.StoredStatus != "3" &&
             (periodic.Contains(x.Id)
-                ? !assignments.Any(a => a.LocationId == x.LocationId && eligible.Contains(a.StaffUserId))
-                : x.AssignedUserId == null || !assignments.Any(a => a.LocationId == x.LocationId && a.StaffUserId == x.AssignedUserId)) &&
+                ? !assignments.Any(a => a.LocationId == x.StoredLocationId && eligible.Contains(a.StaffUserId))
+                : x.AssignedUserId == null || !assignments.Any(a => a.LocationId == x.StoredLocationId && a.StaffUserId == x.AssignedUserId)) &&
             !publicationKeys.Contains("task-unassigned:" + x.Id.ToString() + ":" + x.Version.ToString())).OrderBy(x => x.Id).Take(25).ToArrayAsync(t);
         foreach (var row in tasks)
         {
@@ -360,7 +360,7 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
             await Mark(key, t);
         }
         var until = Today.AddDays(30);
-        var contracts = await db.Set<Native.Contract>().AsNoTracking().Where(c => c.Status == (short)ContractStatus.Active && c.ContractType != "HOLDING" && c.EndDate <= until).Select(c => c.Id).ToArrayAsync(t);
+        var contracts = await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => c.Status == ContractStatus.Active && c.Kind != BHome.Domain.TenantContracts.ContractKind.Holding && c.EndDate <= until).Select(c => c.Id).ToArrayAsync(t);
         foreach (var id in contracts)
         {
             var contract = await NativeContractSnapshot.LoadAsync(db, id, t);

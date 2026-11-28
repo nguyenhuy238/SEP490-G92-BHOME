@@ -156,11 +156,11 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
         // Never disclose another tenant's adjustment reason or evidence.
         var today = clock.BusinessToday();
         var held = db is Compact24DbContext heldDb
-            ? await (from r in heldDb.Set<Native.InvoiceAdjustment>().AsNoTracking()
-                     join i in heldDb.Set<Native.Invoice>() on r.InvoiceId equals i.Id
-                     where r.DecisionSnapshot == null && i.Status == (short)InvoiceStatus.Draft && i.ScheduledFinalDate <= today &&
+            ? await (from r in heldDb.Set<InvoiceAdjustmentRequest>().AsNoTracking()
+                     join i in heldDb.Set<BHome.Domain.Billing.Invoice>() on r.InvoiceId equals i.Id
+                     where r.DecisionSnapshot == null && i.Status == InvoiceStatus.Draft && i.ScheduledFinalDate <= today &&
                         !publicationKeys.Contains("invoice-finalization-held:" + r.InvoiceId.ToString())
-                     orderby r.RequestedAt, r.Id
+                     orderby r.SubmittedAt, r.Id
                      select new { r.Id, r.InvoiceId }).Take(50).ToArrayAsync(t)
             : await db.Set<InvoiceAdjustmentRequest>().AsNoTracking()
             .Where(r => r.Decision == null && r.Invoice.Status == InvoiceStatus.Draft &&
@@ -199,9 +199,9 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
             foreach (var invoiceIds in BlockedInvoiceIds(execution.ExceptionsJson).Chunk(100))
             {
                 var blockedDrafts = db is Compact24DbContext blockedDb
-                    ? await blockedDb.Set<Native.Invoice>().AsNoTracking().Where(i => invoiceIds.Contains(i.Id) &&
-                        i.LocationId == execution.LocationId && i.BillingPeriod == execution.BillingPeriod && i.Status == (short)InvoiceStatus.Draft &&
-                        i.ScheduledFinalDate <= today && !blockedDb.Set<Native.InvoiceAdjustment>().Any(r => r.InvoiceId == i.Id && r.DecisionSnapshot == null) &&
+                    ? await blockedDb.Set<BHome.Domain.Billing.Invoice>().AsNoTracking().Where(i => invoiceIds.Contains(i.Id) &&
+                        i.LocationId == execution.LocationId && i.BillingPeriod == execution.BillingPeriod && i.Status == InvoiceStatus.Draft &&
+                        i.ScheduledFinalDate <= today && !blockedDb.Set<InvoiceAdjustmentRequest>().Any(r => r.InvoiceId == i.Id && r.DecisionSnapshot == null) &&
                         !publicationKeys.Contains("invoice-finalization-inputs:" + i.Id.ToString()))
                         .OrderBy(i => i.ScheduledFinalDate).ThenBy(i => i.Id).Select(i => i.Id).ToArrayAsync(t)
                     : await db.Set<Invoice>().AsNoTracking().Where(i => invoiceIds.Contains(i.Id) &&
@@ -228,7 +228,7 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
         foreach (var e in payments) count += await Publish("payment:" + e.AllocationId, async () =>
         {
             var allocation = db is Compact24DbContext allocationDb
-                ? await allocationDb.Set<Native.PaymentAllocation>().AsNoTracking().Where(a => a.Id == e.AllocationId && a.TargetInvoiceId == e.InvoiceId).Select(a => new { a.Amount, VerifiedByUserId = a.CreatedByUserId ?? Guid.Empty }).SingleAsync(t)
+                ? await allocationDb.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AsNoTracking().Where(a => a.Id == e.AllocationId && a.InvoiceId == e.InvoiceId).Select(a => new { a.Amount, VerifiedByUserId = a.CreatedByUserId ?? Guid.Empty }).SingleAsync(t)
                 : await db.Set<PaymentAllocation>().AsNoTracking().Where(a => a.Id == e.AllocationId && a.InvoiceId == e.InvoiceId).Select(a => new { a.Amount, a.VerifiedByUserId }).SingleAsync(t);
             var i = await LoadInvoice(e.InvoiceId, t);
             if (i.Status != InvoiceStatus.Final) return [];
@@ -256,7 +256,7 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
             else if (e.Name == "invoice.adjustment.decided.v1")
             {
                 var decision = db is Compact24DbContext decisionDb
-                    ? NativeAdjustmentPersistence.ReadDecision(await decisionDb.Set<Native.InvoiceAdjustment>().AsNoTracking().SingleAsync(r => r.Id == e.RequestId, t)) ?? throw new InvalidOperationException("Notification adjustment decision missing.")
+                    ? NativeAdjustmentPersistence.ReadDecision(await decisionDb.Set<InvoiceAdjustmentRequest>().AsNoTracking().SingleAsync(r => r.Id == e.RequestId, t)) ?? throw new InvalidOperationException("Notification adjustment decision missing.")
                     : await db.Set<InvoiceAdjustmentDecision>().AsNoTracking().SingleAsync(d => d.RequestId == e.RequestId, t);
                 var approved = decision.Outcome == "Approved";
                 list.Add(new(e.RequesterId, Roles.Tenant, i.LocationId, "Adjustment", approved ? "Yêu cầu điều chỉnh đã được duyệt" : "Yêu cầu điều chỉnh đã bị từ chối", "Mở yêu cầu của bạn để xem kết quả được phép truy cập.", "Adjustment", e.RequestId));
@@ -275,7 +275,7 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
         }, t);
         var tasks = db is Compact24DbContext taskDb
             ? (await Outbox(taskDb, "OperationalTaskNotification").Where(n => !publicationKeys.Contains("task:" + n.Id.ToString()) &&
-                (!billingOnly || taskDb.Set<Native.OperationalTask>().Any(task => task.Id.ToString() == n.EventData.GetProperty("state").GetProperty("taskId").GetString() && task.TaskType == "METER_READ" && task.BillingPeriod != null)))
+                (!billingOnly || taskDb.Set<BHome.Domain.Billing.OperationalTask>().Any(task => task.Id.ToString() == n.EventData.GetProperty("state").GetProperty("taskId").GetString() && task.TaskType == "METER_READ" && task.BillingPeriod != null)))
                 .OrderBy(n => n.EventAt).Take(25).ToArrayAsync(t)).Select(NativeOperationalTaskPersistence.Notice).ToArray()
             : await db.Set<OperationalTaskNotification>().AsNoTracking().Where(e => !publicationKeys.Contains("task:" + e.Id.ToString()) &&
             (!billingOnly || db.Set<OperationalTask>().Any(task => task.Id == e.TaskId && task.Kind == OperationalTaskKind.MeterReading && task.BillingPeriod != null)))

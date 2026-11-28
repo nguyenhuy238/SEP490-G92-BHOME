@@ -63,7 +63,7 @@ internal sealed class IncidentRepository(BHomePersistenceContext db,
     public Task<bool> ActiveRoleAsync(Guid actor, string role, CancellationToken t) => reads is not null ? reads.ActiveRole(role).AnyAsync(id => id == actor, t) : db.Users.AsNoTracking().AnyAsync(u =>
         u.Id == actor && u.IsActive && db.UserRoles.Any(ur => ur.UserId == actor && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == role)), t);
     public Task<bool> ActiveLocationAsync(Guid id, CancellationToken t) => db is Compact24DbContext compact
-        ? compact.Set<BHome.Domain.Entities.Location>().AnyAsync(l => l.Id == id && l.IsActive, t)
+        ? compact.Set<BHome.Domain.Locations.Location>().AnyAsync(l => l.Id == id && l.IsActive, t)
         : db.Locations.AsNoTracking().AnyAsync(l => l.Id == id && l.IsActive, t);
     public Task<FastRepairPolicy?> FastRepairPolicyAsync(CancellationToken t) => native is not null
         ? native.PolicyAsync(t) : db.Set<FastRepairPolicy>().SingleOrDefaultAsync(p => p.Id == FastRepairPolicy.GlobalId, t);
@@ -87,19 +87,19 @@ internal sealed class IncidentRepository(BHomePersistenceContext db,
         return await (includeStaff ? owners.Union(StaffAt(location, today)) : owners).ToArrayAsync(t);
     }
     public Task<IncidentRoom?> RoomAsync(Guid id, CancellationToken t) => db is Compact24DbContext compact
-        ? compact.Set<BHome.Domain.Entities.Room>().AsNoTracking().Where(r => r.Id == id).Select(r => new IncidentRoom(r.Id, r.LocationId)).SingleOrDefaultAsync(t)
+        ? compact.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(r => r.Id == id).Select(r => new IncidentRoom(r.Id, r.LocationId)).SingleOrDefaultAsync(t)
         : db.Set<Room>().AsNoTracking().Where(r => r.Id == id)
         .Select(r => new IncidentRoom(r.Id, r.LocationId)).SingleOrDefaultAsync(t);
     public Task<string?> LocationNameAsync(Guid id, CancellationToken t) => db is Compact24DbContext compact
-        ? compact.Set<BHome.Domain.Entities.Location>().AsNoTracking().Where(l => l.Id == id).Select(l => l.Name).SingleOrDefaultAsync(t)
+        ? compact.Set<BHome.Domain.Locations.Location>().AsNoTracking().Where(l => l.Id == id).Select(l => l.Name).SingleOrDefaultAsync(t)
         : db.Locations.AsNoTracking()
         .Where(l => l.Id == id).Select(l => l.Name).SingleOrDefaultAsync(t);
     public Task<string?> RoomNumberAsync(Guid id, CancellationToken t) => db is Compact24DbContext compact
-        ? compact.Set<BHome.Domain.Entities.Room>().AsNoTracking().Where(r => r.Id == id).Select(r => r.RoomNumber).SingleOrDefaultAsync(t)
+        ? compact.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(r => r.Id == id).Select(r => r.RoomNumber).SingleOrDefaultAsync(t)
         : db.Set<Room>().AsNoTracking()
         .Where(r => r.Id == id).Select(r => r.RoomNumber).SingleOrDefaultAsync(t);
     public Task<string?> AssetNameAsync(Guid id, CancellationToken t) => db is Compact24DbContext compact
-        ? compact.Set<BHome.Domain.Entities.Asset>().AsNoTracking().Where(a => a.Id == id).Select(a => a.Name).SingleOrDefaultAsync(t)
+        ? compact.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking().Where(a => a.Id == id).Select(a => a.Name).SingleOrDefaultAsync(t)
         : db.Set<Asset>().AsNoTracking()
         .Where(a => a.Id == id).Select(a => a.Name).SingleOrDefaultAsync(t);
     public Task<string?> StaffNameAsync(Guid id, CancellationToken t) => db.Users.AsNoTracking()
@@ -114,7 +114,7 @@ internal sealed class IncidentRepository(BHomePersistenceContext db,
                 r.ResidenceFrom <= date && (r.ResidenceTo == null || r.ResidenceTo >= date)))
         .OrderBy(c => c.RoomId).Select(c => new IncidentTenancy(c.Id, c.RoomId)).FirstOrDefaultAsync(t);
     public Task<Guid?> ContractRoomAsync(Guid contract, CancellationToken t) => db is Compact24DbContext compact
-        ? compact.Set<BHome.Domain.Entities.Contract>().AsNoTracking().Where(c => c.Id == contract).Select(c => (Guid?)c.RoomId).SingleOrDefaultAsync(t)
+        ? compact.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => c.Id == contract).Select(c => (Guid?)c.RoomId).SingleOrDefaultAsync(t)
         : db.Set<Contract>().AsNoTracking().Where(c => c.Id == contract)
         .Select(c => (Guid?)c.RoomId).SingleOrDefaultAsync(t);
     public Task<Asset?> AssetAsync(Guid id, CancellationToken t) => native is not null ? native.AssetAsync(id, t) :
@@ -127,14 +127,14 @@ internal sealed class IncidentRepository(BHomePersistenceContext db,
         native is not null ? await native.WorkOrdersAsync(incident, t) :
             await db.Set<MaintenanceWorkOrder>().Where(w => w.IncidentId == incident).OrderBy(w => w.Id).ToArrayAsync(t);
     public Task<bool> OtherAssetWorkAsync(Guid asset, Guid? exceptWorkOrder, CancellationToken t) => db is Compact24DbContext compact
-        ? compact.Set<BHome.Domain.Entities.OperationalTask>().AsNoTracking()
+        ? compact.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking()
             .AnyAsync(w => w.TaskType == "WORK_ORDER" && w.AssetId == asset && w.Id != exceptWorkOrder &&
-                w.Status != "Verified" && w.Status != "Cancelled", t) : db.Set<MaintenanceWorkOrder>()
+                w.StoredStatus != "Verified" && w.StoredStatus != "Cancelled", t) : db.Set<MaintenanceWorkOrder>()
         .AnyAsync(w => w.AssetId == asset && w.Id != exceptWorkOrder && w.Status != WorkOrderStatus.Verified && w.Status != WorkOrderStatus.Cancelled, t);
     public Task<bool> OtherAssetExecutionAsync(Guid asset, Guid? exceptWorkOrder, CancellationToken t) => db is Compact24DbContext compact
-        ? compact.Set<BHome.Domain.Entities.OperationalTask>().AsNoTracking()
+        ? compact.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking()
             .AnyAsync(w => w.TaskType == "WORK_ORDER" && w.AssetId == asset && w.Id != exceptWorkOrder &&
-                (w.Status == "InProgress" || w.Status == "PendingVerification"), t) : db.Set<MaintenanceWorkOrder>()
+                (w.StoredStatus == "InProgress" || w.StoredStatus == "PendingVerification"), t) : db.Set<MaintenanceWorkOrder>()
         .AnyAsync(w => w.AssetId == asset && w.Id != exceptWorkOrder &&
             (w.Status == WorkOrderStatus.InProgress || w.Status == WorkOrderStatus.PendingVerification), t);
     public Task<IncidentCommand?> CommandAsync(Guid actor, Guid key, CancellationToken t) => native is not null

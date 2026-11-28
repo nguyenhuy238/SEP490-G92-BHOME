@@ -14,7 +14,7 @@ internal sealed partial class SharedConfigurationStore
     public Task<bool> HasApplicationAsync(Guid family, Guid location, CancellationToken t) => sql.Scalar<bool>("SELECT EXISTS(SELECT 1 FROM operational_tasks WHERE task_type='COMMAND' AND location_id=@location AND task_data->>'recordType'='SharedConfigurationOperation' AND task_data->'operation'->>'kind'='Apply' AND task_data->'operation'->>'familyId'=@family)", t, ("location", location), ("family", family.ToString()));
     public async Task<IReadOnlyList<PolicyDto>> PoliciesAsync(Guid location, CancellationToken t)
     {
-        var rows = await db.Set<Native.BillingPolicy>().AsNoTracking().Where(p => p.LocationId == location)
+        var rows = await db.Set<BHome.Domain.PropertyManagement.BillingPolicy>().AsNoTracking().Where(p => p.LocationId == location)
             .OrderBy(p => p.Id).Take(1001).ToArrayAsync(t);
         if (rows.Length > 1000) throw new PropertyException(409, "configuration_copy_page_limit");
         return rows.Select(p => PolicyView(p, false)).ToArray();
@@ -23,7 +23,7 @@ internal sealed partial class SharedConfigurationStore
     {
         // Filter before the bounded read: per-room rent and legacy room-type pricing
         // are not copyable setup inputs, and must not exhaust the configuration limit.
-        var rows = await db.Set<Native.BillingPolicy>().FromSqlInterpolated($"""
+        var rows = await db.Set<BHome.Domain.PropertyManagement.BillingPolicy>().FromSqlInterpolated($"""
             SELECT p.* FROM billing_policies p
             LEFT JOIN LATERAL (
                 SELECT h.value->'state' AS data FROM jsonb_array_elements(p.history) WITH ORDINALITY h(value,n)
@@ -35,7 +35,7 @@ internal sealed partial class SharedConfigurationStore
         if (rows.Length > 1000) throw new PropertyException(409, "configuration_copy_page_limit");
         return rows.Select(p => PolicyView(p, true)).ToArray();
     }
-    private static PolicyDto PolicyView(Native.BillingPolicy policy, bool forSetup)
+    private static PolicyDto PolicyView(BHome.Domain.PropertyManagement.BillingPolicy policy, bool forSetup)
     {
         // Name and retired room-type scope are stored in the last typed history entry.
         var state = policy.History.EnumerateArray().Reverse().FirstOrDefault(h =>
@@ -48,15 +48,8 @@ internal sealed partial class SharedConfigurationStore
         Guid? roomType = !forSetup && data.ValueKind == JsonValueKind.Object &&
             data.TryGetProperty("roomTypeId", out var r) && r.ValueKind == JsonValueKind.String
             ? r.GetGuid() : null;
-        var method = policy.CalculationMethod switch
-        {
-            "METERED" => ChargingMethod.Metered,
-            "FIXED_PER_PERSON_PER_MONTH" => ChargingMethod.FixedPerPersonPerMonth,
-            "FIXED_PER_ROOM_PER_MONTH" => ChargingMethod.FixedPerRoomPerMonth,
-            _ => (ChargingMethod)(-1)
-        };
-        return new(policy.Id, policy.LocationId, policy.RoomId, (ChargeCategory)policy.Category, policy.ChargeCode,
-            name, method, policy.Rate, policy.EffectiveFrom, policy.EffectiveTo, policy.Version,
+        return new(policy.Id, policy.LocationId, policy.RoomId, policy.Category, policy.ChargeCode,
+            name, policy.Method, policy.Rate, policy.EffectiveFrom, policy.EffectiveTo, policy.Version,
             forSetup ? null : policy.FirstUsedAt, roomType, null);
     }
     public async Task<SharedOperation?> OperationAsync(Guid actor, string kind, Guid key, CancellationToken t)

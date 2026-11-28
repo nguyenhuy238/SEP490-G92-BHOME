@@ -26,7 +26,7 @@ internal sealed class AdjustmentEvidenceFiles(BHomePersistenceContext context, I
         };
         if (db is Compact24DbContext compact)
         {
-            var invoice = await compact.Set<Native.Invoice>().AsNoTracking().Where(i => i.Id == invoiceId)
+            var invoice = await compact.Set<BHome.Domain.Billing.Invoice>().AsNoTracking().Where(i => i.Id == invoiceId)
                 .Select(i => new { i.LocationId, i.RoomId }).SingleAsync(t);
             file.ObjectKey = PrivateImageKeys.Evidence(invoice.LocationId, invoice.RoomId, "invoice-adjustments", invoiceId, file.Id);
             await SaveNativeAsync(compact, file, t); // Durable orphan intent before the upload.

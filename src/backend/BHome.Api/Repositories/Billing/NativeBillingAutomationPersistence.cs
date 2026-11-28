@@ -28,7 +28,7 @@ internal static class NativeBillingAutomationPersistence
 
     internal static async Task<BillingSchedule?> ScheduleAsync(Compact24DbContext db, Guid location, CancellationToken t)
     {
-        var settings = await db.Set<Native.Location>().AsNoTracking().Where(l => l.Id == location)
+        var settings = await db.Set<BHome.Domain.Locations.Location>().AsNoTracking().Where(l => l.Id == location)
             .Select(l => l.OperatingSettings).SingleOrDefaultAsync(t);
         if (settings.ValueKind != JsonValueKind.Object || !settings.TryGetProperty("billingSchedule", out var node)
             || node.ValueKind != JsonValueKind.Object) return null;
@@ -43,7 +43,7 @@ internal static class NativeBillingAutomationPersistence
 
     internal static async Task<BillingAutomationPlan[]> PlansAsync(Compact24DbContext db, Guid location, CancellationToken t)
     {
-        var settings = await db.Set<Native.Location>().AsNoTracking().Where(l => l.Id == location)
+        var settings = await db.Set<BHome.Domain.Locations.Location>().AsNoTracking().Where(l => l.Id == location)
             .Select(l => l.OperatingSettings).SingleOrDefaultAsync(t);
         return settings.ValueKind == JsonValueKind.Object && settings.TryGetProperty("automationPlanVersions", out var array)
             ? array.Deserialize<BillingAutomationPlan[]>(Json) ?? [] : [];
@@ -61,7 +61,7 @@ internal static class NativeBillingAutomationPersistence
 
     internal static async Task<BillingRepresentativeSelection?> RepresentativeAsync(Compact24DbContext db, Guid room, DateOnly period, CancellationToken t)
     {
-        var json = await db.Set<Native.Room>().AsNoTracking().Where(r => r.Id == room)
+        var json = await db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(r => r.Id == room)
             .Select(r => r.BillingRepresentatives).SingleOrDefaultAsync(t);
         if (json.ValueKind != JsonValueKind.Array) return null;
         return json.EnumerateArray().Where(e => e.TryGetProperty("recordType", out var kind) &&

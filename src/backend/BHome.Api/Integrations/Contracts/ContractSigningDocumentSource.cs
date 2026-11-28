@@ -167,7 +167,7 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
             if (settings.OwnerSignerId != c.OwnerSignerId) throw ContractException.Conflict("owner_contract_settings_required");
             var tenant = await mainData.IdentityAsync(c.RoomId, c.RepresentativeResidentId, t);
             var ids = db is Compact24DbContext
-                ? await db.Set<BHome.Domain.Entities.ContractResident>().AsNoTracking().Where(r => r.ContractId == c.Id).Select(r => r.ResidentId).ToArrayAsync(t)
+                ? await db.Set<BHome.Domain.TenantContracts.ContractResident>().AsNoTracking().Where(r => r.ContractId == c.Id).Select(r => r.ResidentId).ToArrayAsync(t)
                 : await db.Set<ContractResident>().Where(r => r.ContractId == c.Id).Select(r => r.ResidentId).ToArrayAsync(t);
             var occupants = new List<string>();
             foreach (var id in ids.Where(id => id != c.RepresentativeResidentId)) occupants.Add((await mainData.IdentityAsync(c.RoomId, id, t)).FullName);

@@ -33,8 +33,8 @@ internal sealed class SmsNotificationContent(Compact24DbContext db, TimeProvider
         var today = BillingAutomationDates.BusinessDate(clock.GetUtcNow());
         if (notice.EventType is "INVOICE_FINALIZED" or "INVOICE_OVERDUE")
         {
-            var invoice = (await NativeInvoicePersistence.ReadAsync(db, db.Set<Native.Invoice>().AsNoTracking()
-                .Where(i => i.Id == notice.RelatedObjectId && i.Status == (short)InvoiceStatus.Final && i.RecipientUserIds.Contains(recipient)), t, false)).SingleOrDefault();
+            var invoice = (await NativeInvoicePersistence.ReadAsync(db, db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking()
+                .Where(i => i.Id == notice.RelatedObjectId && i.Status == InvoiceStatus.Final && i.RecipientUserIds.Contains(recipient)), t, false)).SingleOrDefault();
             if (invoice is null) return null;
             if (notice.EventType == "INVOICE_OVERDUE" && (invoice.DueDate >= today || (await db.FinancialsAsync(invoice.Id, t)).OutstandingAmount <= 0)) return null;
             return new Dictionary<string, string> { ["ROOM"] = invoice.RoomNumber, ["PERIOD"] = invoice.BillingPeriod.ToString("MM/yyyy", System.Globalization.CultureInfo.InvariantCulture) };
@@ -63,10 +63,10 @@ internal sealed class SmsNotificationContent(Compact24DbContext db, TimeProvider
         }
         if (notice.EventType == "INCIDENT_EMERGENCY_SUBMITTED")
         {
-            var incident = await db.Set<Native.IncidentReport>().AsNoTracking().SingleOrDefaultAsync(i => i.Id == notice.RelatedObjectId && i.Severity == "EMERGENCY", t);
+            var incident = await db.Set<IncidentReport>().AsNoTracking().SingleOrDefaultAsync(i => i.Id == notice.RelatedObjectId && i.Severity == IncidentSeverity.Emergency, t);
             if (incident is null) return null;
-            var location = await db.Set<Native.Location>().Where(l => l.Id == incident.LocationId).Select(l => l.Name).SingleAsync(t);
-            var room = incident.RoomId is { } id ? await db.Set<Native.Room>().Where(r => r.Id == id).Select(r => r.RoomNumber).SingleOrDefaultAsync(t) : null;
+            var location = await db.Set<BHome.Domain.Locations.Location>().Where(l => l.Id == incident.LocationId).Select(l => l.Name).SingleAsync(t);
+            var room = incident.RoomId is { } id ? await db.Set<BHome.Domain.PropertyManagement.Room>().Where(r => r.Id == id).Select(r => r.RoomNumber).SingleOrDefaultAsync(t) : null;
             return new Dictionary<string, string> { ["LOCATION"] = location.Length > 60 ? location[..60] : location, ["ROOM"] = room ?? "khu vuc chung" };
         }
         return null;

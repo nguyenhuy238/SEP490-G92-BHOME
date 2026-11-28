@@ -104,7 +104,7 @@ internal static class LocationAssetInventoryTaskFactory
     {
         // There is one open handover task per Location. Assignment changes transfer
         // responsibility on that task; they must never manufacture a second task ID.
-        var locationTasks = (await NativeOperationalTaskPersistence.Roots(db).Where(x => x.LocationId == locationId && x.TaskType == "GENERAL")
+        var locationTasks = (await NativeOperationalTaskPersistence.Roots(db).Where(x => x.StoredLocationId == locationId && x.TaskType == "GENERAL")
             .ToArrayAsync(token)).Select(NativeCaptureReads.Task).Where(x => x.Kind == OperationalTaskKind.LocationAssetHandover).ToArray();
         var openTasks = locationTasks.Where(task => task.Status is not (MeterTaskStatus.Completed or MeterTaskStatus.Cancelled))
             .Select(task => task.Id).Take(2).ToArray();
@@ -243,8 +243,8 @@ internal static class LocationAssetInventoryTaskFactory
         Guid locationId, Guid actor, DateTimeOffset now, CancellationToken token)
     {
         if (workspace is null) return;
-        var task = (await NativeOperationalTaskPersistence.Roots(db).Where(x => x.LocationId == locationId && x.TaskType == "GENERAL" &&
-            (x.Status == "0" || x.Status == "1")).ToArrayAsync(token)).Select(NativeCaptureReads.Task)
+        var task = (await NativeOperationalTaskPersistence.Roots(db).Where(x => x.StoredLocationId == locationId && x.TaskType == "GENERAL" &&
+            (x.StoredStatus == "0" || x.StoredStatus == "1")).ToArrayAsync(token)).Select(NativeCaptureReads.Task)
             .SingleOrDefault(x => x.Kind == OperationalTaskKind.LocationAssetHandover);
         if (task?.AssignmentId is not { } assignment || task.AssignedStaffUserId is not { } staff ||
             string.IsNullOrWhiteSpace(task.LocationAssetInventoryJson)) return;
@@ -369,10 +369,10 @@ internal static class LocationAssetInventoryTaskFactory
         DateOnly effectiveFrom, DateTimeOffset now, CancellationToken token)
     {
         if (workspace is null) throw new InvalidOperationException("Owner inventory workspace is not available.");
-        var rooms = await db.Set<Native.Room>().AsNoTracking().Where(r => r.LocationId == locationId)
+        var rooms = await db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(r => r.LocationId == locationId)
             .OrderBy(r => r.RoomNumber).ThenBy(r => r.Id)
             .Select(r => new { r.Id, r.RoomNumber, Status = (RoomStatus)r.Status }).ToArrayAsync(token);
-        var assets = (await db.Set<Native.Asset>().AsNoTracking().Where(a => a.LocationId == locationId && a.Status != (short)AssetStatus.Retired)
+        var assets = (await db.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking().Where(a => a.LocationId == locationId && a.Status != AssetStatus.Retired)
             .ToArrayAsync(token)).Select(a => new
             {
                 a.Id,
@@ -381,7 +381,7 @@ internal static class LocationAssetInventoryTaskFactory
                 a.Name,
                 a.Category,
                 Status = (AssetStatus)a.Status,
-                PurchaseInfo = a.PurchaseInfo.GetRawText()
+                PurchaseInfo = a.PurchaseMetadata.GetRawText()
             }).ToArray();
         // Query Owner's durable inventory verification documents once per Location.
         var setup = await workspace.ReviewDocumentsAsync(locationId,
@@ -425,8 +425,8 @@ internal static class LocationAssetInventoryTaskFactory
         // Restrict inherited evidence to the ACTIVE Tenant's contract chain. A previous unrelated
         // occupant's signed handover must never automatically confirm the new Staff's checklist.
         var roomIds = rooms.Select(r => r.Id).ToArray();
-        var contracts = await db.Set<Native.Contract>().AsNoTracking().Where(c => roomIds.Contains(c.RoomId) &&
-                (c.ContractType == "MAIN" || c.ContractType == "RENEWAL"))
+        var contracts = await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => roomIds.Contains(c.RoomId) &&
+                (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal))
             .Select(c => new
             {
                 c.Id,

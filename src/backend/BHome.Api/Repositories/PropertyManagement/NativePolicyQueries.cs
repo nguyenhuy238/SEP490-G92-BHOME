@@ -13,7 +13,7 @@ internal static class NativePolicyQueries
         PropertyQuery q, Guid? staffId, DateOnly today, CancellationToken token)
     {
         short? category = q.ChargeCategory is { } kind ? (short)kind : null;
-        var rows = db.Set<Native.BillingPolicy>().FromSqlInterpolated($"""
+        var rows = db.Set<BHome.Domain.PropertyManagement.BillingPolicy>().FromSqlInterpolated($"""
             SELECT p.* FROM billing_policies p
             JOIN locations l ON l.id=p.location_id
             LEFT JOIN LATERAL (

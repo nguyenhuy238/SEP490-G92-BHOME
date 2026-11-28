@@ -37,8 +37,8 @@ internal sealed partial class RefundRepository
             WHERE source_deposit_contract_id={contract.Id} AND status IN ('REQUESTED','APPROVED','COMPLETED')
             """).SingleAsync(token);
         if (allReserved != requests.Where(r => r.Status is "REQUESTED" or "APPROVED" or "COMPLETED").Sum(r => r.Amount)) blockers.Add("refund_source_requires_manual_review");
-        var people = await db.Set<Native.Resident>().AsNoTracking().Where(r => r.VerificationStatus == (short)IdentityVerificationStatus.Verified &&
-            db.Set<Native.ContractResident>().Any(cr => cr.ContractId == contract.Id && cr.ResidentId == r.Id)).OrderBy(r => r.Id)
+        var people = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => r.VerificationStatus == IdentityVerificationStatus.Verified &&
+            db.Set<BHome.Domain.TenantContracts.ContractResident>().Any(cr => cr.ContractId == contract.Id && cr.ResidentId == r.Id)).OrderBy(r => r.Id)
             .Select(r => new RefundPerson(r.Id, r.DisplayLabel)).ToArrayAsync(token);
         return new(decision?.RefundRequired ?? 0, contract.PaymentMode == "Test", people, requests, contract.Id, reference,
             blockers.Distinct().Order().ToArray(), position is null ? null : Math.Max(0, (decision?.RefundRequired ?? 0) - position.Refunded - position.Reserved),

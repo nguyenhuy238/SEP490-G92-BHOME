@@ -26,7 +26,7 @@ internal sealed class AssetCapitalSyncJob(BHomePersistenceContext db, ICapitalAs
     public async Task ExecuteAsync(JobExecution job, CancellationToken token)
     {
         var locations = db is Compact24DbContext
-            ? await db.Set<BHome.Domain.Entities.Location>().AsNoTracking().Select(location => location.Id).ToArrayAsync(token)
+            ? await db.Set<BHome.Domain.Locations.Location>().AsNoTracking().Select(location => location.Id).ToArrayAsync(token)
             : await db.Set<Location>().AsNoTracking().Select(location => location.Id).ToArrayAsync(token);
         foreach (var location in locations)
         {

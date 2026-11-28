@@ -29,7 +29,7 @@ internal sealed class CaptureScope(BHomePersistenceContext db, ICurrentUser user
     public IQueryable<OperationalTask> VisibleTasks => db.Set<OperationalTask>()
         .Where(t => t.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading && VisibleRooms.Any(r => r.Id == t.Meter.RoomId) &&
             (t.Purpose == ReadingPurpose.Periodic || t.AutomationPlanId == null || user.IsInRole(Roles.Owner) || t.AssignedStaffUserId == UserId));
-    internal IQueryable<Native.Location> NativeLocations
+    internal IQueryable<BHome.Domain.Locations.Location> NativeLocations
     {
         get
         {
@@ -40,22 +40,22 @@ internal sealed class CaptureScope(BHomePersistenceContext db, ICurrentUser user
                 SELECT l.id AS "Value" FROM locations l CROSS JOIN LATERAL jsonb_array_elements(l.staff_assignments) a
                 WHERE (a->>'staffUserId')::uuid={UserId} AND (a->>'startDate')::date<={Today} AND (a->>'endDate')::date>={Today}
                 """);
-            return compact.Set<Native.Location>().AsNoTracking().Where(l => l.IsActive &&
+            return compact.Set<BHome.Domain.Locations.Location>().AsNoTracking().Where(l => l.IsActive &&
                 (owner || staff && EligibleStaff.Contains(UserId) && assignments.Contains(l.Id)));
         }
     }
-    internal IQueryable<Native.Room> NativeRooms => ((Compact24DbContext)db).Set<Native.Room>().AsNoTracking()
+    internal IQueryable<BHome.Domain.PropertyManagement.Room> NativeRooms => ((Compact24DbContext)db).Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking()
         .Where(r => NativeLocations.Any(l => l.Id == r.LocationId));
-    internal IQueryable<Native.OperationalTask> NativeTasks
+    internal IQueryable<BHome.Domain.Billing.OperationalTask> NativeTasks
     {
         get
         {
             var owner = user.IsInRole(Roles.Owner);
             var compact = (Compact24DbContext)db;
-            return compact.Set<Native.OperationalTask>().FromSqlInterpolated($"""
+            return compact.Set<BHome.Domain.Billing.OperationalTask>().FromSqlInterpolated($"""
                 SELECT * FROM operational_tasks WHERE task_type='METER_READ' AND
                 ((task_data->'state'->>'purpose')::int=1 OR task_data->'state'->>'automationPlanId' IS NULL OR {owner} OR assigned_user_id={UserId})
-                """).AsNoTracking().Where(t => compact.Set<Native.Meter>().Any(m => m.Id == t.MeterId && NativeRooms.Any(r => r.Id == m.RoomId)));
+                """).AsNoTracking().Where(t => compact.Set<BHome.Domain.Billing.Meter>().Any(m => m.Id == t.MeterId && NativeRooms.Any(r => r.Id == m.RoomId)));
         }
     }
     internal Task<bool> RoomVisibleAsync(Guid? id, CancellationToken t) => db is Compact24DbContext
@@ -63,7 +63,7 @@ internal sealed class CaptureScope(BHomePersistenceContext db, ICurrentUser user
     internal Task<bool> LocationVisibleAsync(Guid id, CancellationToken t) => db is Compact24DbContext
         ? NativeLocations.AnyAsync(l => l.Id == id, t) : VisibleLocations.AnyAsync(l => l.Id == id, t);
     internal Task<Guid?> TaskLocationAsync(Guid id, CancellationToken t) => db is Compact24DbContext
-        ? NativeTasks.Where(x => x.Id == id).Select(x => x.LocationId).SingleOrDefaultAsync(t)
+        ? NativeTasks.Where(x => x.Id == id).Select(x => x.StoredLocationId).SingleOrDefaultAsync(t)
         : VisibleTasks.Where(x => x.Id == id).Select(x => (Guid?)x.LocationId).SingleOrDefaultAsync(t);
     internal Task<Guid?> TaskMeterAsync(Guid id, CancellationToken t) => db is Compact24DbContext
         ? NativeTasks.Where(x => x.Id == id).Select(x => x.MeterId).SingleOrDefaultAsync(t)
@@ -77,27 +77,25 @@ internal sealed class CaptureScope(BHomePersistenceContext db, ICurrentUser user
     internal async Task<OperationalTask?> LockTaskAsync(Guid id, CancellationToken t)
     {
         if (db is not Compact24DbContext compact) return await db.Locked<OperationalTask>(id).SingleOrDefaultAsync(t);
-        var row = await compact.Set<Native.OperationalTask>().FromSqlInterpolated($"SELECT * FROM operational_tasks WHERE id={id} AND task_type='METER_READ' FOR UPDATE")
+        var row = await compact.Set<BHome.Domain.Billing.OperationalTask>().FromSqlInterpolated($"SELECT * FROM operational_tasks WHERE id={id} AND task_type='METER_READ' FOR UPDATE")
             .AsNoTracking().SingleOrDefaultAsync(t);
         return row is null ? null : NativeCaptureReads.Task(row);
     }
     internal async Task<Meter> MeterAsync(Guid? id, CancellationToken t, bool locked = false)
     {
         if (db is not Compact24DbContext compact) return locked ? await db.Locked<Meter>(id!.Value).SingleAsync(t) : await db.Set<Meter>().AsNoTracking().SingleAsync(m => m.Id == id, t);
-        var query = locked ? compact.Set<Native.Meter>().FromSqlInterpolated($"SELECT * FROM meters WHERE id={id} FOR UPDATE") : compact.Set<Native.Meter>();
-        return NativeCaptureReads.Meter(await query.AsNoTracking().SingleAsync(m => m.Id == id, t));
+        var query = locked ? compact.Set<BHome.Domain.Billing.Meter>().FromSqlInterpolated($"SELECT * FROM meters WHERE id={id} FOR UPDATE") : compact.Set<BHome.Domain.Billing.Meter>();
+        return await query.AsNoTracking().SingleAsync(m => m.Id == id, t);
     }
     internal async Task<MeterReading?> TaskReadingAsync(Guid id, CancellationToken t)
     {
         if (db is not Compact24DbContext compact) return await db.Set<MeterReading>().SingleOrDefaultAsync(r => r.TaskId == id, t);
-        var row = await compact.Set<Native.MeterReading>().AsNoTracking().SingleOrDefaultAsync(r => r.OperationalTaskId == id, t);
-        return row is null ? null : NativeCaptureReads.Reading(row);
+        return await compact.Set<BHome.Domain.Billing.MeterReading>().AsNoTracking().SingleOrDefaultAsync(r => r.TaskId == id, t);
     }
     internal async Task<MeterReading?> LatestReadingAsync(Guid id, CancellationToken t)
     {
         if (db is not Compact24DbContext compact) return await db.Set<MeterReading>().Where(r => r.MeterId == id).OrderByDescending(r => r.ConfirmedAt).FirstOrDefaultAsync(t);
-        var row = await compact.Set<Native.MeterReading>().AsNoTracking().Where(r => r.MeterId == id).OrderByDescending(r => r.ConfirmedAt).FirstOrDefaultAsync(t);
-        return row is null ? null : NativeCaptureReads.Reading(row);
+        return await compact.Set<BHome.Domain.Billing.MeterReading>().AsNoTracking().Where(r => r.MeterId == id).OrderByDescending(r => r.ConfirmedAt).FirstOrDefaultAsync(t);
     }
     internal Task<MeterEvidence?> LockEvidenceAsync(Guid id, CancellationToken t) => db is Compact24DbContext compact
         ? NativeCaptureReads.LockedEvidenceAsync(compact, id, t) : db.Locked<MeterEvidence>(id).SingleOrDefaultAsync(t);
@@ -147,12 +145,12 @@ internal sealed class CaptureScope(BHomePersistenceContext db, ICurrentUser user
 
     private async Task<bool> CanCorrectNativeAsync(Compact24DbContext compact, OperationalTask task, Meter meter, MeterReading reading, CancellationToken t)
     {
-        if (await compact.Set<Native.MeterReading>().AnyAsync(r => r.MeterId == meter.Id && r.Id != reading.Id && r.ConfirmedAt >= reading.ConfirmedAt, t)) return false;
-        if (task.BillingPeriod != null && await compact.Set<Native.Invoice>().AnyAsync(i => i.Status == (short)InvoiceStatus.Final &&
+        if (await compact.Set<BHome.Domain.Billing.MeterReading>().AnyAsync(r => r.MeterId == meter.Id && r.Id != reading.Id && r.ConfirmedAt >= reading.ConfirmedAt, t)) return false;
+        if (task.BillingPeriod != null && await compact.Set<BHome.Domain.Billing.Invoice>().AnyAsync(i => i.Status == InvoiceStatus.Final &&
             i.RoomId == meter.RoomId && i.BillingPeriod == task.BillingPeriod, t)) return false;
-        if (await (from line in compact.Set<Native.InvoiceItem>()
-                   join invoice in compact.Set<Native.Invoice>() on line.InvoiceId equals invoice.Id
-                   where invoice.Status == (short)InvoiceStatus.Final && line.MeterReadingId == reading.Id
+        if (await (from line in compact.Set<BHome.Domain.Billing.InvoiceLine>()
+                   join invoice in compact.Set<BHome.Domain.Billing.Invoice>() on line.InvoiceId equals invoice.Id
+                   where invoice.Status == InvoiceStatus.Final && line.MeterReadingId == reading.Id
                    select line.Id).AnyAsync(t)) return false;
         var id = reading.Id.ToString();
         if (await db.Database.SqlQuery<bool>($"""
@@ -167,7 +165,7 @@ internal sealed class CaptureScope(BHomePersistenceContext db, ICurrentUser user
             """).SingleAsync(t)) return false;
         if (task.Purpose == ReadingPurpose.Initial && task.ContractId is { } initialContract)
         {
-            if (!await compact.Set<Native.Contract>().AnyAsync(c => c.Id == initialContract && c.Status == (short)ContractStatus.Active, t)) return false;
+            if (!await compact.Set<BHome.Domain.TenantContracts.Contract>().AnyAsync(c => c.Id == initialContract && c.Status == ContractStatus.Active, t)) return false;
             if (await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS(SELECT 1 FROM operational_tasks WHERE contract_id={initialContract} AND task_type='GENERAL'
                     AND COALESCE((task_data->'state'->>'kind')::int,1)=1 AND title LIKE 'Bàn giao vào phòng%'

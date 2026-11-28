@@ -53,16 +53,16 @@ internal sealed class ContractWorkflowRepository(BHomePersistenceContext db, IId
             SELECT l.id AS "Value" FROM locations l CROSS JOIN LATERAL jsonb_array_elements(l.staff_assignments) a
             WHERE (a->>'staffUserId')::uuid={scope.ActorId} AND (a->>'startDate')::date<={scope.Today} AND (a->>'endDate')::date>={scope.Today}
             """);
-        var locations = db.Set<Native.Location>().AsNoTracking().Where(l => l.IsActive &&
+        var locations = db.Set<BHome.Domain.Locations.Location>().AsNoTracking().Where(l => l.IsActive &&
             (scope.Owner || scope.Staff && db.EligibleStaffIds(scope.Today).Contains(scope.ActorId) && assigned.Contains(l.Id)));
         var choices = await locations.OrderBy(l => l.Name).Take(100).Select(l => new ContractChoice(l.Id, l.Name)).ToArrayAsync(t);
         if (locationId is not null && !await locations.AnyAsync(l => l.Id == locationId, t)) throw ContractException.Missing();
-        var roomRows = await db.Set<Native.Room>().AsNoTracking().Where(r => locationId != null && r.LocationId == locationId &&
-            (r.Status == (short)RoomStatus.Available || r.Status == (short)RoomStatus.Occupied || r.Status == (short)RoomStatus.OnHold) &&
+        var roomRows = await db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(r => locationId != null && r.LocationId == locationId &&
+            (r.Status == RoomStatus.Available || r.Status == RoomStatus.Occupied || r.Status == RoomStatus.OnHold) &&
             locations.Any(l => l.Id == r.LocationId)).OrderBy(r => r.RoomNumber).Take(100).ToArrayAsync(t);
         var rooms = roomRows.Select(r => new ContractRoomChoice(r.Id, r.RoomNumber, r.LocationId, ((RoomStatus)r.Status).ToString())).ToArray();
         var ids = rooms.Select(r => r.Id).ToArray();
-        var people = await db.Set<Native.Resident>().AsNoTracking().Where(r => r.CurrentRoomId != null && ids.Contains(r.CurrentRoomId.Value))
+        var people = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => r.RoomId != null && ids.Contains(r.RoomId.Value))
             .OrderBy(r => r.DisplayLabel).Take(500).ToArrayAsync(t);
         var residents = people.Select(NativeResidentPersistence.Read).Select(r =>
         {
@@ -129,19 +129,19 @@ internal sealed class ContractWorkflowRepository(BHomePersistenceContext db, IId
     private async Task NativeLinkTenantAsync(Compact24DbContext native, Guid residentId, Guid tenantId, Guid actor, DateTimeOffset at, CancellationToken t)
     {
         await using var tx = await db.Database.BeginTransactionAsync(t);
-        var roomId = await db.Set<Native.Resident>().Where(r => r.Id == residentId).Select(r => r.CurrentRoomId).SingleOrDefaultAsync(t)
+        var roomId = await db.Set<BHome.Domain.TenantContracts.Resident>().Where(r => r.Id == residentId).Select(r => r.RoomId).SingleOrDefaultAsync(t)
             ?? throw ContractException.Missing();
         await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM rooms WHERE id={roomId} FOR UPDATE").SingleAsync(t);
-        var row = await db.Set<Native.Resident>().FromSqlInterpolated($"SELECT * FROM residents WHERE id={residentId} FOR UPDATE")
+        var row = await db.Set<BHome.Domain.TenantContracts.Resident>().FromSqlInterpolated($"SELECT * FROM residents WHERE id={residentId} FOR UPDATE")
             .AsNoTracking().SingleOrDefaultAsync(t) ?? throw ContractException.Missing();
-        if (row.CurrentRoomId != roomId) throw ContractException.Conflict("resident_room_changed");
+        if (row.RoomId != roomId) throw ContractException.Conflict("resident_room_changed");
         var valid = await db.Users.AsNoTracking().AnyAsync(a => a.Id == tenantId && a.IsActive && EF.Property<string[]>(a, "roles").Contains(Roles.Tenant), t);
-        if (!valid || row.VerificationStatus != (short)IdentityVerificationStatus.Verified) throw ContractException.Invalid("verified_tenant_account_required");
-        if (row.UserId is not null && row.UserId != tenantId || await db.Set<Native.Contract>().AnyAsync(c =>
+        if (!valid || row.VerificationStatus != IdentityVerificationStatus.Verified) throw ContractException.Invalid("verified_tenant_account_required");
+        if (row.TenantUserId is not null && row.TenantUserId != tenantId || await db.Set<BHome.Domain.TenantContracts.Contract>().AnyAsync(c =>
             c.RepresentativeResidentId == residentId && c.TenantUserId != tenantId &&
-            (c.ContractType == "MAIN" || c.ContractType == "RENEWAL" || c.ContractType == "HOLDING" || c.ContractType == "ADDENDUM"), t))
+            (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal || c.Kind == BHome.Domain.TenantContracts.ContractKind.Holding || c.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum), t))
             throw ContractException.Conflict("resident_account_already_linked");
-        if (row.UserId is null)
+        if (row.TenantUserId is null)
         {
             await NativeResidentPersistence.LinkAsync(native, NativeResidentPersistence.Read(row), tenantId, t);
             await SecurityAuditWrites.AppendAsync(db, new(Guid.NewGuid(), actor, null, null, "ContractTenantAccountLinked", true, at, "Resident", residentId), t);

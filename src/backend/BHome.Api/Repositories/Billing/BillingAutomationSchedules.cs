@@ -27,21 +27,21 @@ internal sealed class BillingAutomationSchedules(BHomePersistenceContext db) : I
         await using var tx = await db.Database.BeginTransactionAsync(t);
         var native = db as Compact24DbContext;
         var location = (native is not null
-            ? await native.Set<Native.Room>().AsNoTracking().Where(r => r.Id == x.RoomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t)
+            ? await native.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(r => r.Id == x.RoomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t)
             : await db.Set<Room>().Where(r => r.Id == x.RoomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t))
             ?? throw new InvoiceException(404, "room_not_found");
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({location.ToString()},0))", t);
-        if (native is not null) await native.Set<Native.Room>().FromSqlInterpolated($"SELECT * FROM rooms WHERE id={x.RoomId} FOR UPDATE").AsNoTracking().SingleAsync(t);
+        if (native is not null) await native.Set<BHome.Domain.PropertyManagement.Room>().FromSqlInterpolated($"SELECT * FROM rooms WHERE id={x.RoomId} FOR UPDATE").AsNoTracking().SingleAsync(t);
         else await db.Locked<Room>(x.RoomId).SingleAsync(t);
         if (native is not null
-            ? await native.Set<Native.Invoice>().AnyAsync(i => i.InvoiceType == "PERIODIC" && i.RoomId == x.RoomId && i.BillingPeriod == x.BillingPeriod, t)
+            ? await native.Set<BHome.Domain.Billing.Invoice>().AnyAsync(i => i.Type == "PERIODIC" && i.RoomId == x.RoomId && i.BillingPeriod == x.BillingPeriod, t)
             : await db.PeriodicInvoices().AnyAsync(i => i.RoomId == x.RoomId && i.BillingPeriod == x.BillingPeriod, t)) throw new InvoiceException(409, "invoice_period_already_exists");
         var old = await RepresentativeAsync(x.RoomId, x.BillingPeriod, t); if ((old?.Version ?? 0) != x.ExpectedVersion) throw new InvoiceException(409, "billing_representative_changed");
         var end = x.BillingPeriod.AddMonths(1).AddDays(-1);
         var eligible = native is not null
-            ? await native.Set<Native.Contract>().AnyAsync(c => c.Id == x.ContractId && c.RoomId == x.RoomId && c.ActivatedAt != null &&
-                (c.ContractType == "MAIN" || c.ContractType == "RENEWAL" || c.ContractType == "HOLDING" || c.ContractType == "ADDENDUM") &&
-                (c.Status == (short)ContractStatus.Active || c.Status == (short)ContractStatus.Terminated || c.Status == (short)ContractStatus.Superseded) &&
+            ? await native.Set<BHome.Domain.TenantContracts.Contract>().AnyAsync(c => c.Id == x.ContractId && c.RoomId == x.RoomId && c.ActivatedAt != null &&
+                (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal || c.Kind == BHome.Domain.TenantContracts.ContractKind.Holding || c.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum) &&
+                (c.Status == ContractStatus.Active || c.Status == ContractStatus.Terminated || c.Status == ContractStatus.Superseded) &&
                 c.StartDate <= end && (c.ActualEndDate ?? c.EndDate) >= x.BillingPeriod, t)
             : await db.Set<Contract>().AnyAsync(c => c.Id == x.ContractId && c.RoomId == x.RoomId && c.ActivatedAt != null && (c.Status == ContractStatus.Active || c.Status == ContractStatus.Terminated || c.Status == ContractStatus.Superseded) && c.StartDate <= end && (c.ActualEndDate ?? c.EndDate) >= x.BillingPeriod, t);
         if (!eligible) throw new InvoiceException(400, "representative_contract_not_eligible");
@@ -85,7 +85,7 @@ internal sealed class BillingAutomationSchedules(BHomePersistenceContext db) : I
         await using var tx = await db.Database.BeginTransactionAsync(t);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({x.LocationId.ToString()},0))", t);
         var native = db as Compact24DbContext;
-        if (!(native is not null ? await native.Set<Native.Location>().AnyAsync(l => l.Id == x.LocationId && l.IsActive, t) : await db.Locations.AnyAsync(l => l.Id == x.LocationId && l.IsActive, t))) throw new InvoiceException(404, "billing_location_not_found");
+        if (!(native is not null ? await native.Set<BHome.Domain.Locations.Location>().AnyAsync(l => l.Id == x.LocationId && l.IsActive, t) : await db.Locations.AnyAsync(l => l.Id == x.LocationId && l.IsActive, t))) throw new InvoiceException(404, "billing_location_not_found");
         var latest = await LatestAsync(db, x.LocationId, t);
         var version = latest?.Version ?? 0;
         var schedule = native is not null ? await NativeBillingAutomationPersistence.ScheduleAsync(native, x.LocationId, t) : await db.Set<BillingSchedule>().SingleOrDefaultAsync(s => s.LocationId == x.LocationId, t);

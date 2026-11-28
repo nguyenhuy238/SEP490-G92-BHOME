@@ -37,7 +37,7 @@ internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db
     {
         var selected = await schedules.ForPeriodAsync(p.LocationId, period, t);
         return selected?.Id == p.Id && p.Enabled && (phase != "Final" || p.AuthorizeAutomaticFinalization) && await ActiveRole(p.AuthorizedByUserId, Roles.Owner, t) &&
-            (db is Compact24DbContext compact ? await compact.Set<Native.Location>().AnyAsync(l => l.Id == p.LocationId && l.IsActive, t) : await db.Locations.AnyAsync(l => l.Id == p.LocationId && l.IsActive, t))
+            (db is Compact24DbContext compact ? await compact.Set<BHome.Domain.Locations.Location>().AnyAsync(l => l.Id == p.LocationId && l.IsActive, t) : await db.Locations.AnyAsync(l => l.Id == p.LocationId && l.IsActive, t))
             && Today >= ScheduledDate(p, period, phase);
     }
     internal static DateOnly ScheduledDate(BillingAutomationPlan p, DateOnly period, string phase) => phase switch
@@ -76,11 +76,11 @@ internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db
             Guid? after = null; var from = phase == "Meter" ? InvoiceMath.CalendarDate(x.BillingPeriod, p.MeterDay, 0) : x.BillingPeriod; var end = phase == "Meter" ? from : x.BillingPeriod.AddMonths(1).AddDays(-1);
             while (true)
             {
-                var rooms = native is not null ? await native.Set<Native.Room>().AsNoTracking().Where(r => r.LocationId == p.LocationId && (after == null || r.Id.CompareTo(after.Value) > 0) &&
-                    (phase == "Meter" || native.Set<Native.Invoice>().Any(i => i.InvoiceType == "PERIODIC" && i.RoomId == r.Id && i.BillingPeriod == x.BillingPeriod) ||
-                        native.Set<Native.Contract>().Any(c => c.RoomId == r.Id && c.ActivatedAt != null &&
-                        (c.ContractType == "MAIN" || c.ContractType == "RENEWAL") &&
-                        (c.Status == (short)ContractStatus.Active || c.Status == (short)ContractStatus.Superseded || c.Status == (short)ContractStatus.Terminated || c.Status == (short)ContractStatus.Expired) &&
+                var rooms = native is not null ? await native.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(r => r.LocationId == p.LocationId && (after == null || r.Id.CompareTo(after.Value) > 0) &&
+                    (phase == "Meter" || native.Set<BHome.Domain.Billing.Invoice>().Any(i => i.Type == "PERIODIC" && i.RoomId == r.Id && i.BillingPeriod == x.BillingPeriod) ||
+                        native.Set<BHome.Domain.TenantContracts.Contract>().Any(c => c.RoomId == r.Id && c.ActivatedAt != null &&
+                        (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal) &&
+                        (c.Status == ContractStatus.Active || c.Status == ContractStatus.Superseded || c.Status == ContractStatus.Terminated || c.Status == ContractStatus.Expired) &&
                         c.StartDate <= end && (c.ActualEndDate ?? c.EndDate) > end)))
                     .OrderBy(r => r.Id).Select(r => r.Id).Take(100).ToArrayAsync(t)
                     : await db.Set<Room>().AsNoTracking().Where(r => r.LocationId == p.LocationId && (after == null || r.Id.CompareTo(after.Value) > 0) &&
@@ -97,7 +97,7 @@ internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db
                     db.ChangeTracker.Clear(); await using var tx = await db.Database.BeginTransactionAsync(t);
                     await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({p.LocationId.ToString()},0))", t);
                     var lockedLocation = native is not null
-                        ? (await native.Set<Native.Room>().FromSqlInterpolated($"SELECT * FROM rooms WHERE id={room} FOR UPDATE").AsNoTracking().SingleAsync(t)).LocationId
+                        ? (await native.Set<BHome.Domain.PropertyManagement.Room>().FromSqlInterpolated($"SELECT * FROM rooms WHERE id={room} FOR UPDATE").AsNoTracking().SingleAsync(t)).LocationId
                         : (await db.Locked<Room>(room).SingleAsync(t)).LocationId;
                     if (lockedLocation != p.LocationId) { await tx.CommitAsync(t); continue; }
                     if (!await Eligible(p, x.BillingPeriod, phase, t)) { errors.Add(new { roomId = room, code = "automation_authorization_changed" }); await tx.CommitAsync(t); break; }
@@ -145,7 +145,7 @@ internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db
         foreach (var type in new[] { UtilityType.Electricity, UtilityType.Water })
         {
             var meters = native is not null
-                ? (await native.Set<Native.Meter>().AsNoTracking().Where(m => m.RoomId == room && m.UtilityType == (short)type && m.IsActive && m.InstalledOn <= readingDate).Take(2).ToArrayAsync(t)).Select(NativeCaptureReads.Meter).ToArray()
+                ? (await native.Set<BHome.Domain.Billing.Meter>().AsNoTracking().Where(m => m.RoomId == room && m.UtilityType == type && m.IsActive && m.InstalledOn <= readingDate).Take(2).ToArrayAsync(t))
                 : await db.Set<Meter>().AsNoTracking().Where(m => m.RoomId == room && m.UtilityType == type && m.IsActive && m.InstalledOn <= readingDate).Take(2).ToArrayAsync(t);
             var previous = native is not null ? await NativeBillingJobPersistence.PeriodicTaskAsync(native, room, type, period, t)
                 : await db.Set<OperationalTask>().SingleOrDefaultAsync(task => task.BillingRoomId == room && task.BillingUtilityType == type && task.BillingPeriod == period, t);

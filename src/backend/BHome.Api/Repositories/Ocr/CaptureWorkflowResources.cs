@@ -17,11 +17,11 @@ internal sealed class CaptureWorkflowResources(BHomePersistenceContext db, Captu
         try
         {
             if (db is Compact24DbContext compact)
-                return await (from r in compact.Set<Native.Resident>()
-                              join room in scope.NativeRooms on r.CurrentRoomId equals (Guid?)room.Id
+                return await (from r in compact.Set<BHome.Domain.TenantContracts.Resident>()
+                              join room in scope.NativeRooms on r.RoomId equals (Guid?)room.Id
                               where r.Id == id
                               select new OcrWorkflowResource(new ResourceScope(room.LocationId, null),
-                                  r.VerificationStatus == (short)IdentityVerificationStatus.Pending, OcrDocumentKind.IdentityFront, null, null)).SingleOrDefaultAsync(token);
+                                  r.VerificationStatus == IdentityVerificationStatus.Pending, OcrDocumentKind.IdentityFront, null, null)).SingleOrDefaultAsync(token);
             return await db.Set<Resident>().Where(r => r.Id == id && scope.VisibleRooms.Any(room => room.Id == r.RoomId))
             .Select(r => new OcrWorkflowResource(new ResourceScope(r.Room.LocationId, null),
                 r.VerificationStatus == IdentityVerificationStatus.Pending, OcrDocumentKind.IdentityFront, null, null)).SingleOrDefaultAsync(token);
@@ -48,7 +48,7 @@ internal sealed class CaptureWorkflowResources(BHomePersistenceContext db, Captu
                     (UtilityType.Electricity, MeterDisplay.Digital) => OcrDocumentKind.DigitalElectricity,
                     _ => (OcrDocumentKind?)null
                 };
-                var latest = await compact.Set<Native.MeterReading>().Where(r => r.MeterId == device.Id).OrderByDescending(r => r.ConfirmedAt)
+                var latest = await compact.Set<BHome.Domain.Billing.MeterReading>().Where(r => r.MeterId == device.Id).OrderByDescending(r => r.ConfirmedAt)
                     .ThenBy(r => r.Id).Select(r => (decimal?)r.ConfirmedValue).FirstOrDefaultAsync(token);
                 var result = new OcrWorkflowResource(new ResourceScope(current.LocationId, null),
                     device.IsActive && current.Status is MeterTaskStatus.Assigned or MeterTaskStatus.InProgress,

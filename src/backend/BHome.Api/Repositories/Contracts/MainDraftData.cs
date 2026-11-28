@@ -107,18 +107,18 @@ internal sealed class MainDraftData(BHomePersistenceContext db, IIdentityProtect
     }
     public Task<bool> DuplicateAsync(Guid roomId, Guid except, Guid[] people, DateOnly from, DateOnly to, CancellationToken t) =>
         db is Compact24DbContext
-        ? db.Set<Native.Contract>().AsNoTracking().AnyAsync(c => c.RoomId == roomId && c.Id != except &&
-            (c.ContractType == "MAIN" || c.ContractType == "RENEWAL" || c.ContractType == "HOLDING" || c.ContractType == "ADDENDUM") &&
-            (c.Status == (short)ContractStatus.Draft || c.Status == (short)ContractStatus.PendingSigning ||
-             c.Status == (short)ContractStatus.PendingActivation || c.Status == (short)ContractStatus.Active) &&
-            c.StartDate <= to && c.EndDate >= from && db.Set<Native.ContractResident>().Any(r => r.ContractId == c.Id && people.Contains(r.ResidentId)), t)
+        ? db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().AnyAsync(c => c.RoomId == roomId && c.Id != except &&
+            (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal || c.Kind == BHome.Domain.TenantContracts.ContractKind.Holding || c.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum) &&
+            (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning ||
+             c.Status == ContractStatus.PendingActivation || c.Status == ContractStatus.Active) &&
+            c.StartDate <= to && c.EndDate >= from && db.Set<BHome.Domain.TenantContracts.ContractResident>().Any(r => r.ContractId == c.Id && people.Contains(r.ResidentId)), t)
         : db.Set<Contract>().AnyAsync(c => c.RoomId == roomId && c.Id != except &&
         (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation || c.Status == ContractStatus.Active) && c.StartDate <= to && c.EndDate >= from && c.Residents.Any(r => people.Contains(r.ResidentId)), t);
     public Task<string?> PhoneAsync(Guid roomId, Guid residentId, CancellationToken t) =>
         db is Compact24DbContext
-        ? (from r in db.Set<Native.Resident>().AsNoTracking()
-           join account in db.Users.AsNoTracking() on r.UserId equals (Guid?)account.Id
-           where r.CurrentRoomId == roomId && r.Id == residentId && r.VerificationStatus == (short)IdentityVerificationStatus.Verified
+        ? (from r in db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking()
+           join account in db.Users.AsNoTracking() on r.TenantUserId equals (Guid?)account.Id
+           where r.RoomId == roomId && r.Id == residentId && r.VerificationStatus == IdentityVerificationStatus.Verified
            select account.PhoneNumber).SingleOrDefaultAsync(t)
         : (from r in db.Set<Resident>().AsNoTracking()
            join account in db.Users.AsNoTracking() on r.TenantUserId equals (Guid?)account.Id
@@ -133,9 +133,9 @@ internal sealed class MainDraftData(BHomePersistenceContext db, IIdentityProtect
     public string Protect(Contract c, MainDraftState state) => JsonSerializer.Serialize(Encode(state, new(c.OwnerSignerId, c.Id)));
     public Task<string?> EmailAsync(Guid roomId, Guid residentId, CancellationToken t) =>
         db is Compact24DbContext
-        ? (from r in db.Set<Native.Resident>().AsNoTracking()
-           join account in db.Users.AsNoTracking() on r.UserId equals (Guid?)account.Id
-           where r.CurrentRoomId == roomId && r.Id == residentId && r.VerificationStatus == (short)IdentityVerificationStatus.Verified
+        ? (from r in db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking()
+           join account in db.Users.AsNoTracking() on r.TenantUserId equals (Guid?)account.Id
+           where r.RoomId == roomId && r.Id == residentId && r.VerificationStatus == IdentityVerificationStatus.Verified
            select account.Email).SingleOrDefaultAsync(t)
         : (from r in db.Set<Resident>().AsNoTracking()
            join account in db.Users.AsNoTracking() on r.TenantUserId equals (Guid?)account.Id
@@ -145,7 +145,7 @@ internal sealed class MainDraftData(BHomePersistenceContext db, IIdentityProtect
     {
         if (db is not Compact24DbContext)
             return await db.Set<Resident>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == residentId && r.RoomId == roomId, t);
-        var row = await db.Set<Native.Resident>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == residentId && r.CurrentRoomId == roomId, t);
+        var row = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == residentId && r.RoomId == roomId, t);
         return row is null ? null : NativeResidentPersistence.Read(row);
     }
     public MainDraftState Unprotect(Contract c) => Decode<MainDraftState>(JsonSerializer.Deserialize<EncryptedIdentity>(c.DraftMetadata)!, new(c.OwnerSignerId, c.Id));

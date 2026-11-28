@@ -52,7 +52,7 @@ public sealed class Compact24TableModelTests(Compact24Fixture fixture) : IClassF
         });
         Assert.Equal(Compact24Schema.ExpectedForeignKeys(schema).Order(StringComparer.Ordinal), foreignKeys.Order(StringComparer.Ordinal));
         Assert.False(db.Database.HasPendingModelChanges());
-        db.Add(new Native.Location { Id = Guid.NewGuid() });
+        db.Add(new BHome.Domain.Locations.Location("Native transaction guard"));
         Assert.Throws<InvalidOperationException>(() => db.SaveChanges());
         await Assert.ThrowsAsync<InvalidOperationException>(() => db.SaveChangesAsync());
     }
@@ -67,13 +67,13 @@ public sealed class Compact24TableModelTests(Compact24Fixture fixture) : IClassF
         {
             await domain.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO locations(id,name,address,operating_settings) VALUES ({id},'Native model','Synthetic address','{{\"futureField\":{{\"amount\":123}}}}'::jsonb)");
             Assert.Same(transaction.GetDbTransaction(), domain.Database.CurrentTransaction!.GetDbTransaction());
-            var row = await domain.Set<Native.Location>().AsNoTracking().SingleAsync(x => x.Id == id);
+            var row = await domain.Set<BHome.Domain.Locations.Location>().AsNoTracking().SingleAsync(x => x.Id == id);
             Assert.Equal("Native model", row.Name);
             Assert.Equal(123, row.OperatingSettings.GetProperty("futureField").GetProperty("amount").GetInt32());
             Assert.Empty(domain.ChangeTracker.Entries());
             await transaction.RollbackAsync();
         }
-        Assert.False(await domain.Set<Native.Location>().AnyAsync(x => x.Id == id));
+        Assert.False(await domain.Set<BHome.Domain.Locations.Location>().AnyAsync(x => x.Id == id));
     }
 
     [CompactPostgresFact]
@@ -85,7 +85,7 @@ public sealed class Compact24TableModelTests(Compact24Fixture fixture) : IClassF
         await Assert.ThrowsAsync<InvalidOperationException>(() => domain.SaveChangesAsync(default));
         domain.ChangeTracker.Clear();
         await using var transaction = await domain.Database.BeginTransactionAsync();
-        domain.Add(new Native.Contract { Id = Guid.NewGuid() });
+        domain.Add(new BHome.Domain.TenantContracts.Contract());
         await Assert.ThrowsAsync<InvalidOperationException>(() => domain.SaveChangesAsync(default));
         domain.ChangeTracker.Clear();
         domain.Remove(new Native.StaffEmployment { Id = Guid.NewGuid() });

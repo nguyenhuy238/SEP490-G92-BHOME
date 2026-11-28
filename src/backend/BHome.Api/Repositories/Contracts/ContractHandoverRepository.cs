@@ -273,8 +273,8 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     // task belonging only to an ended tenancy is considered for a new cycle.
     private async Task<bool> PrepareRoomMoveInAsync(Contract c, Guid actor, DateTimeOffset now, CancellationToken t)
     {
-        var contracts = await db.Set<Native.Contract>().AsNoTracking().Where(x => x.RoomId == c.RoomId &&
-            (x.ContractType == "MAIN" || x.ContractType == "RENEWAL"))
+        var contracts = await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(x => x.RoomId == c.RoomId &&
+            (x.Kind == BHome.Domain.TenantContracts.ContractKind.Main || x.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal))
             .Select(x => new { x.Id, x.PreviousContractId, Status = (ContractStatus)x.Status, x.StartDate, x.EndDate }).ToArrayAsync(t);
         var byId = contracts.ToDictionary(x => x.Id);
         Guid Root(Guid id)
@@ -418,7 +418,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         // Every tenancy starts with its own photographed electricity/water baseline.
         // A physical meter may have confirmed readings from previous occupants, so
         // these tasks are keyed by Contract + Meter instead of Meter alone.
-        var meters = await db.Set<Native.Meter>().AsNoTracking().Where(m => m.RoomId == c.RoomId && m.IsActive)
+        var meters = await db.Set<BHome.Domain.Billing.Meter>().AsNoTracking().Where(m => m.RoomId == c.RoomId && m.IsActive)
             .OrderBy(m => m.UtilityType).ThenBy(m => m.Id).ToArrayAsync(t);
         var ids = new List<Guid>(meters.Length);
         foreach (var meter in meters)
@@ -443,7 +443,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
                 LocationId = c.Room.LocationId,
                 MeterId = meter.Id,
                 ContractId = c.Id,
-                Title = $"Chụp chỉ số {(meter.UtilityType == (short)UtilityType.Electricity ? "điện" : "nước")} khi nhận phòng {c.Room.RoomNumber}",
+                Title = $"Chụp chỉ số {(meter.UtilityType == UtilityType.Electricity ? "điện" : "nước")} khi nhận phòng {c.Room.RoomNumber}",
                 Requirements = "Chụp ảnh thực tế, đối chiếu và xác nhận chỉ số đầu kỳ cho hợp đồng nhận phòng này. Tiếp tục sử dụng công tơ hiện có, không tạo công tơ mới hay kế thừa chỉ số/ảnh của người thuê trước.",
                 Purpose = ReadingPurpose.Initial,
                 ReadingDate = new[] { c.StartDate, date, meter.InstalledOn }.Max(),
@@ -702,7 +702,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     }
     public async Task<IReadOnlyList<AssetChangeParty>> ActivePartiesAsync(Guid roomId, CancellationToken t) =>
         db is Compact24DbContext compact
-        ? await compact.Set<Native.Contract>().AsNoTracking().Where(c => c.RoomId == roomId && (c.ContractType == "MAIN" || c.ContractType == "RENEWAL") && c.Status == (short)ContractStatus.Active)
+        ? await compact.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => c.RoomId == roomId && (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal) && c.Status == ContractStatus.Active)
             .Select(c => new AssetChangeParty(c.Id, c.TenantUserId)).ToArrayAsync(t)
         : await db.Set<Contract>().AsNoTracking().Where(c => c.RoomId == roomId && (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal) && c.Status == ContractStatus.Active)
             .Select(c => new AssetChangeParty(c.Id, c.TenantUserId)).ToArrayAsync(t);
@@ -718,8 +718,8 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
                     AND n.related_entity_type='Asset' AND a.room_id={roomId}
                 ORDER BY n.event_at DESC LIMIT 200
                 """).ToArrayAsync(t);
-            var nativeOrders = (await compact.Set<Native.OperationalTask>().AsNoTracking()
-                .Where(w => w.RoomId == roomId && w.TaskType == "WORK_ORDER" && w.Status == "Verified" && w.AssetId != null)
+            var nativeOrders = (await compact.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking()
+                .Where(w => w.RoomId == roomId && w.TaskType == "WORK_ORDER" && w.StoredStatus == "Verified" && w.AssetId != null)
                 .Take(200).ToArrayAsync(t)).Select(NativeIncidentSession.Read)
                 .Select(w => new AssetChangeSource(w.Id, w.AssetId!.Value, w.Description, w.Id));
             return nativeOrders.Concat(nativeHistory).ToArray();
@@ -739,7 +739,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     public async Task<IReadOnlyList<Asset>> AssetsAsync(Guid roomId, CancellationToken t)
     {
         var assets = db is Compact24DbContext compact
-            ? (await compact.Set<Native.Asset>().AsNoTracking().Where(a => a.RoomId == roomId && a.Status != (short)AssetStatus.Retired).OrderBy(a => a.Name).Take(201).ToArrayAsync(t)).Select(NativeAssetPersistence.Read).ToArray()
+            ? (await compact.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking().Where(a => a.RoomId == roomId && a.Status != AssetStatus.Retired).OrderBy(a => a.Name).Take(201).ToArrayAsync(t)).Select(NativeAssetPersistence.Read).ToArray()
             : await db.Set<Asset>().AsNoTracking().Where(a => a.RoomId == roomId && a.Status != AssetStatus.Retired).OrderBy(a => a.Name).Take(201).ToArrayAsync(t);
         if (assets.Length > 200) throw new ContractException(503, "handover_inventory_limit");
         return assets;

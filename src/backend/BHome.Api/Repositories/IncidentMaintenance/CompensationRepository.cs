@@ -46,9 +46,9 @@ internal sealed class CompensationRepository(BHomePersistenceContext db, IIncide
     public async Task<IReadOnlyList<CompensationContract>> ContractsAsync(Guid room, CancellationToken t)
     {
         if (native is not null)
-            return (await db.Set<Native.Contract>().AsNoTracking().Where(c => c.RoomId == room && c.ActivatedAt != null &&
-                c.ContractType != "HOLDING" && (c.Status == (short)ContractStatus.Active || c.Status == (short)ContractStatus.Terminated ||
-                c.Status == (short)ContractStatus.Superseded)).OrderByDescending(c => c.StartDate).Take(100)
+            return (await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => c.RoomId == room && c.ActivatedAt != null &&
+                c.Kind != BHome.Domain.TenantContracts.ContractKind.Holding && (c.Status == ContractStatus.Active || c.Status == ContractStatus.Terminated ||
+                c.Status == ContractStatus.Superseded)).OrderByDescending(c => c.StartDate).Take(100)
                 .Select(c => new { c.Id, c.Status, c.StartDate, End = c.ActualEndDate ?? c.EndDate }).ToArrayAsync(t))
                 .Select(c => new CompensationContract(c.Id, ((ContractStatus)c.Status).ToString(), c.StartDate, c.End)).ToArray();
         return await db.Set<Contract>().AsNoTracking().Where(c => c.RoomId == room && c.ActivatedAt != null && c.Kind != ContractKind.Holding &&
@@ -73,7 +73,7 @@ internal sealed class CompensationRepository(BHomePersistenceContext db, IIncide
     public Task<IReadOnlyList<IncidentEvidence>> EvidenceAsync(Guid workOrder, CancellationToken t) => native is not null
         ? native.EvidenceAsync(null, workOrder, t) : incidents.WorkEvidenceAsync(workOrder, t);
     public Task<bool> InvoiceHasMoneyAsync(Guid invoice, CancellationToken t) => native is not null
-        ? db.Set<Native.PaymentAllocation>().AsNoTracking().AnyAsync(a => a.TargetInvoiceId == invoice, t)
+        ? db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AsNoTracking().AnyAsync(a => a.InvoiceId == invoice, t)
         : db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AnyAsync(a => a.InvoiceId == invoice, t);
     public async Task IssueInvoiceAsync(Invoice invoice, InvoiceIssuedEvent issued, CancellationToken t)
     {
@@ -131,7 +131,7 @@ internal sealed class CompensationRepository(BHomePersistenceContext db, IIncide
         while (root.PreviousContractId is { } parent)
         {
             if (!visited.Add(parent) || visited.Count > 100) throw IncidentException.Conflict("contract_version_integrity_failed");
-            root = NativeContractSnapshot.Read(await compact.Set<Native.Contract>().AsNoTracking().SingleAsync(c => c.Id == parent, t));
+            root = NativeContractSnapshot.Read(await compact.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().SingleAsync(c => c.Id == parent, t));
             if (root.RoomId != contract.RoomId || root.TenantUserId != contract.TenantUserId)
                 throw IncidentException.Conflict("contract_version_integrity_failed");
         }
@@ -150,8 +150,8 @@ internal sealed class CompensationRepository(BHomePersistenceContext db, IIncide
         var available = position is null || position.UnclassifiedRefunds > 0 ? 0 :
             position.Received - position.Allocated - position.Refunded - position.Reserved - reserved - (legacyPlan?.Total ?? 0);
         var residents = contract.Residents.Select(r => r.ResidentId).ToArray();
-        var people = await compact.Set<Native.Resident>().AsNoTracking().Where(r => residents.Contains(r.Id) && r.UserId != null)
-            .Select(r => r.UserId!.Value).ToArrayAsync(t);
+        var people = await compact.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => residents.Contains(r.Id) && r.TenantUserId != null)
+            .Select(r => r.TenantUserId!.Value).ToArrayAsync(t);
         var recipients = contract.TenantUserId is { } tenant ? people.Prepend(tenant).Distinct().ToArray() : [];
         var ready = contract.Status == ContractStatus.Active && await compact.Database.SqlQuery<bool>($"""
             SELECT EXISTS(SELECT 1 FROM contracts c WHERE (c.move_out->'current'->>'contractId')::uuid={contractId}

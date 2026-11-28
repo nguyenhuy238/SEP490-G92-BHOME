@@ -20,7 +20,7 @@ public sealed partial class Compact24ArchiveContext
     public override IQueryable<T> Locked<T>(Guid id, bool skipLocked = false, bool shared = false)
     {
         var suffix = shared ? " FOR SHARE" : " FOR UPDATE" + (skipLocked ? " SKIP LOCKED" : "");
-        if (typeof(T) == typeof(ApplicationUser) || typeof(T) == typeof(CompactRefreshRow) || Compact24NativeModel.IsNative(typeof(T)))
+        if (Model.FindEntityType(typeof(T))?.GetSqlQuery() is null)
             return base.Locked<T>(id, skipLocked, shared);
         var spec = Compact24Records.For(typeof(T));
         var predicate = spec.Kind is CompactRecordKind.Array or CompactRecordKind.History
@@ -39,7 +39,7 @@ public sealed partial class Compact24ArchiveContext
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
         ChangeTracker.DetectChanges();
-        if (ChangeTracker.Entries().Any(e => Compact24NativeModel.IsNative(e.Metadata.ClrType) &&
+        if (ChangeTracker.Entries().Any(e => Compact24NativeModel.IsNative(e.Metadata.ClrType) && e.Metadata.GetSqlQuery() is null &&
             e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
             return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
         var domain = ChangeTracker.Entries().Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted &&

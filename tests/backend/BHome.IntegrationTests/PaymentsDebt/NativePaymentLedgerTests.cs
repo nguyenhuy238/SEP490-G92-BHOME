@@ -54,6 +54,46 @@ public sealed partial class PaymentLedgerTests
                 AND (SELECT count(*) FROM jsonb_array_elements(p.history) h WHERE h->>'recordType'='PaymentReconciliation')=2)
               AS "Value"
             """).SingleAsync());
+        var physical = await db.Set<PaymentTransfer>().AsNoTracking().SingleAsync(p => p.Id == receipt.Id);
+        Assert.Equal("VERIFIED", physical.Status);
+        Assert.Equal("MANUAL", physical.VerificationMethod);
+        Assert.Equal((Guid?)w.Owner, physical.StoredVerifiedByUserId);
+        Assert.NotNull(physical.StoredVerifiedAt);
+        var snapshot = physical.VerificationData.GetProperty("compactState");
+        string[] expectedReceiptFields =
+        [
+            "providerIdentity", "bankReference", "normalizedReference", "amount", "currency",
+            "occurredAt", "transferDescription", "statementReference", "statementEvidenceObjectKey",
+            "statementEvidenceSha256", "statementEvidenceContentType", "statementEvidenceLength",
+            "verificationReason", "verificationSource", "verifiedByUserId", "verifiedAt",
+            "proposedInvoiceId", "proposedDepositContractId", "isDevelopmentDemo", "id", "createdAt", "updatedAt"
+        ];
+        Assert.Equal(expectedReceiptFields.Order(), snapshot.EnumerateObject().Select(p => p.Name).Order());
+        var hydrated = (await repository.TransferAsync(receipt.Id, default))!;
+        Assert.Equal(physical.BankReference, hydrated.BankReference);
+        Assert.Equal(snapshot.GetProperty("normalizedReference").GetString(), hydrated.NormalizedReference);
+        Assert.Equal(snapshot.GetProperty("proposedInvoiceId").GetGuid(), hydrated.ProposedInvoiceId);
+        Assert.Equal(physical.StoredVerifiedAt, hydrated.StoredVerifiedAt);
+        Assert.Equal(physical.StoredVerifiedByUserId, hydrated.StoredVerifiedByUserId);
+
+        // A physical payment without a receipt snapshot must never enter the
+        // verified receipt lookup, even though the canonical type maps all rows.
+        await using (var pendingTx = await db.Database.BeginTransactionAsync())
+        {
+            var pendingId = Guid.NewGuid();
+            var pendingReference = "PENDING-" + pendingId;
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO payments(id,provider_code,receiving_account_key,transaction_reference,received_at,amount,currency,status)
+                VALUES({pendingId},'SYNTHETIC-PENDING','test',{pendingReference},now(),1,'VND','PENDING')
+                """);
+            var pending = await db.Set<PaymentTransfer>().AsNoTracking().SingleAsync(p => p.Id == pendingId);
+            Assert.Null(pending.StoredRemittanceInfo);
+            Assert.Null(pending.StoredVerifiedByUserId);
+            Assert.Null(pending.StoredVerifiedAt);
+            Assert.Null(await repository.TransferAsync(pendingId, default));
+            Assert.Null(await repository.TransferReferenceAsync("SYNTHETIC-PENDING", pendingReference, default));
+            await pendingTx.RollbackAsync();
+        }
         Assert.Equal(1, await db.Database.SqlQuery<int>($"""
             SELECT count(*)::int AS "Value" FROM notifications WHERE record_kind='OUTBOX'
               AND event_key={"PaymentConfirmedEvent:" + allocation.Id}
