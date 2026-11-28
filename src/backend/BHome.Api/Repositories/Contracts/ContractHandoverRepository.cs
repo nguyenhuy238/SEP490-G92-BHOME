@@ -496,7 +496,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             EvidenceRequired = false,
             MeterStatus = MeterTaskStatus.Assigned,
             ReadingDate = c.StartDate,
-            MoveInInventoryJson = JsonSerializer.Serialize(new MoveInInventorySnapshot(source.StateToken, items))
+            MoveInInventoryJson = JsonSerializer.Serialize(new MoveInInventorySnapshot(source.MoveInStateToken ?? source.StateToken, items))
         };
         var history = new OperationalTaskHistory
         {

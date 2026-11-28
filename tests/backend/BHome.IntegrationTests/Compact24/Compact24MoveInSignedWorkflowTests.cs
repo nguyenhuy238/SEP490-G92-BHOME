@@ -9,6 +9,7 @@ using BHome.Application.Notifications;
 using BHome.Application.StaffOperations;
 using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
+using BHome.Domain.PropertyManagement;
 using BHome.Domain.StaffOperations;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Contracts;
@@ -178,6 +179,16 @@ public sealed partial class Compact24OwnerSetupTests
         }
         Assert.Equal("Completed", inventoryView.Status);
         Assert.False(inventoryView.ReadyForHandover); // Owner has not resolved the missing asset.
+
+        // The legacy task holds the strict token captured before an unrelated
+        // room version update. This must not invalidate the completed inspection.
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var room = await db.Set<Room>().SingleAsync(r => r.Id == w.Room);
+            room.Version++;
+            await db.SaveChangesAsync();
+        }
 
         var beforeSubmit = (await staff.GetFromJsonAsync<HandoverDraftView>(
             $"/api/v1/contracts/{contractId}/handover/draft"))!;

@@ -154,17 +154,28 @@ public sealed partial class Compact24OwnerSetupTests
         var stored = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal(1, await stored.Set<Room>().CountAsync(room => room.LocationId == w.Location));
         Assert.Equal(RoomStatus.Occupied, (await stored.Set<Room>().SingleAsync(room => room.Id == w.Room)).Status);
-        var contract = await stored.Set<Contract>().SingleAsync(c => c.Id == created.ContractId);
+        var contract = await stored.Set<Contract>().Include(c => c.Residents).SingleAsync(c => c.Id == created.ContractId);
         Assert.Equal(w.Owner.Id, contract.OwnerSignerId);
         Assert.Equal(ContractStatus.Active, contract.Status);
         Assert.Equal(3200000m, contract.RentAmount);
         Assert.Equal(0m, contract.RequiredDeposit);
+        // PostgreSQL stores whole-VND contract amounts but policy rates have scale 4.
+        // The persisted demo contract must still supply immutable billing prices.
+        Assert.True(ContractChargeSnapshot.IsIntact(contract));
+        var missingPrices = new List<string>();
+        var billingPrices = BHome.Application.Billing.ContractBillingPrices.Read(contract, w.Location, missingPrices);
+        Assert.Empty(missingPrices);
+        Assert.Equal(3, billingPrices.Count);
         Assert.Equal(2, await stored.Set<Meter>().CountAsync(m => m.RoomId == w.Room));
         Assert.Equal(existingAsset.Id, Assert.Single(await stored.Set<Asset>().Where(a => a.RoomId == w.Room).ToArrayAsync()).Id);
         var inventoryTask = Assert.Single(await stored.Set<OperationalTask>().Where(task =>
             task.ContractId == created.ContractId && task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MoveInInventory).ToArrayAsync());
         var inventorySnapshot = JsonSerializer.Deserialize<MoveInInventorySnapshot>(inventoryTask.MoveInInventoryJson)!;
-        Assert.Equal(draft.InventoryToken, inventorySnapshot.SourceToken);
+        var currentInventory = await check.ServiceProvider.GetRequiredService<RoomInventoryReviewService>()
+            .PrepareForMoveInTaskAsync(w.Room, default);
+        Assert.Equal(draft.InventoryToken, currentInventory.StateToken);
+        Assert.NotNull(currentInventory.MoveInStateToken);
+        Assert.Equal(currentInventory.MoveInStateToken, inventorySnapshot.SourceToken);
         Assert.Equal(2, inventorySnapshot.Items.Length);
         var inventoryItem = Assert.Single(inventorySnapshot.Items, item => item.Id == configuredItem.Id);
         Assert.Equal(existingAsset.Id, inventoryItem.AssetId);

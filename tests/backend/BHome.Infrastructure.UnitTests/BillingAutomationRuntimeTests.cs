@@ -18,8 +18,10 @@ public sealed class BillingAutomationRuntimeTests
     [InlineData("Production", false, false, true, false, true)]
     [InlineData("Development", false, false, true, true, true)]
     [InlineData("Staging", false, true, true, false, true)]
-    [InlineData("Production", true, false, false, false, false)]
+    [InlineData("Production", true, false, false, true, false)]
+    [InlineData("Production", true, true, true, true, true)]
     [InlineData("Custom", true, false, false, false, false)]
+    // Retain the established CI identity while extending the opt-in to Production.
     public void ManualStagingOptInIsIndependentOfWorkersAndOtherDeveloperActions(
         string environment, bool manual, bool jobs, bool automatic, bool canRun, bool worker)
     {

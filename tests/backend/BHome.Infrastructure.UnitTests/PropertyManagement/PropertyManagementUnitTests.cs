@@ -460,14 +460,22 @@ public sealed class PropertyManagementUnitTests(PostgresContainerFixture postgre
         await StartAsync();
         await AddLocationAsync(Sample1Id, "BHOME SAMPLE 1");
         var v1 = await AddElectricityV1Async();
-        // Drafts do not reserve effective periods. Publish immediately to exercise the overlap rule.
+        // The sheet gives no name for the new version; a different name is used so the overlap rule (not the duplicate-name rule) is tested.
+        // Match Owner Web's save-and-publish command; a legacy Draft does not reserve an effective period.
 
-        await Assert.ThrowsAnyAsync<PropertyException>(() => Shared.SaveAsync(BillingPolicyResource, null,
-            new SharedWrite("Electricity 2026-12", "", BillingPolicyData("Electricity", 3800m, new(2026, 12, 1), null), PublishImmediately: true), default));
+        var error = await Assert.ThrowsAsync<PropertyException>(() => Shared.SaveAsync(BillingPolicyResource, null,
+            new SharedWrite("Electricity 2026-12", "", BillingPolicyData("Electricity", 3800m, new(2026, 12, 1), null),
+                PublishImmediately: true), default));
+        Assert.Equal(409, error.Status);
+        Assert.Equal("overlapping_shared_fee_period", error.Code);
 
         var stored = await Shared.GetAsync(BillingPolicyResource, v1.Id, default);
         Assert.Equal(3500m, stored.Data.GetProperty("referenceRate").GetDecimal());
         Assert.Equal(v1.Version, stored.Version);
+        Assert.Equal(v1.Status, stored.Status);
+        Assert.Equal(v1.UpdatedAt, stored.UpdatedAt);
+        Assert.Equal("2026-11-01", stored.Data.GetProperty("effectiveFrom").GetString());
+        Assert.Equal("2026-12-31", stored.Data.GetProperty("effectiveTo").GetString());
         Assert.Equal(1, await SharedCountAsync(BillingPolicyResource));
     }
 

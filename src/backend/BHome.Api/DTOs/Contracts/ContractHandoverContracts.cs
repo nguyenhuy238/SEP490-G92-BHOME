@@ -19,7 +19,16 @@ public sealed record HandoverAsset(Guid Id, string Name, string InventoryConditi
     int? HandedOverQuantity = null, int? GoodQuantity = null, int? WornQuantity = null,
     int? DamagedQuantity = null, int? MissingQuantity = null, bool Checked = false, string? Notes = null, Guid[]? EvidenceIds = null,
     HandoverPhysicalObservation[]? PhysicalObservations = null);
-public sealed record HandoverInventory(string StateToken, string State, bool NoAssetsConfirmed, HandoverAsset[] Groups);
+public sealed record HandoverInventory(string StateToken, string State, bool NoAssetsConfirmed, HandoverAsset[] Groups)
+{
+    [JsonIgnore]
+    public string? MoveInStateToken { get; init; }
+    internal Func<string, bool>? LegacyMoveInTokenMatches { get; init; }
+
+    public bool MatchesMoveInSourceToken(string sourceToken) =>
+        sourceToken == (MoveInStateToken ?? StateToken) || sourceToken == StateToken ||
+        LegacyMoveInTokenMatches?.Invoke(sourceToken) == true;
+}
 public sealed record HandoverOwnerReview(int Version, bool Accepted, string Reason, string HandlingPlan);
 public sealed record HandoverOwnerAcceptance(int Version, Guid ActorId, DateTimeOffset At, string Reason, string HandlingPlan);
 public sealed record InspectionTenantFeedback(int Version, bool Confirmed, string Reason);

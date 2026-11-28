@@ -80,11 +80,11 @@ public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore stor
 
     private static string Baseline(Room room, bool active, bool invalid, SetupDocument? assignment,
         SetupDocument? provenance, SetupDocument? template, SetupDocument? desired,
-        IEnumerable<Physical> physical, IEnumerable<Mapping> mappings) => Hash(new
+        IEnumerable<Physical> physical, IEnumerable<Mapping> mappings, int? roomVersion = null) => Hash(new
         {
             room = room.Id,
             room.RoomNumber,
-            room.Version,
+            Version = roomVersion ?? room.Version,
             active,
             invalid,
             assignment = assignment is null ? null : new { assignment.Id, assignment.Version },

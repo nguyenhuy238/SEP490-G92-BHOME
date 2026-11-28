@@ -171,7 +171,9 @@ public sealed class DevelopmentOnboardingSeedService(
                 EndDate = endDate,
                 Kind = ContractKind.Main,
                 Status = ContractStatus.Active,
-                RentAmount = rent.Rate,
+                // Match the native whole-VND contract column before hashing;
+                // PostgreSQL policy rates otherwise retain four decimal places.
+                RentAmount = decimal.Truncate(rent.Rate),
                 // Demo contract explicitly has no deposit or initial payment obligation.
                 // There is no simulated verification, signature, or payment record.
                 RequiredDeposit = 0,
@@ -187,7 +189,7 @@ public sealed class DevelopmentOnboardingSeedService(
             };
             contract.Residents[0].ContractId = contract.Id;
             var charges = prices.Charges.Select(p => new HoldingPriceCharge(p.Id, p.ChargeCode, (int)p.Category,
-                (int)p.Method, p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version)
+                (int)p.Method, p.ChargeCode == "RENT" ? contract.RentAmount : p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version)
             { Name = p.Name, PolicyLocationId = p.LocationId, PolicyRoomId = p.RoomId, PolicyRoomTypeId = p.RoomTypeId }).ToArray();
             contract.AgreedPriceSnapshot = JsonSerializer.Serialize(new HoldingPriceSnapshot(contract.RentAmount,
                 contract.RequiredDeposit, today, endDate, default, "DevelopmentSyntheticFixture", now, charges)

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { Named } from '../lib/api';
 
@@ -71,7 +71,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   state.role = 'Staff';
   state.userId = 'staff-1';
-  state.request.mockResolvedValue([first, second]);
+  state.request.mockReset().mockResolvedValue([first, second]);
 });
 
 function WorkspaceProbe({ name }: { name: string }) {
@@ -141,7 +141,13 @@ it('commits the other assigned location before navigating from a notification', 
 });
 
 it('refreshes stale assignments when a notification points to a newly assigned location', async () => {
-  state.request.mockResolvedValueOnce([first]).mockResolvedValueOnce([first, second]);
+  let finish!: (value: Named[]) => void;
+  state.request.mockResolvedValueOnce([first]).mockImplementationOnce(
+    () =>
+      new Promise<Named[]>((resolve) => {
+        finish = resolve;
+      }),
+  );
   const opened = vi.fn();
   render(
     <WorkspaceProvider>
@@ -152,8 +158,11 @@ it('refreshes stale assignments when a notification points to a newly assigned l
     expect(screen.getByTestId('notification-location').textContent).toBe(first.id),
   );
   fireEvent.click(screen.getByRole('button', { name: 'Mở thông báo cơ sở khác' }));
-  await waitFor(() => expect(opened).toHaveBeenCalledExactlyOnceWith(second.id));
-  expect(state.request).toHaveBeenCalledTimes(2);
+  await waitFor(() => expect(state.request).toHaveBeenCalledTimes(2));
+  expect(opened).not.toHaveBeenCalled();
+  await act(async () => finish([first, second]));
+  expect(screen.getByTestId('notification-location').textContent).toBe(second.id);
+  expect(opened).toHaveBeenCalledExactlyOnceWith(second.id);
 });
 
 it('does not navigate when the refreshed assignments do not contain the notification location', async () => {

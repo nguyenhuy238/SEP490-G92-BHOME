@@ -40,7 +40,27 @@ public sealed partial class RoomInventoryReviewService : IHandoverInventory
                 null, null, p.Metadata.Unit, p.Metadata.TrackingMode, [PhysicalView(p)]))).ToArray();
         if (groups.Length > 200) throw new PropertyException(409, "handover_inventory_limit");
         // Reinspection flags/evidence-only appends do not change the inspected asset baseline.
-        return new(Hash(new { room.Baseline, noAssetsVersion = noAssets ? empty!.Version : 0 }), room.View.State, noAssets, groups);
+        var noAssetsVersion = noAssets ? empty!.Version : 0;
+        string Token(string baseline) => Hash(new { Baseline = baseline, noAssetsVersion });
+        string BaselineAt(int version) => Baseline(room.Room, true, room.InvalidConfiguration,
+            room.Assignment, room.Provenance, room.Template, room.Desired, room.Physical, room.Mappings, version);
+        var roomVersion = room.Room.Version;
+        // Move-in tasks may be created before activation changes the room row version.
+        // Keep the general inventory token strict for other workflows; only the
+        // move-in token ignores unrelated room version changes.
+        return new(Token(room.Baseline), room.View.State, noAssets, groups)
+        {
+            MoveInStateToken = Token(BaselineAt(0)),
+            // Existing tasks store the original strict hash. Accept an older room
+            // version only if the entire remaining inventory baseline matches.
+            // Bound the legacy search; never accept a mismatched asset snapshot.
+            LegacyMoveInTokenMatches = source =>
+            {
+                for (var version = roomVersion - 1; version >= Math.Max(1, roomVersion - 64); version--)
+                    if (source == Token(BaselineAt(version))) return true;
+                return false;
+            }
+        };
     }
 
     public async Task<HandoverInventory> PrepareAsync(Guid roomId, CancellationToken t) =>

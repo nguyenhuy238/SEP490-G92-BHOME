@@ -445,7 +445,7 @@ public static class DependencyInjection
             return new BHome.Application.Billing.BillingAutomationRuntime(host is "Development" or "Testing",
                 config.GetValue<bool>("BillingAutomation:AutomaticJobsEnabled"), demoOwner, deployedDemo)
             {
-                ManualActionsEnabled = host == "Staging" && config.GetValue<bool>("BillingAutomation:ManualActionsEnabled")
+                ManualActionsEnabled = (host is "Staging" or "Production") && config.GetValue<bool>("BillingAutomation:ManualActionsEnabled")
             };
         });
         services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-meter", "Meter", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>(), p.GetRequiredService<BHome.Application.Billing.BillingAutomationRuntime>().WorkerEnabled));
