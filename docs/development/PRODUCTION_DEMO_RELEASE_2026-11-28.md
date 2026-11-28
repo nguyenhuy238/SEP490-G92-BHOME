@@ -112,6 +112,11 @@ Dump/private config/secret chỉ nằm trên VPS, không đưa vào Git hay báo
 | Backup restore, migration clone, schema verifier read-only       | PASS                                                |
 | git diff --check                                                 | PASS                                                |
 
+Kiểm tra bổ sung: resolve Compose candidate và environment safety PASS, approval
+chưa activate. Restore backup vào clone khác rồi chạy DatabaseCheck dựng từ main
+cũ: Compact24 PASS, 17 applied, pending/unknown 0. Đã xóa ba database review sau
+kiểm tra, giữ backup/evidence/config đã chuẩn bị; không để database thử tồn đọng.
+
 Docker local ban đầu tắt: 7 test PDF fail tại fixture. Sau bật Docker nhưng chưa có
 converter, 6 PDF fail. Dựng converter từ Dockerfile có sẵn rồi chạy lại 7 PDF PASS.
 Lượt deployment test đầu thiếu file đóng gói và phát hiện `$sha` chưa khai báo trong
@@ -132,7 +137,8 @@ TRX/log local ở `.tools/production-demo-20261128/`, evidence private trên VPS
    lập lại FROM/TO, không dùng backup rehearsal cũ để thay backup cuối.
 4. Áp migration, schema verifier; backup baseline cũ rồi cập nhật checksum artifact
    main sau PASS. Tính runtime approval đúng SHA, install private overlay và release ba app.
-5. Phải kiểm rollback cùng schema/config mới. Không mặc định image cũ tương thích
+5. Đã kiểm backup phục hồi vào clone tương thích main cũ bằng verifier main cũ;
+   vẫn phải kiểm rollback ứng dụng cùng schema/config mới. Không mặc định image cũ tương thích
    database đã nâng; khi lỗi dừng writer, kiểm checkpoint và không tự restore đè DB
    nếu đã có ghi mới. Chưa diễn tập rollback migration/data Production.
 6. Lưu/check Owner Test/Live, chọn Test, cập nhật callback; smoke auth/isolation,
