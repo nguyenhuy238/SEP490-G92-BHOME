@@ -63,7 +63,7 @@ public sealed partial class Compact24NotificationMvpTests
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE staff_employments
             SET reward_penalty_policy=reward_penalty_policy||jsonb_build_object('LegacyPolicy',jsonb_build_object('amount',123)),
-                history=jsonb_build_array((history->0)||jsonb_build_object('legacyMarker','kept'))
+                history=history||jsonb_build_array((history->0)||jsonb_build_object('legacyMarker','kept'))
             WHERE id={employmentId}
             """);
 
@@ -76,24 +76,24 @@ public sealed partial class Compact24NotificationMvpTests
         var periods = (await owner.GetFromJsonAsync<EmploymentPeriodView[]>(route + "/employments"))!;
         var period = Assert.Single(periods);
         Assert.Null(period.EmploymentType);
-        Assert.Equal(2, period.History.Count);
+        Assert.Equal(3, period.History.Count);
         Assert.Null(period.History[0].Before);
         Assert.Null(period.History[0].After!.EmploymentType);
-        Assert.Equal("", period.History[1].Before!.EmploymentType);
-        Assert.Null(period.History[1].After!.EmploymentType);
-        Assert.Equal(closed, period.History[1].After);
+        Assert.Equal("", period.History[2].Before!.EmploymentType);
+        Assert.Null(period.History[2].After!.EmploymentType);
+        Assert.Equal(closed, period.History[2].After);
         Assert.True(await db.Database.SqlQuery<bool>($"""
             SELECT (
                 reward_penalty_policy->'LegacyPolicy'->>'amount'='123'
-                AND history->0->>'legacyMarker'='kept'
+                AND history->1->>'legacyMarker'='kept'
                 AND history->0->'before'='null'::jsonb
                 AND NOT ((history->0->'after') ? 'employmentType')
-                AND history->1->'before'->>'employmentType'=''
-                AND NOT ((history->1->'after') ? 'employmentType')
-                AND (history->1->>'occurredAt')::timestamptz = (
+                AND history->2->'before'->>'employmentType'=''
+                AND NOT ((history->2->'after') ? 'employmentType')
+                AND (history->2->>'occurredAt')::timestamptz = (
                     SELECT event_at FROM notifications
                     WHERE record_kind='AUDIT' AND notification_type='StaffUpdated'
-                      AND related_entity_id={w.Staff.Id} AND event_at=(history->1->>'occurredAt')::timestamptz
+                      AND related_entity_id={w.Staff.Id} AND event_at=(history->2->>'occurredAt')::timestamptz
                     LIMIT 1)
             ) AS "Value" FROM staff_employments WHERE id={employmentId}
             """).SingleAsync());
