@@ -5,9 +5,11 @@ using BHome.Domain.PropertyManagement;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Persistence.Compact24;
 using BHome.Infrastructure.Modules.Billing.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Billing;
 
@@ -16,14 +18,26 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
     public Task<BillingSchedule?> ScheduleAsync(Guid locationId, CancellationToken t) => db.Set<BillingSchedule>().SingleOrDefaultAsync(s => s.LocationId == locationId, t);
     public Task<BillingSchedule?> ScheduleForPeriodAsync(Guid locationId, DateOnly period, CancellationToken t) =>
         BillingAutomationSchedules.ResolveCalendarAsync(db, locationId, period, t);
-    public async Task<IReadOnlyList<Guid>> TenantBillingLocationIdsAsync(Guid tenantId, CancellationToken t) =>
-        await db.Set<Contract>().AsNoTracking().Where(c => c.TenantUserId == tenantId && c.Status == ContractStatus.Active &&
+    public async Task<IReadOnlyList<Guid>> TenantBillingLocationIdsAsync(Guid tenantId, CancellationToken t)
+    {
+        if (db is Compact24DbContext compact)
+        {
+            await using var tables = await Compact24TableContext.OpenAsync(compact, t);
+            return await (from c in tables.Set<Native.Contract>()
+                          join r in tables.Set<Native.Room>() on c.RoomId equals r.Id
+                          join l in tables.Set<Native.Location>() on r.LocationId equals l.Id
+                          where c.TenantUserId == tenantId && c.Status == (short)ContractStatus.Active &&
+                              (c.ContractType == "MAIN" || c.ContractType == "RENEWAL") && c.ActivatedAt != null && l.IsActive
+                          select r.LocationId).Distinct().ToArrayAsync(t);
+        }
+        return await db.Set<Contract>().AsNoTracking().Where(c => c.TenantUserId == tenantId && c.Status == ContractStatus.Active &&
             (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal) && c.ActivatedAt != null && c.Room.Location.IsActive)
             .Select(c => c.Room.LocationId).Distinct().ToArrayAsync(t);
+    }
     public Task<Room?> RoomAsync(Guid roomId, CancellationToken t) => db.Set<Room>().Include(r => r.Location).SingleOrDefaultAsync(r => r.Id == roomId, t);
     public async Task<T> WithRoomLockAsync<T>(Guid roomId, Func<Task<T>> action, CancellationToken t)
     {
-        var locationId = await db.Set<Room>().AsNoTracking().Where(r => r.Id == roomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t)
+        var locationId = await RoomLocationAsync(roomId, t)
             ?? throw new InvoiceException(404, "room_not_found");
         return await WithLocationLockAsync(locationId, async () =>
         {
@@ -31,12 +45,21 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
             return await action();
         }, t);
     }
+    private async Task<Guid?> RoomLocationAsync(Guid roomId, CancellationToken t)
+    {
+        if (db is Compact24DbContext compact)
+        {
+            await using var tables = await Compact24TableContext.OpenAsync(compact, t);
+            return await tables.Set<Native.Room>().Where(r => r.Id == roomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t);
+        }
+        return await db.Set<Room>().AsNoTracking().Where(r => r.Id == roomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t);
+    }
     public async Task<T> WithLocationLockAsync<T>(Guid locationId, Func<Task<T>> action, CancellationToken t)
     {
         db.ChangeTracker.Clear();
         await using var transaction = await db.Database.BeginTransactionAsync(t);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({locationId.ToString()}, 0))", t);
-        if (!await db.Locations.AnyAsync(l => l.Id == locationId, t)) throw new InvoiceException(404, "billing_location_not_found");
+        if (!await LocationExistsAsync(locationId, t)) throw new InvoiceException(404, "billing_location_not_found");
         try
         {
             var result = await action(); await db.SaveChangesAsync(t); await transaction.CommitAsync(t); return result;
@@ -44,6 +67,15 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
         catch (DbUpdateConcurrencyException) { throw new InvoiceException(409, "invoice_concurrent_change"); }
         catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: "23505" or "23514" or "23P01" })
         { throw new InvoiceException(409, "invoice_concurrent_or_invalid_state"); }
+    }
+    private async Task<bool> LocationExistsAsync(Guid locationId, CancellationToken t)
+    {
+        if (db is Compact24DbContext compact)
+        {
+            await using var tables = await Compact24TableContext.OpenAsync(compact, t);
+            return await tables.Set<Native.Location>().AnyAsync(l => l.Id == locationId, t);
+        }
+        return await db.Locations.AnyAsync(l => l.Id == locationId, t);
     }
     private IQueryable<Invoice> Visible(InvoiceScope scope) => db.Set<Invoice>().Where(i => scope.Owner || scope.Tenant && i.Recipients.Any(r => r.TenantUserId == scope.Actor));
     private static IQueryable<Invoice> Detail(IQueryable<Invoice> source) => source.Include(i => i.Lines).Include(i => i.Recipients).AsSplitQuery();

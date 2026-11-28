@@ -4,6 +4,7 @@ using BHome.Application.PropertyManagement;
 using BHome.Infrastructure.Modules.Notifications;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 
@@ -17,7 +18,11 @@ internal sealed partial class SharedConfigurationStore(Compact24DbContext db, Co
         foreach (var location in locations.Distinct().Order())
         {
             await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({location.ToString()},0))", t);
-            if (validateActiveLocations && !await db.Locations.AnyAsync(l => l.Id == location && l.IsActive, t)) throw new PropertyException(409, "location_inactive_or_missing");
+            if (validateActiveLocations)
+            {
+                await using var tables = await Compact24TableContext.OpenAsync(db, t);
+                if (!await tables.Set<Native.Location>().AnyAsync(l => l.Id == location && l.IsActive, t)) throw new PropertyException(409, "location_inactive_or_missing");
+            }
         }
         var value = await work(); await db.SaveChangesAsync(t); await tx.CommitAsync(t); return value;
     }
