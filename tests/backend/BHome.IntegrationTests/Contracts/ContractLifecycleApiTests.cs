@@ -1772,6 +1772,8 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var certificateRequest = new System.Security.Cryptography.X509Certificates.CertificateRequest(
             "CN=BHOME CI Test Seal", key, System.Security.Cryptography.HashAlgorithmName.SHA256, System.Security.Cryptography.RSASignaturePadding.Pkcs1);
         using var certificate = certificateRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+        // Production rejects the Testing process-key fallback; use a disposable key for these test hosts.
+        var otpSecret = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
         var sealPath = System.IO.Path.GetTempFileName();
         try
         {
@@ -1783,6 +1785,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
                 {
                     ["ContractPdf:TemplateId"] = ContractPdfRendererTests.TemplateId,
                     ["ContractSigning:Methods:Otp"] = "true",
+                    ["ContractSigning:Otp:Secret"] = otpSecret,
                     ["ContractSigning:Seal:PfxPath"] = sealPath
                 }));
                 b.ConfigureTestServices(s =>
