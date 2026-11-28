@@ -21,7 +21,11 @@ public sealed record ContractPreparation(IReadOnlyList<ContractChoice> Locations
     IReadOnlyList<ContractResidentChoice> Residents, IReadOnlyList<ContractChoice> OwnerSigners);
 public sealed record TenantAccountLink(Guid TenantUserId);
 public sealed record ContractDocumentView(Guid Id, Guid ContractId, string Kind, string SnapshotHash,
-    string? TemplateId, int? TemplateVersion, bool DevelopmentOnly, DateTimeOffset RecordedAt);
+    string? TemplateId, int? TemplateVersion, bool DevelopmentOnly, DateTimeOffset RecordedAt)
+{
+    internal static ContractDocumentView From(ContractDocumentFile f) => new(f.Id, f.ContractId, f.Kind.ToString(),
+        f.SnapshotHash, f.TemplateId, f.TemplateVersion, f.DevelopmentOnly, f.RecordedAt);
+}
 public sealed record ContractHistoryView(string Action, Guid? ActorId, DateTimeOffset OccurredAt);
 public sealed record DepositVerificationView(Guid Id, string BankTransactionReference,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Amount, string VerificationReason,

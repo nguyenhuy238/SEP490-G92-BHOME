@@ -1,7 +1,6 @@
 using BHome.Application.Common;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using BHome.Application.IdentityAccess;
 using BHome.Domain.Billing;
@@ -414,7 +413,7 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
     private async Task<T> CommandAsync<T>(Guid location, Guid key, string operation, object input, Func<Task<T>> work, Func<T, Guid> taskId, CancellationToken t)
     {
         if (key == Guid.Empty) throw OperationalTaskException.Invalid("idempotency_key_required");
-        var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(operation + "\n" + JsonSerializer.Serialize(input))));
+        var fingerprint = CommandFingerprint.ForOperation(operation, input);
         return await repository.TransactionAsync(location, Actor, key, async () =>
         {
             var existing = await repository.CommandAsync(Actor, key, t);

@@ -39,13 +39,7 @@ public sealed class YoloMeterCategoryClassifier : IImageCategoryClassifier, IDis
         {
             if (!Convert.ToHexString(SHA256.HashData(bytes)).Equals(options.VisualClassifier.Sha256, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Visual classifier checksum mismatch.");
-            using var config = new SessionOptions
-            {
-                IntraOpNumThreads = options.InferenceThreads,
-                InterOpNumThreads = 1,
-                GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-                LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL
-            };
+            using var config = YoloMeterSceneDetector.CreateSessionOptions(options);
             var model = new InferenceSession(bytes, config);
             try
             {

@@ -12,13 +12,7 @@ internal static class OcrLineSegmentation
         Cv2.CvtColor(crop, gray, ColorConversionCodes.BGR2GRAY);
         Cv2.Threshold(gray, mask, 0, 255, ThresholdTypes.BinaryInv | ThresholdTypes.Otsu);
         if (Cv2.CountNonZero(mask) > mask.Total() / 2) Cv2.BitwiseNot(mask, mask);
-        var columns = new int[mask.Width];
-        var top = mask.Height; var bottom = -1;
-        for (var y = 0; y < mask.Height; y++)
-            for (var x = 0; x < mask.Width; x++)
-                if (mask.At<byte>(y, x) != 0)
-                { columns[x]++; top = Math.Min(top, y); bottom = Math.Max(bottom, y); }
-        var glyphHeight = bottom - top + 1;
+        var (columns, glyphHeight) = MeasureForeground(mask);
         if (glyphHeight < 4) return false;
         var bestDistance = double.MaxValue;
         for (var x = mask.Width / 4; x < mask.Width * 3 / 4; x++)
@@ -33,5 +27,16 @@ internal static class OcrLineSegmentation
             bestDistance = distance; split = center;
         }
         return split > 0;
+    }
+
+    internal static (int[] Columns, int GlyphHeight) MeasureForeground(Mat mask)
+    {
+        var columns = new int[mask.Width];
+        var top = mask.Height; var bottom = -1;
+        for (var y = 0; y < mask.Height; y++)
+            for (var x = 0; x < mask.Width; x++)
+                if (mask.At<byte>(y, x) != 0)
+                { columns[x]++; top = Math.Min(top, y); bottom = Math.Max(bottom, y); }
+        return (columns, bottom - top + 1);
     }
 }

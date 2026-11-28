@@ -1,6 +1,6 @@
 ﻿# BHOME - Refactor để nhóm sinh viên làm chủ mã nguồn
 
-Nhánh: `refactor/bhome-develop`. Mốc gốc: `origin/develop` tại `f3be1bfe` (PR #189). Không lấy các commit riêng của member/THuy làm mốc. Không merge hay deploy khi chưa nghiệm thu.
+Nhánh: `refactor/bhome-develop`. Mốc gốc: `origin/develop` tại `f3be1bfe` (PR #189), đã đồng bộ các thay đổi Develop đến `76dcbbab` qua merge `93d309af`. Không lấy các commit riêng của member/THuy làm mốc. Không merge hay deploy khi chưa nghiệm thu.
 
 ## Mục tiêu và giới hạn
 
@@ -46,15 +46,22 @@ Git quản lý 3.300 file ở mốc gốc: Backend C# 681, Owner Web TS/TSX 450,
 - Repository: bỏ track `.expo/README.md` và `.expo/devices.json`; file local vẫn giữ và được ignore. Giữ migrations, seed/demo có consumer, các API và lịch sử. Sửa stack lỗi thời trong README và đánh dấu thiết kế foundation cũ là lịch sử.
 - Hướng dẫn nhóm: [Mục lục đọc mã nguồn](../business-flows/README.md), [Backend](../business-flows/BACKEND.md), [Frontend](../business-flows/FRONTEND.md). Đối chiếu các UC-01–38 và JOB-01–09 với Report 3 hiện lưu trong repo; đây là chỉ mục, không phải báo cáo đạt tất cả UC.
 
+### Đợt tinh giản cuối và chuyển kiểm thử sang luồng thật
+
+- Backend: dùng chung cách tạo fingerprint SHA-256 cho các lệnh có cùng cách serialize; giữ các chế độ serializer và loại khóa khác biệt. Gom các phép kiểm tra trùng nhau trong OCR, truy vấn nhiệm vụ bàn giao và phạm vi biểu phí; chuyển nguyên các method PDF/evidence bàn giao sang partial file tài liệu hiện có. Không tạo thêm service/DI, không đổi migration, API, transaction hay định dạng PDF.
+- Owner Web: bỏ `TasksApiPage.tsx` và `LocationRoomDefaultsPicker.tsx` chỉ còn test gọi; chuyển kiểm thử sang workspace công việc và màn tạo phòng đang chạy. Tách logic thuần của wizard cơ sở và bản nháp bàn giao khỏi JSX, dùng chung hàm tải Blob và tính đơn giá kiểm kê. Giữ cả wizard live và mock vì khác trách nhiệm và hợp đồng dữ liệu.
+- Mobile: bỏ `TenantEvidenceDraft.tsx`, `OwnerAttentionSummary.tsx` và wrapper `TenantProfileScreen.tsx` chỉ còn test gọi; chuyển kiểm thử sang trình xác thực ảnh sự cố, tổng quan Chủ trọ và hồ sơ đang chạy. Gom logic bản nháp bàn giao/trả phòng; giữ giới hạn, thứ tự, API và màn hình hiện hành.
+- Chi tiết các module, điểm vào và lý do giữ cấu trúc xem [Backend](../business-flows/BACKEND.md) và [Frontend](../business-flows/FRONTEND.md). Không chia file theo số dòng một cách máy móc.
+
 ### Các ứng viên còn giữ có lý do
 
-| Nhóm                                                                                                                                                                          | Lý do không xóa hoặc hợp nhất vội                                                                                              |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `TasksApiPage.tsx`, `HoldingDepositAllocation`, `InitialMeterTask`, `TenantSettlementReceivables`, `SigningCertificates`, `TenantEvidenceDraft` và component chỉ còn test gọi | Phải chuyển các assertion hữu ích sang luồng đang chạy trước khi xóa component và test cũ; không giảm coverage để đạt số file. |
-| `ErrorBoundary.tsx`, `useSmsRecovery.ts` của client-core                                                                                                                      | Có wildcard export package; chưa chứng minh không có consumer ngoài repo.                                                      |
-| Legacy persistence và các đường đọc dữ liệu đã ký                                                                                                                             | Có fixture/test, API hoặc dữ liệu lịch sử cần bảo toàn.                                                                        |
-| Validation khác null/role/annotation/mã lỗi; ledger, chế độ ký và thanh toán                                                                                                  | Không đồng nhất về semantics dù code nhìn giống nhau.                                                                          |
-| Hơn 550 tài liệu lịch sử                                                                                                                                                      | Phân loại bằng mục lục thay vì xóa bằng chứng hoặc sửa báo cáo lịch sử.                                                        |
+| Nhóm                                                                                                                               | Lý do không xóa hoặc hợp nhất vội                                                |
+| ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `HoldingDepositAllocation`, `InitialMeterTask`, `TenantSettlementReceivables`, `SigningCertificates` và các component còn consumer | Giữ đường chạy hoặc compatibility cần thiết; không giảm coverage để đạt số file. |
+| `ErrorBoundary.tsx`, `useSmsRecovery.ts` của client-core                                                                           | Có wildcard export package; chưa chứng minh không có consumer ngoài repo.        |
+| Legacy persistence và các đường đọc dữ liệu đã ký                                                                                  | Có fixture/test, API hoặc dữ liệu lịch sử cần bảo toàn.                          |
+| Validation khác null/role/annotation/mã lỗi; ledger, chế độ ký và thanh toán                                                       | Không đồng nhất về semantics dù code nhìn giống nhau.                            |
+| Hơn 550 tài liệu lịch sử                                                                                                           | Phân loại bằng mục lục thay vì xóa bằng chứng hoặc sửa báo cáo lịch sử.          |
 
 ## Bản đồ đọc code ban đầu: hợp đồng và bàn giao
 

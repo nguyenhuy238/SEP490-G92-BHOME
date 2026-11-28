@@ -1,8 +1,8 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { TasksApiPage } from './TasksApiPage';
+import TasksPage from './pages/TasksPage';
 import { TaskStatus } from './components/TaskDetailDrawer';
 import type { OwnerTask } from './taskContracts';
 import { ApiError } from '../../../../../packages/client-core/src/api';
@@ -34,6 +34,19 @@ const staff = {
   accountVersion: 'v1',
   employment: null,
 };
+const workRow = {
+  ...task,
+  kind: 'task',
+  workType: 'AdHoc',
+  source: 'Owner',
+  locationName: 'Cơ sở A',
+  status: 'Chờ xác minh',
+  phase: 'needsOwner',
+  nextAction: 'Xác minh kết quả',
+  staffName: staff.fullName,
+  workOrderCount: 0,
+  createdAt: '2026-11-09T00:00:00Z',
+};
 beforeEach(() => {
   mocks.request.mockReset();
   mocks.request.mockImplementation(async (path: string) => {
@@ -57,6 +70,14 @@ beforeEach(() => {
     if (path === '/api/v1/staff?page=1&pageSize=100') return { items: [staff], totalCount: 1 };
     if (path === '/api/v1/operational-tasks/task/actors')
       return [{ userId: 'owner', displayName: 'Owner synthetic' }];
+    if (path.startsWith('/api/v1/operational-work?'))
+      return {
+        items: [workRow],
+        totalCount: 1,
+        page: 1,
+        pageSize: 20,
+        counts: { total: 1, needsOwner: 1, active: 0, closed: 0, overdue: 0, verification: 1 },
+      };
     return path.endsWith('/evidence')
       ? []
       : path === '/api/v1/operational-tasks/task'
@@ -68,6 +89,7 @@ beforeEach(() => {
 it('creates work for an asset in a common area and keeps the assigned Staff derived from location', async () => {
   mount('/operational-tasks?locationId=location');
   fireEvent.click(await screen.findByRole('button', { name: /^Tạo công việc$/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /Công việc thông thường/ }));
   const dialog = await screen.findByRole('dialog', { name: 'Tạo công việc' });
   await within(dialog).findByText('Staff phụ trách: Staff synthetic');
   fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: 'Phạm vi công việc' }));
@@ -106,14 +128,17 @@ it('creates work for an asset in a common area and keeps the assigned Staff deri
     expect.anything(),
   );
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 function mount(url = '/operational-tasks') {
   render(
     <MemoryRouter initialEntries={[url]}>
       <QueryClientProvider
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
       >
-        <TasksApiPage />
+        <TasksPage />
       </QueryClientProvider>
     </MemoryRouter>,
   );
@@ -182,13 +207,14 @@ it('opens a deep-linked location and recorded Staff responsibility filter on the
       expect.anything(),
     ),
   );
+  fireEvent.click(screen.getByRole('button', { name: 'Bộ lọc nâng cao' }));
   expect(
     await screen.findByRole('combobox', { name: 'Người được giao trong hồ sơ' }),
   ).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Xóa bộ lọc' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Làm mới' }));
   await waitFor(() =>
     expect(mocks.request).toHaveBeenCalledWith(
-      '/api/v1/operational-tasks?page=1&pageSize=20',
+      '/api/v1/operational-work?view=work&page=1&pageSize=20',
       expect.anything(),
     ),
   );
@@ -208,12 +234,12 @@ it('keeps task status, due date and review action visible in the compact table',
   mount();
   const table = await screen.findByRole('table', { name: 'Danh sách công việc' });
   const row = await within(table).findByRole('row', { name: /Synthetic task/ });
-  expect(
-    within(table)
-      .getAllByRole('columnheader')
-      .map((cell) => cell.textContent),
-  ).toEqual(['Công việc', 'Thao tác']);
-  expect(within(row).getByText(/Hạn:/)).toBeVisible();
+  expect(within(table).getAllByRole('columnheader')).toHaveLength(2);
+  expect(within(table).getByRole('columnheader', { name: 'Công việc' })).toBeVisible();
+  expect(within(table).getByRole('columnheader', { name: 'Thao tác' })).toBeVisible();
+  expect(within(row).getByText('Chờ xác minh')).toBeVisible();
+  expect(within(row).getByText('Hạn hoàn thành')).toBeVisible();
+  expect(within(row).getByText('10/11/2026')).toBeVisible();
   fireEvent.click(within(row).getByRole('button', { name: 'Xem chi tiết' }));
   expect(await screen.findByRole('button', { name: 'Nghiệm thu' })).toBeVisible();
 });
@@ -267,7 +293,7 @@ it('shows Staff-completed move-in inventory and linked BF-07 incident with no Ow
   mount('/operational-tasks?taskId=task');
   const drawer = await screen.findByRole('dialog', { name: 'Chi tiết công việc' });
   expect(await within(drawer).findByText('Báo cáo kiểm kê trước bàn giao')).toBeInTheDocument();
-  expect(within(drawer).getByText(/2\/2 loại đã kiểm tra/)).toBeInTheDocument();
+  expect(await within(drawer).findByText(/2\/2 loại đã kiểm tra/)).toBeInTheDocument();
   expect(within(drawer).queryByText(/Loại:\s*Kiểm kê trước bàn giao/)).not.toBeInTheDocument();
   expect(within(drawer).queryByRole('button', { name: 'Nghiệm thu' })).not.toBeInTheDocument();
   fireEvent.click(within(drawer).getByText('Bàn học'));
@@ -298,6 +324,7 @@ it('labels an archived prior-Staff handover as Đã chuyển giao in task histor
   });
   mount('/operational-tasks?taskId=task');
   const drawer = await screen.findByRole('dialog', { name: 'Chi tiết công việc' });
+  fireEvent.click(await within(drawer).findByRole('tab', { name: 'Lịch sử' }));
   expect(await within(drawer).findByText('Đã chuyển giao')).toBeInTheDocument();
 });
 
@@ -324,6 +351,7 @@ it('labels inherited checklist progress as Kế thừa tiến độ kiểm kê i
   });
   mount('/operational-tasks?taskId=task');
   const drawer = await screen.findByRole('dialog', { name: 'Chi tiết công việc' });
+  fireEvent.click(await within(drawer).findByRole('tab', { name: 'Lịch sử' }));
   expect(await within(drawer).findByText('Kế thừa tiến độ kiểm kê')).toBeInTheDocument();
 });
 

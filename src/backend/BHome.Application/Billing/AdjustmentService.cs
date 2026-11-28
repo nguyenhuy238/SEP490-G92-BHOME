@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+using BHome.Application.Common;
 using System.Text.Json;
 using BHome.Application.Contracts;
 using BHome.Application.IdentityAccess;
@@ -35,7 +35,7 @@ public sealed partial class AdjustmentService(IAdjustmentRepository repository, 
     }
     private async Task<InvoiceAdjustmentRequest> Request(Guid id, CancellationToken t) =>
         await repository.RequestAsync(id, Scope, t) ?? throw new AdjustmentException(404, "adjustment_not_found");
-    private static string Fingerprint(object value) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value)));
+    private static string Fingerprint(object value) => CommandFingerprint.ForInput(value);
     private async Task<Guid?> Replay(Guid key, string operation, object input, CancellationToken t)
     {
         if (key == Guid.Empty) throw new AdjustmentException(400, "idempotency_key_required");

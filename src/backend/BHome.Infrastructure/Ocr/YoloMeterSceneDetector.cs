@@ -25,13 +25,7 @@ public sealed class YoloMeterSceneDetector : IMeterSceneDetector, IDisposable
             using var file = File.OpenRead(path);
             if (!Convert.ToHexString(SHA256.HashData(file)).Equals(Sha256, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Meter detector checksum mismatch.");
-            using var config = new SessionOptions
-            {
-                IntraOpNumThreads = options.InferenceThreads,
-                InterOpNumThreads = 1,
-                GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-                LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL
-            };
+            using var config = CreateSessionOptions(options);
             var loaded = new InferenceSession(path, config);
             if (loaded.InputMetadata.Count != 1 || !loaded.InputMetadata.First().Value.Dimensions.SequenceEqual(new[] { 1, 3, 640, 640 }) ||
                 loaded.OutputMetadata.Count != 1 || !loaded.OutputMetadata.First().Value.Dimensions.SequenceEqual(new[] { 1, 18, 8400 }))
@@ -39,6 +33,14 @@ public sealed class YoloMeterSceneDetector : IMeterSceneDetector, IDisposable
             return loaded;
         });
     }
+
+    internal static SessionOptions CreateSessionOptions(OcrOptions options) => new()
+    {
+        IntraOpNumThreads = options.InferenceThreads,
+        InterOpNumThreads = 1,
+        GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
+        LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL
+    };
 
     // Only analog water displays were evaluated. Other trusted task types retain
     // the existing PP-OCR/manual path rather than applying an unvalidated model.

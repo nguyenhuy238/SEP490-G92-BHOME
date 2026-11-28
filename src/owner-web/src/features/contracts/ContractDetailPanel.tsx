@@ -70,15 +70,8 @@ import { useContractFunds } from './useContractFunds';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CloseIcon from '@mui/icons-material/Close';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import { downloadBlob } from '../../utils/downloadBlob';
 
-function downloadBlob(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob),
-    link = document.createElement('a');
-  link.href = url;
-  link.download = name;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 export function ContractDetailPanel({
   api,
   id,

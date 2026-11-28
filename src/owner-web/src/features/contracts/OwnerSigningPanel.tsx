@@ -34,19 +34,11 @@ import {
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { useSigningApi } from './useContractsApi';
 import { SignaturePlacementPicker, type PlacementChoice } from './SignaturePlacementPicker';
+import { downloadBlob as download } from '../../utils/downloadBlob';
 
 const DONE = ['Signed', 'Simulated'];
 const OPEN = (s: Signature) => !['Signed', 'Simulated', 'Failed'].includes(s.status);
 const MAX_BYTES = 10 * 1024 * 1024;
-
-function download(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob),
-    link = document.createElement('a');
-  link.href = url;
-  link.download = name;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 
 // The Owner's part of "Chữ ký số" for the in-app methods (mockups 3.2.2 web):
 // UPLOAD_PROOF – download the issued PDF, sign it with MySign (certificate registered through VNeID), upload it back;

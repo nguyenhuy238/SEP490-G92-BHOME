@@ -1,5 +1,5 @@
 using System.Security.Cryptography;
-using System.Text;
+using BHome.Application.Common;
 using System.Text.Json;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Jobs;
@@ -234,7 +234,7 @@ public sealed partial class IncidentService(IIncidentRepository repository, ICur
         Func<Task> authorize, Func<Task<IncidentCommandResult>> work, CancellationToken t)
     {
         Key(key);
-        var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(operation + "\n" + JsonSerializer.Serialize(input))));
+        var fingerprint = CommandFingerprint.ForOperation(operation, input);
         return await repository.TransactionAsync(location, room, Actor, key, async () =>
         {
             // Recheck authority even for replay; a historical response is not a lasting access grant.

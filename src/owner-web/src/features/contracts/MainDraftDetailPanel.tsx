@@ -14,6 +14,7 @@ import { MainDraftReleasePanel } from './MainDraftReleasePanel';
 import { ContractDocumentViewer } from './ContractDocumentViewer';
 import { useObjectUrl } from './useObjectUrl';
 import { contractPdfName } from '../../../../../packages/client-core/src/contractPdfName';
+import { downloadBlob } from '../../utils/downloadBlob';
 
 export function MainDraftDetailPanel({
   id,
@@ -91,18 +92,14 @@ export function MainDraftDetailPanel({
           setPreviewFile({ id: file.id, blob: new Blob([bytes], { type: 'application/pdf' }) });
           return;
         }
-        const url = URL.createObjectURL(
+        downloadBlob(
           new Blob([bytes], {
             type: pdf
               ? 'application/pdf'
               : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           }),
+          `hop-dong-nhap.${pdf ? 'pdf' : 'docx'}`,
         );
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `hop-dong-nhap.${pdf ? 'pdf' : 'docx'}`;
-        link.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
       } finally {
         bytes.fill(0);
       }

@@ -37,13 +37,7 @@ internal static class MeterDisplaySplitter
     {
         split = 0;
         using var mask = Foreground(crop);
-        var columns = new int[mask.Width];
-        var top = mask.Height; var bottom = -1;
-        for (var y = 0; y < mask.Height; y++)
-            for (var x = 0; x < mask.Width; x++)
-                if (mask.At<byte>(y, x) != 0)
-                { columns[x]++; top = Math.Min(top, y); bottom = Math.Max(bottom, y); }
-        var glyphHeight = bottom - top + 1;
+        var (columns, glyphHeight) = OcrLineSegmentation.MeasureForeground(mask);
         if (glyphHeight < 4) return false;
         var first = Array.FindIndex(columns, c => c > 0);
         var last = Array.FindLastIndex(columns, c => c > 0);

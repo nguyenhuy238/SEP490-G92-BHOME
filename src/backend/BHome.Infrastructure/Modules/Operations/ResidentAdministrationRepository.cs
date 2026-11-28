@@ -5,7 +5,6 @@ using BHome.Application.Operations;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -22,8 +21,7 @@ internal sealed class ResidentAdministrationRepository(Compact24DbContext db) : 
               WHERE h.value->>'recordType'='Resident' ORDER BY h.n DESC LIMIT 1),0)::smallint
         FROM residents r LEFT JOIN rooms room ON room.id=r.current_room_id LEFT JOIN users u ON u.id=r.user_id
         """;
-    private NpgsqlCommand Command(string sql) => new(sql, (NpgsqlConnection)db.Database.GetDbConnection(),
-        (NpgsqlTransaction?)db.Database.CurrentTransaction?.GetDbTransaction());
+    private NpgsqlCommand Command(string sql) => db.CreateSqlCommand(sql);
     public async Task<OperationsPage<ResidentAdministrationView>> ListAsync(ResidentAdministrationQuery query, CancellationToken t)
     {
         await db.Database.OpenConnectionAsync(t);

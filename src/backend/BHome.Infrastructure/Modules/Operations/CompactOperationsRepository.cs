@@ -12,7 +12,6 @@ using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -1053,7 +1052,7 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
     private static void AddNullableUuid(NpgsqlCommand command, string name, Guid? value) => command.Parameters.Add(new NpgsqlParameter(name, NpgsqlDbType.Uuid) { Value = (object?)value ?? DBNull.Value });
 
     private async Task Open(CancellationToken t) { if (db.Database.GetDbConnection().State != ConnectionState.Open) await db.Database.OpenConnectionAsync(t); }
-    private NpgsqlCommand Command(string sql) => new(sql, (NpgsqlConnection)db.Database.GetDbConnection(), (NpgsqlTransaction?)db.Database.CurrentTransaction?.GetDbTransaction());
+    private NpgsqlCommand Command(string sql) => db.CreateSqlCommand(sql);
 
     private sealed record StoredPhoto(string ObjectKey, string ContentType, long Length, int? Index = null);
     private sealed record LocationProfile(string Summary = "", IReadOnlyList<string>? Amenities = null,

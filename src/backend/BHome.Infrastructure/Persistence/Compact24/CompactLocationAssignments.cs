@@ -5,7 +5,6 @@ using BHome.Application.IdentityAccess;
 using BHome.Application.Locations;
 using BHome.Domain.IdentityAccess;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 using BHome.Domain.Billing;
 using BHome.Domain.IncidentMaintenance;
@@ -617,8 +616,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         query.Parameters.AddWithValue("staff", staffId); query.Parameters.AddWithValue("location", locationId); query.Parameters.AddWithValue("date", today);
         return (bool)(await query.ExecuteScalarAsync(token))!;
     }
-    private NpgsqlCommand Command(string sql) => new(sql, (NpgsqlConnection)db.Database.GetDbConnection(),
-        (NpgsqlTransaction?)db.Database.CurrentTransaction?.GetDbTransaction());
+    private NpgsqlCommand Command(string sql) => db.CreateSqlCommand(sql);
     private async Task LockStaffAsync(Guid staff, CancellationToken t)
     {
         await using var command = Command("SELECT id FROM users WHERE id=@id FOR SHARE"); command.Parameters.AddWithValue("id", staff);

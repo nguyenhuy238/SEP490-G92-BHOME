@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using BHome.Application.IdentityAccess;
 using BHome.Domain.IdentityAccess;
@@ -33,7 +32,7 @@ public abstract class SetupWorkspaceService(ISetupWorkspaceStore store, ICurrent
     { await Scope(location, false, t); return await store.ListAsync(location, kind, t); }
     protected static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     protected static T Read<T>(SetupDocument doc) => doc.Data.Deserialize<T>(Json) ?? throw new PropertyException(409, "invalid_setup_document");
-    protected static Guid Key(string value) => new(SHA256.HashData(Encoding.UTF8.GetBytes(value)).AsSpan(0, 16));
+    protected static Guid Key(string value) => LocationSetupKeys.Key(value);
     protected static string Hash(object value) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value, Json)));
     protected static bool EqualText(string? a, string? b) => string.Equals(a?.Trim(), b?.Trim(), StringComparison.OrdinalIgnoreCase);
     protected static bool IsValidEvidence(SetupDocument document, Guid location)

@@ -2,7 +2,6 @@ using BHome.Application.Common;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Security.Cryptography;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using BHome.Application.IdentityAccess;
 using BHome.Domain.Billing;
@@ -31,7 +30,7 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
             foreach (var annotation in parameter.GetCustomAttributes(typeof(ValidationAttribute), true).Cast<ValidationAttribute>())
                 if (!annotation.IsValid(value.GetType().GetProperty(parameter.Name!)!.GetValue(value))) throw new PaymentException(400, "invalid_payment_input");
     }
-    private static string Fingerprint(object value) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value)));
+    private static string Fingerprint(object value) => CommandFingerprint.ForInput(value);
     private async Task<Guid?> Replay(Guid key, string operation, object input, CancellationToken t)
     {
         if (key == Guid.Empty) throw new PaymentException(400, "idempotency_key_required");

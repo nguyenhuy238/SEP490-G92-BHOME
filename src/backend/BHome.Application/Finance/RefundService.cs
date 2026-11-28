@@ -1,5 +1,5 @@
 using System.Security.Cryptography;
-using System.Text.Json;
+using BHome.Application.Common;
 using System.Text.Json.Serialization;
 using System.ComponentModel.DataAnnotations.Schema;
 using BHome.Application.Contracts;
@@ -125,7 +125,7 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
     private static string Reason(string value) => string.IsNullOrWhiteSpace(value) || value.Length > 2000
         ? throw new FinanceException(400, "invalid_refund_reason") : value.Trim();
     private static void Key(Guid key) { if (key == Guid.Empty) throw new FinanceException(400, "idempotency_key_required"); }
-    private static string Hash(object value) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value)));
+    private static string Hash(object value) => CommandFingerprint.ForInput(value);
     private static RefundView View(RefundRecord row) => new(row.Id, row.SourcePaymentId, row.BeneficiaryResidentId,
         row.BeneficiaryLabel, row.Amount, row.Reason, row.Status, row.Version, row.RequestedAt, row.DecisionReason,
         row.DecidedAt, row.ExecutedAt, row.ExternalReference, row.IsDevelopmentDemo, row.State.Events,

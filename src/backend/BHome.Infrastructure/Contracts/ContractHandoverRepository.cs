@@ -653,10 +653,13 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             TaskVersion = inventoryTask.Version
         });
     }
+    private Task<OperationalTask?> FindMoveInTaskForUpdateAsync(Guid contractId, CancellationToken t) =>
+        db.Set<OperationalTask>().SingleOrDefaultAsync(x => x.Id == ContractHandoverTaskIds.MoveIn(contractId), t);
+
     public async Task SubmitMoveInTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t)
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
-        var task = await db.Set<OperationalTask>().SingleOrDefaultAsync(x => x.Id == ContractHandoverTaskIds.MoveIn(contractId), t)
+        var task = await FindMoveInTaskForUpdateAsync(contractId, t)
             ?? throw ContractException.Conflict("move_in_task_required");
         if (task.AssignedStaffUserId != actor || task.Status != MeterTaskStatus.InProgress)
             throw ContractException.Conflict("move_in_task_not_started");
@@ -668,7 +671,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     public async Task ReopenMoveInTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t)
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
-        var task = await db.Set<OperationalTask>().SingleOrDefaultAsync(x => x.Id == ContractHandoverTaskIds.MoveIn(contractId), t)
+        var task = await FindMoveInTaskForUpdateAsync(contractId, t)
             ?? throw ContractException.Conflict("move_in_task_required");
         if (task.Status != MeterTaskStatus.PendingVerification)
             throw ContractException.Conflict("move_in_task_not_submitted");
@@ -679,7 +682,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     public async Task CompleteMoveInTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t)
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
-        var task = await db.Set<OperationalTask>().SingleOrDefaultAsync(x => x.Id == ContractHandoverTaskIds.MoveIn(contractId), t);
+        var task = await FindMoveInTaskForUpdateAsync(contractId, t);
         if (task is null || task.Status == MeterTaskStatus.Completed) return;
         if (task.Status != MeterTaskStatus.PendingVerification) throw ContractException.Conflict("move_in_task_not_submitted");
         task.ApplyAction("verify", now, actor); task.Version++;

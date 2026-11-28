@@ -277,7 +277,7 @@ public sealed partial class Compact24DbContext
         if (entry.Entity is BHome.Infrastructure.Jobs.BackgroundJobRecord job)
         {
             id = job.Id;
-            sourceKey = "job:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new[] { job.Name, job.IdempotencyKey }))));
+            sourceKey = CompactJobPersistence.Key(job.Name, job.IdempotencyKey);
             data = JsonSerializer.Serialize(new { schemaVersion = 1, name = job.Name, idempotencyKey = job.IdempotencyKey, payload = JsonNode.Parse(job.PayloadJson), lastErrorCode = job.LastErrorCode });
         }
         else if (entry.Metadata.FindProperty("Id") is not null) id = (Guid)entry.Property("Id").CurrentValue!;
@@ -302,10 +302,13 @@ public sealed partial class Compact24DbContext
 
     internal static Guid DeterministicId(string key) => new(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key)).AsSpan(0, 16));
 
+    internal NpgsqlCommand CreateSqlCommand(string sql) => new(sql, (NpgsqlConnection)Database.GetDbConnection(),
+        (NpgsqlTransaction?)Database.CurrentTransaction?.GetDbTransaction());
+
     private async Task<int> ExecuteAsync(string sql, CancellationToken token, params (string Name, object? Value)[] parameters)
     {
         await Database.OpenConnectionAsync(token);
-        await using var cmd = new NpgsqlCommand(sql, (NpgsqlConnection)Database.GetDbConnection(), (NpgsqlTransaction?)Database.CurrentTransaction?.GetDbTransaction());
+        await using var cmd = CreateSqlCommand(sql);
         foreach (var (name, value) in parameters)
         {
             if (value is null) cmd.Parameters.Add(new NpgsqlParameter(name, NpgsqlDbType.Unknown) { Value = DBNull.Value });

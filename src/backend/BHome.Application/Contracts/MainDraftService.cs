@@ -193,7 +193,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
         var preparation = await PrepareAsync(c.RoomId, c.RepresentativeResidentId, c.Residents.Select(r => r.ResidentId).ToArray(), c.StartDate, t);
         return new(c.Id, c.Status.ToString(), c.DraftVersion, state.Input, preparation with { Charges = state.Charges, SecurityDeposit = c.RequiredDeposit });
     }
-    private static ContractDocumentView FileView(ContractDocumentFile f) => new(f.Id, f.ContractId, f.Kind.ToString(), f.SnapshotHash, f.TemplateId, f.TemplateVersion, f.DevelopmentOnly, f.RecordedAt);
+    private static ContractDocumentView FileView(ContractDocumentFile f) => ContractDocumentView.From(f);
     public async Task<MainDraftFiles> GenerateAsync(Guid id, CancellationToken t)
     {
         var before = await Load(id, t);

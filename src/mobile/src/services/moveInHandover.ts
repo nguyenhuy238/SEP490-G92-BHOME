@@ -5,6 +5,7 @@ import {
   type HandoverReading,
 } from '../../../../packages/client-core/src/contracts';
 import { NO_CERTIFICATE, type SigningOtpView } from '../../../../packages/client-core/src/signing';
+import type { MoveInInventory, MoveInInventoryItem } from './moveInInventory';
 
 export type MoveInDraftStatus =
   | 'Draft'
@@ -236,6 +237,64 @@ export function moveInHandover(api: ContractClient) {
     confirm: (id: string, version: number, note: string, key: string) =>
       mutate(id, '/tenant-confirmation', { version, note: note.trim() }, key),
   };
+}
+
+export function hasCompleteRoomInspection(value: MoveInDraft): boolean {
+  return (
+    (value.evidenceIds ?? []).length > 0 &&
+    roomHandoverChecks.every(({ code }) => {
+      const matches = (value.roomChecks ?? []).filter((check) => check.code === code);
+      if (matches.length !== 1) return false;
+      const check = matches[0]!;
+      return (
+        (check.status === 'Passed' ||
+          check.status === 'NotApplicable' ||
+          check.status === 'Issue') &&
+        (check.status === 'NotApplicable' || (check.evidenceIds ?? []).length > 0)
+      );
+    })
+  );
+}
+
+function hasCompleteAssetInspection(value: MoveInDraft): boolean {
+  return (
+    value.noAssetsConfirmed ||
+    (value.assets.length > 0 &&
+      value.assets.every((asset) => asset.checked && (asset.evidenceIds ?? []).length > 0))
+  );
+}
+
+export function hasSavedInventoryItem(item: MoveInInventoryItem, completed = false): boolean {
+  return (
+    item.condition !== null &&
+    item.actualQuantity !== null &&
+    (completed || item.actualQuantity === 0 || (item.evidenceIds ?? []).length > 0)
+  );
+}
+
+export function hasCompleteAssetSection(
+  value: MoveInDraft,
+  inventory: MoveInInventory | null,
+): boolean {
+  if (!value.moveInTask?.inventoryTaskId) return hasCompleteAssetInspection(value);
+  return (
+    inventory?.status === 'Completed' &&
+    inventory.contractId === value.contractId &&
+    inventory.items.length === value.assets.length &&
+    value.assets.every((asset) =>
+      inventory.items.some((item) => item.id === asset.id && hasSavedInventoryItem(item, true)),
+    )
+  );
+}
+
+export function firstUnfinishedStep(
+  value: MoveInDraft,
+  inventory: MoveInInventory | null = null,
+): number {
+  if (!value.electricity || !value.water) return 0;
+  if (!hasCompleteRoomInspection(value)) return 1;
+  if (!hasCompleteAssetSection(value, inventory)) return 2;
+  return 3;
 }
 
 export function canTenantRespondToMoveIn(draft: MoveInDraft | null): boolean {

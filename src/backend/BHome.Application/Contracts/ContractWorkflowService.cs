@@ -51,8 +51,7 @@ public sealed partial class ContractService
         return Workflow.LinkTenantAsync(residentId, input.TenantUserId, Actor, clock.GetUtcNow(), t);
     }
 
-    private static ContractDocumentView DocumentView(ContractDocumentFile f) => new(f.Id, f.ContractId, f.Kind.ToString(),
-        f.SnapshotHash, f.TemplateId, f.TemplateVersion, f.DevelopmentOnly, f.RecordedAt);
+    private static ContractDocumentView DocumentView(ContractDocumentFile f) => ContractDocumentView.From(f);
 
     public Task<ContractDocumentView> GeneratePreviewAsync(Guid id, Guid key, CancellationToken t) =>
         Mutate(id, [Roles.Owner, Roles.Staff, Roles.Tenant], async c =>

@@ -46,6 +46,10 @@ import { randomUUID } from '../../lib/randomUUID';
 import { canUseLocalMeterDemo, meterDemoJpegBytes } from '../../lib/meterDemoCapture';
 import {
   canStaffEditMoveIn,
+  hasCompleteRoomInspection,
+  hasSavedInventoryItem,
+  hasCompleteAssetSection,
+  firstUnfinishedStep,
   canTenantRespondToMoveIn,
   moveInReinspectionLabel,
   moveInHandover,
@@ -63,11 +67,7 @@ import { SignaturePad } from './SignaturePad';
 import { HandoverAssetFields } from './HandoverAssetFields';
 import { MeterTaskScreen } from '../../app/meter';
 import { StaffMoveInInventoryScreen } from '../../screens/StaffMoveInInventoryScreen';
-import {
-  inventoryStatusLabels,
-  type MoveInInventory,
-  type MoveInInventoryItem,
-} from '../../services/moveInInventory';
+import { inventoryStatusLabels, type MoveInInventory } from '../../services/moveInInventory';
 import { colors } from '../../theme/theme';
 
 const statusLabels = {
@@ -205,58 +205,6 @@ const wizardStyles = StyleSheet.create({
     borderRadius: 18,
   },
 });
-
-function hasCompleteRoomInspection(value: MoveInDraft): boolean {
-  return (
-    (value.evidenceIds ?? []).length > 0 &&
-    roomHandoverChecks.every(({ code }) => {
-      const matches = (value.roomChecks ?? []).filter((check) => check.code === code);
-      if (matches.length !== 1) return false;
-      const check = matches[0]!;
-      return (
-        (check.status === 'Passed' ||
-          check.status === 'NotApplicable' ||
-          check.status === 'Issue') &&
-        (check.status === 'NotApplicable' || (check.evidenceIds ?? []).length > 0)
-      );
-    })
-  );
-}
-
-function hasCompleteAssetInspection(value: MoveInDraft): boolean {
-  return (
-    value.noAssetsConfirmed ||
-    (value.assets.length > 0 &&
-      value.assets.every((asset) => asset.checked && (asset.evidenceIds ?? []).length > 0))
-  );
-}
-
-function hasSavedInventoryItem(item: MoveInInventoryItem, completed = false): boolean {
-  return (
-    item.condition !== null &&
-    item.actualQuantity !== null &&
-    (completed || item.actualQuantity === 0 || (item.evidenceIds ?? []).length > 0)
-  );
-}
-
-function hasCompleteAssetSection(value: MoveInDraft, inventory: MoveInInventory | null): boolean {
-  if (!value.moveInTask?.inventoryTaskId) return hasCompleteAssetInspection(value);
-  return (
-    inventory?.status === 'Completed' &&
-    inventory.contractId === value.contractId &&
-    inventory.items.length === value.assets.length &&
-    value.assets.every((asset) =>
-      inventory.items.some((item) => item.id === asset.id && hasSavedInventoryItem(item, true)),
-    )
-  );
-}
-
-function firstUnfinishedStep(value: MoveInDraft, inventory: MoveInInventory | null = null): number {
-  if (!value.electricity || !value.water) return 0;
-  if (!hasCompleteRoomInspection(value)) return 1;
-  if (!hasCompleteAssetSection(value, inventory)) return 2;
-  return 3;
-}
 
 // Synthetic test-only artwork; it never depicts a real room or a meter reading.
 function handoverDemoJpeg(): Uint8Array<ArrayBuffer> {

@@ -1,5 +1,5 @@
 using System.Security.Cryptography;
-using System.Text.Json;
+using BHome.Application.Common;
 using System.Text.Json.Serialization;
 using BHome.Application.Contracts;
 using BHome.Application.IdentityAccess;
@@ -97,7 +97,7 @@ public sealed class TenantRefundPetitionService(
         return value;
     }
     private static string Fingerprint(object data) =>
-        Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(data)));
+        CommandFingerprint.ForInput(data);
     private static void Page(int page, int size)
     {
         if (page < 1 || size is < 1 or > 100 || (long)(page - 1) * size > int.MaxValue)

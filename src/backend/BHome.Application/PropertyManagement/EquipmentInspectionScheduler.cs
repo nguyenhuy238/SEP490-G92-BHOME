@@ -3,8 +3,6 @@ using BHome.Application.StaffOperations;
 using BHome.Domain.Billing;
 using BHome.Domain.PropertyManagement;
 using BHome.Domain.StaffOperations;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 
 namespace BHome.Application.PropertyManagement;
@@ -13,7 +11,7 @@ public sealed class EquipmentInspectionScheduler(ISetupWorkspaceStore store, IOp
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     public static Guid InspectionId(Guid taskId) => Key("equipment-inspection:" + taskId);
-    private static Guid Key(string value) => new(SHA256.HashData(Encoding.UTF8.GetBytes(value)).AsSpan(0, 16));
+    private static Guid Key(string value) => LocationSetupKeys.Key(value);
 
     public async Task<int> GenerateAsync(Guid scheduleId, CancellationToken t)
     {

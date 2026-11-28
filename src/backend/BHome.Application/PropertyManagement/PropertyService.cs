@@ -409,6 +409,10 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             (input.EffectiveTo == null || p.EffectiveFrom <= input.EffectiveTo), t))
             throw Error(409, "billing_policy_overlap");
     }
+    private static bool PolicyScopeChanged(BillingPolicy policy, PolicyWrite input) =>
+        policy.LocationId != input.LocationId || policy.RoomTypeId != input.RoomTypeId || policy.RoomId != input.RoomId ||
+        policy.Category != input.Category || policy.ChargeCode != PropertyRules.Normalize(input.ChargeCode);
+
     private static BillingPolicy NewPolicy(PolicyWrite input) => new()
     {
         LocationId = input.LocationId,
@@ -445,8 +449,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             await LocationAsync(x.LocationId, true, t);
             CheckVersion(x.Version, update.ExpectedVersion);
             if (x.FirstUsedAt.HasValue || x.EffectiveFrom <= Today) throw Error(409, "policy_not_editable");
-            if (x.LocationId != input.LocationId || x.RoomTypeId != input.RoomTypeId || x.RoomId != input.RoomId ||
-                x.Category != input.Category || x.ChargeCode != PropertyRules.Normalize(input.ChargeCode))
+            if (PolicyScopeChanged(x, input))
                 throw Error(400, "policy_scope_immutable");
             await ValidatePolicyAsync(input, t, checkRoomLock: false);
             if (input.EffectiveFrom <= Today) throw Error(400, "future_policy_date_required");
@@ -473,8 +476,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             await ValidatePolicyAsync(input, t, checkRoomLock: false);
             var old = await repository.FindAsync<BillingPolicy>(id, t) ?? throw Error(404, "resource_not_found");
             CheckVersion(old.Version, replacement.ExpectedVersion);
-            if (old.LocationId != input.LocationId || old.RoomTypeId != input.RoomTypeId || old.RoomId != input.RoomId ||
-                old.Category != input.Category || old.ChargeCode != PropertyRules.Normalize(input.ChargeCode))
+            if (PolicyScopeChanged(old, input))
                 throw Error(400, "replacement_scope_mismatch");
             if (input.EffectiveFrom <= Today || input.EffectiveFrom <= old.EffectiveFrom || old.EffectiveTo < input.EffectiveFrom)
                 throw Error(409, "replacement_date_invalid");
