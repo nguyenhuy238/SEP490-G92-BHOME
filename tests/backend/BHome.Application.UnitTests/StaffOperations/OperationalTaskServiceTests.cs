@@ -283,7 +283,7 @@ public sealed class OperationalTaskServiceTests
         var task = new OperationalTask
         {
             Kind = OperationalTaskKind.MoveInInventory,
-            LocationId = rig.Location,
+            RequiredLocationId = rig.Location,
             ContractId = contractId,
             AssignmentId = rig.Responsibility!.AssignmentId,
             AssignedStaffUserId = rig.Staff
@@ -302,7 +302,7 @@ public sealed class OperationalTaskServiceTests
             var error = await Assert.ThrowsAsync<OperationalTaskException>(() =>
                 rig.Service.ActAsync(task.Id, "start", new(task.Version), Guid.NewGuid(), default));
             Assert.Equal("move_in_handover_task_not_started", error.Code);
-            Assert.Equal(MeterTaskStatus.Assigned, task.Status);
+            Assert.Equal(MeterTaskStatus.Assigned, task.MeterStatus);
             Assert.Empty(rig.Added.OfType<OperationalTaskCommand>());
         }
     }
@@ -319,7 +319,7 @@ public sealed class OperationalTaskServiceTests
         var task = new OperationalTask
         {
             Kind = OperationalTaskKind.LocationAssetHandover,
-            LocationId = rig.Location,
+            RequiredLocationId = rig.Location,
             AssignmentId = rig.Responsibility!.AssignmentId,
             AssignedStaffUserId = rig.Staff,
             LocationAssetInventoryJson = JsonSerializer.Serialize(new LocationAssetInventorySnapshot(
@@ -373,8 +373,8 @@ public sealed class OperationalTaskServiceTests
         var task = new OperationalTask
         {
             Kind = OperationalTaskKind.LocationAssetHandover,
-            Status = MeterTaskStatus.InProgress,
-            LocationId = rig.Location,
+            MeterStatus = MeterTaskStatus.InProgress,
+            RequiredLocationId = rig.Location,
             AssignmentId = assignment,
             AssignedStaffUserId = rig.Staff,
             LocationAssetInventoryJson = JsonSerializer.Serialize(authoritative with { Items = [challenged] })
@@ -407,8 +407,8 @@ public sealed class OperationalTaskServiceTests
         var task = new OperationalTask
         {
             Kind = OperationalTaskKind.LocationAssetHandover,
-            Status = MeterTaskStatus.InProgress,
-            LocationId = rig.Location,
+            MeterStatus = MeterTaskStatus.InProgress,
+            RequiredLocationId = rig.Location,
             AssignmentId = assignment,
             AssignedStaffUserId = rig.Staff,
             LocationAssetInventoryJson = JsonSerializer.Serialize(new LocationAssetInventorySnapshot(
@@ -453,8 +453,8 @@ public sealed class OperationalTaskServiceTests
         var task = new OperationalTask
         {
             Kind = OperationalTaskKind.LocationAssetHandover,
-            Status = MeterTaskStatus.InProgress,
-            LocationId = rig.Location,
+            MeterStatus = MeterTaskStatus.InProgress,
+            RequiredLocationId = rig.Location,
             AssignmentId = assignment,
             AssignedStaffUserId = rig.Staff,
             LocationAssetInventoryJson = JsonSerializer.Serialize(new LocationAssetInventorySnapshot(
@@ -473,7 +473,7 @@ public sealed class OperationalTaskServiceTests
             rig.Service.ReconcileLocationAssetInventoryAsync(task.Id,
                 new(task.Version, true), Guid.NewGuid(), default))).Code);
         Assert.Equal(before, task.LocationAssetInventoryJson);
-        task.Status = MeterTaskStatus.PendingVerification;
+        task.MeterStatus = MeterTaskStatus.PendingVerification;
         Assert.Equal("location_asset_inventory_reconciliation_locked", (await Assert.ThrowsAsync<OperationalTaskException>(() =>
             rig.Service.ReconcileLocationAssetInventoryAsync(task.Id,
                 new(task.Version, true), Guid.NewGuid(), default))).Code);
@@ -489,7 +489,7 @@ public sealed class OperationalTaskServiceTests
         var task = new OperationalTask
         {
             Kind = OperationalTaskKind.LocationAssetHandover,
-            LocationId = rig.Location,
+            RequiredLocationId = rig.Location,
             AssignmentId = firstAssignmentId,
             AssignedStaffUserId = rig.Staff,
             LocationAssetInventoryJson = JsonSerializer.Serialize(new LocationAssetInventorySnapshot(

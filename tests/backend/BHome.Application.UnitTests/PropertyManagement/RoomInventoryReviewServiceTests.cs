@@ -106,6 +106,7 @@ public sealed class RoomInventoryReviewServiceTests
         {
             var room = new Room { LocationId = Location.Id, RoomNumber = (rooms.Count + 1).ToString(), Capacity = 2 };
             rooms.Add(room);
+            store.RoomLocationAsync(room.Id, Arg.Any<CancellationToken>()).Returns(Location.Id);
             if (configuredItems is null) return room;
             var templateId = Guid.NewGuid();
             Add(templateId, "AssetTemplate", "Published",
@@ -213,6 +214,54 @@ public sealed class RoomInventoryReviewServiceTests
             new(room.RoomId, room.DesiredId, room.DesiredVersion, room.StateToken, items);
         public static RoomInventoryReviewInputItem[] CheckedItems(RoomInventoryReviewRoom room, params Guid[] evidenceIds) =>
             room.Items.Select((item, index) => new RoomInventoryReviewInputItem(item.Id, true, [evidenceIds[index]])).ToArray();
+    }
+
+    [Fact]
+    public async Task MoveInTokenIgnoresRoomVersionButStillDetectsAssetChanges()
+    {
+        var world = new World();
+        var item = World.Item();
+        var room = world.AddRoom(item);
+        var asset = world.AddPhysical(room, item, item.Quantity);
+        world.AddOwnerMapping(room, item, asset);
+        var original = await world.Service.PrepareForMoveInTaskAsync(room.Id, default);
+        Assert.NotNull(original.MoveInStateToken);
+
+        room.Status = RoomStatus.Occupied;
+        room.Version++;
+        var activated = await world.Service.PrepareForMoveInTaskAsync(room.Id, default);
+        Assert.NotEqual(original.StateToken, activated.StateToken);
+        Assert.Equal(original.MoveInStateToken, activated.MoveInStateToken);
+        Assert.True(activated.MatchesMoveInSourceToken(original.StateToken));
+        Assert.True(activated.MatchesMoveInSourceToken(original.MoveInStateToken!));
+
+        world.Metadata[asset.Id] = world.Metadata[asset.Id] with { Quantity = 1 };
+        var changed = await world.Service.PrepareForMoveInTaskAsync(room.Id, default);
+        Assert.False(changed.MatchesMoveInSourceToken(original.StateToken));
+        Assert.False(changed.MatchesMoveInSourceToken(original.MoveInStateToken!));
+    }
+
+    [Fact]
+    public async Task MoveInTokenStillDetectsChangedPhysicalAssetVersionAndConfiguration()
+    {
+        var world = new World();
+        var item = World.Item();
+        var room = world.AddRoom(item);
+        var asset = world.AddPhysical(room, item, item.Quantity);
+        world.AddOwnerMapping(room, item, asset);
+        var original = await world.Service.PrepareForMoveInTaskAsync(room.Id, default);
+
+        room.Version++;
+        asset.Version++;
+        var changed = await world.Service.PrepareForMoveInTaskAsync(room.Id, default);
+        Assert.False(changed.MatchesMoveInSourceToken(original.StateToken));
+        Assert.False(changed.MatchesMoveInSourceToken(original.MoveInStateToken!));
+
+        asset.Version--;
+        world.ReplaceRoomRequirements(room, item with { Quantity = item.Quantity + 1 });
+        var reconfigured = await world.Service.PrepareForMoveInTaskAsync(room.Id, default);
+        Assert.False(reconfigured.MatchesMoveInSourceToken(original.StateToken));
+        Assert.False(reconfigured.MatchesMoveInSourceToken(original.MoveInStateToken!));
     }
 
     [Fact]

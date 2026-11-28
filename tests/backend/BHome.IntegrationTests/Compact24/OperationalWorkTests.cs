@@ -20,7 +20,7 @@ public sealed partial class Compact24NotificationMvpTests
         using var staff = await Client(w.Staff);
         using var tenant = await Client(w.Tenants[0]);
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var now = DateTimeOffset.UtcNow;
         var report = new IncidentReport
         {
@@ -59,12 +59,12 @@ public sealed partial class Compact24NotificationMvpTests
         var task = new OperationalTask
         {
             Kind = OperationalTaskKind.AdHoc,
-            LocationId = w.Location,
-            Title = "Unified synthetic task",
+            RequiredLocationId = w.Location,
+            TaskTitle = "Unified synthetic task",
             Requirements = "Synthetic work",
-            Priority = OperationalTaskPriority.High,
+            TaskPriority = OperationalTaskPriority.High,
             DueAt = now.AddDays(-1),
-            Status = MeterTaskStatus.Assigned,
+            MeterStatus = MeterTaskStatus.Assigned,
             AssignedStaffUserId = w.Staff.Id
         };
         db.AddRange(report, approved, pending, proactive, task);
@@ -106,15 +106,15 @@ public sealed partial class Compact24NotificationMvpTests
         var w = await Seed();
         using var owner = await Client(w.Owner);
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var assignment = await db.StaffLocationAssignments.AsNoTracking().SingleAsync(x => x.LocationId == w.Location);
         var now = DateTimeOffset.UtcNow;
         var handover = new OperationalTask
         {
             Kind = OperationalTaskKind.LocationAssetHandover,
-            LocationId = w.Location,
-            Title = "Unified signing inventory",
-            Status = MeterTaskStatus.PendingVerification,
+            RequiredLocationId = w.Location,
+            TaskTitle = "Unified signing inventory",
+            MeterStatus = MeterTaskStatus.PendingVerification,
             AssignedStaffUserId = w.Staff.Id,
             AssignmentId = assignment.Id,
             DueAt = now.AddDays(1)
@@ -122,11 +122,11 @@ public sealed partial class Compact24NotificationMvpTests
         var moveIn = new OperationalTask
         {
             Kind = OperationalTaskKind.AdHoc,
-            LocationId = w.Location,
+            RequiredLocationId = w.Location,
             ContractId = w.Contracts[0],
             TargetRoomId = w.Room,
-            Title = "Bàn giao vào phòng Unified signing",
-            Status = MeterTaskStatus.PendingVerification,
+            TaskTitle = "Bàn giao vào phòng Unified signing",
+            MeterStatus = MeterTaskStatus.PendingVerification,
             AssignedStaffUserId = w.Staff.Id,
             AssignmentId = assignment.Id,
             DueAt = now.AddDays(2)
@@ -134,9 +134,9 @@ public sealed partial class Compact24NotificationMvpTests
         var review = new OperationalTask
         {
             Kind = OperationalTaskKind.AdHoc,
-            LocationId = w.Location,
-            Title = "Unified signing review",
-            Status = MeterTaskStatus.PendingVerification,
+            RequiredLocationId = w.Location,
+            TaskTitle = "Unified signing review",
+            MeterStatus = MeterTaskStatus.PendingVerification,
             AssignedStaffUserId = w.Staff.Id,
             AssignmentId = assignment.Id,
             DueAt = now.AddDays(1)
@@ -189,7 +189,7 @@ public sealed partial class Compact24NotificationMvpTests
         using var owner = await Client(w.Owner);
         using var staff = await Client(w.Staff);
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var now = DateTimeOffset.UtcNow;
         IncidentReport Report(string title, IncidentStatus status, string reporterRole) => new()
         {
@@ -231,9 +231,9 @@ public sealed partial class Compact24NotificationMvpTests
         var task = new OperationalTask
         {
             Kind = OperationalTaskKind.AdHoc,
-            LocationId = w.Location,
-            Title = "Split synthetic task",
-            Status = MeterTaskStatus.Assigned,
+            RequiredLocationId = w.Location,
+            TaskTitle = "Split synthetic task",
+            MeterStatus = MeterTaskStatus.Assigned,
             AssignedStaffUserId = w.Staff.Id,
             DueAt = now.AddDays(3)
         };

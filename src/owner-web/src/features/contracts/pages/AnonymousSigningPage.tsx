@@ -12,7 +12,7 @@ import {
 } from '@mui/material';
 import { createApiClient } from '../../../../../../packages/client-core/src/api';
 import { apiBaseUrl } from '../../../services/config';
-import { ContractDocumentViewer } from '../ContractDocumentViewer';
+import { ContractDocumentViewer } from '../components/signing/ContractDocumentViewer';
 import {
   internalSigningClient,
   signingMessage,

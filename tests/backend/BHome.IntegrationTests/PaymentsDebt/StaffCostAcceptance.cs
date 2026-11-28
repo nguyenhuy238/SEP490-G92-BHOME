@@ -21,7 +21,7 @@ public sealed partial class PaymentLedgerTests
         string Assignment() => JsonSerializer.Serialize(new[] { new { id = Guid.NewGuid(), staffUserId = w.Staff, startDate = period, endDate = end } });
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO staff_employments(id,staff_user_id,start_date,end_date,salary_type,base_rate,status)
                 VALUES({employment},{w.Staff},{period},{end},'Monthly',10000000,'Active')
@@ -68,7 +68,7 @@ public sealed partial class PaymentLedgerTests
         var after = Assert.Single((await owner.GetFromJsonAsync<StaffCostCandidate[]>(path))!, c => c.EmploymentId == employment);
         Assert.True(after.Recorded);
         await using var verification = fixture.Factory.Services.CreateAsyncScope();
-        var check = verification.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var check = verification.ServiceProvider.GetFixturePersistence();
         Assert.Equal(6_000_000m, await check.Database.SqlQuery<decimal>($"SELECT sum(amount) AS \"Value\" FROM expenses WHERE location_id={w.Location} AND category='Lương'").SingleAsync());
         Assert.Equal(4_000_000m, await check.Database.SqlQuery<decimal>($"SELECT sum(amount) AS \"Value\" FROM expenses WHERE location_id={secondLocation} AND category='Lương'").SingleAsync());
         var forecastMonth = period.AddMonths(2);

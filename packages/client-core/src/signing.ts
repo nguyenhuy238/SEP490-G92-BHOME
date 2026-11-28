@@ -6,9 +6,7 @@ import {
   type Signature as ContractSignatureView,
 } from './contracts';
 
-// Remote signing with Viettel MySign, shared by the Owner portal and the mobile app: the signer's picture, where the
-// visible signature goes on the contract, and the Owner's Viettel account. The private key never leaves Viettel;
-// BHOME only sends the document hash and the signer confirms on the MySign app.
+// Shared in-app signature image, placement and consent client.
 
 /** Page is 1-based; x, y and width are fractions of the page from its top-left corner. */
 export interface SignaturePlacement {
@@ -32,35 +30,7 @@ export interface SignatureImageView {
   version: string | null;
   updatedAt: string | null;
 }
-export type SettingSource = 'DATABASE' | 'CONFIGURATION' | 'NONE';
-export interface ViettelSettings {
-  baseUrl: string;
-  baseUrlSource: SettingSource;
-  clientId: string;
-  clientIdSource: SettingSource;
-  profileId: string;
-  profileIdSource: SettingSource;
-  secretSet: boolean;
-  secretHint: string;
-  secretSource: SettingSource;
-  secretUnreadable: boolean;
-  updatedByUserId: string | null;
-  updatedAt: string | null;
-}
-export interface SaveViettelSettings {
-  baseUrl: string | null;
-  clientId: string | null;
-  profileId: string | null;
-  clientSecret: string | null;
-  clearSecret: boolean;
-}
-export interface ConnectionTestResult {
-  ok: boolean;
-  milliseconds: number;
-  message: string;
-}
-
-/** What GET /contracts/signing-methods offers the signed-in party (Owner: UPLOAD_PROOF first; Tenant: OTP). */
+/** What GET /contracts/signing-methods offers the signed-in party. */
 export interface SigningMethods {
   methods: string[];
   default: string | null;
@@ -82,7 +52,6 @@ export interface DrawnSignature {
 export const NO_CERTIFICATE = '00000000-0000-0000-0000-000000000000';
 
 const image = '/api/v1/digital-signing/signature-image';
-const viettel = '/api/v1/digital-signing/settings/viettel';
 const guid = (value: string) => {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))
     throw new Error('Mã không hợp lệ.');
@@ -134,10 +103,10 @@ export function signingClient(request: ContractRequest) {
       }),
     methods: (signal?: AbortSignal) =>
       request<SigningMethods>('/api/v1/contracts/signing-methods', { signal }),
-    /** Starts OTP (in-app) or UPLOAD_PROOF (Owner signs the PDF with MySign outside BHOME) signing. */
+    /** Starts in-app OTP or Owner session signing. */
     start: (
       contractId: string,
-      method: 'OTP' | 'UPLOAD_PROOF' | 'OWNER_SESSION',
+      method: 'OTP' | 'OWNER_SESSION',
       key: string,
       placement: SignaturePlacement | null = null,
       usePicture = true,
@@ -164,37 +133,6 @@ export function signingClient(request: ContractRequest) {
     resendOtp: (contractId: string) =>
       request<SigningOtpView>(`/api/v1/contracts/${guid(contractId)}/signing/otp/resend`, {
         method: 'POST',
-      }),
-    /** UPLOAD_PROOF: the exact PDF the Owner must sign with MySign. */
-    uploadSourceBytes: (contractId: string, signal?: AbortSignal) =>
-      request<Uint8Array>(
-        `/api/v1/contracts/${guid(contractId)}/signing/upload-source`,
-        { signal, headers: { Accept: 'application/pdf' } },
-        'bytes',
-      ),
-    uploadSourceBlob: (contractId: string, signal?: AbortSignal) =>
-      request<Blob>(
-        `/api/v1/contracts/${guid(contractId)}/signing/upload-source`,
-        { signal, headers: { Accept: 'application/pdf' } },
-        'blob',
-      ),
-    /** UPLOAD_PROOF: the MySign-signed PDF; BHOME checks it before accepting. */
-    uploadSigned: (contractId: string, pdf: BodyInit, key: string) =>
-      request<ContractView>(`/api/v1/contracts/${guid(contractId)}/signing/upload`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/pdf', 'Idempotency-Key': key },
-        body: pdf,
-      }),
-    removeCertificate: (id: string) =>
-      request<void>(`/api/v1/digital-signing/certificates/${guid(id)}`, { method: 'DELETE' }),
-    viettel: (signal?: AbortSignal) => request<ViettelSettings>(viettel, { signal }),
-    saveViettel: (settings: SaveViettelSettings) =>
-      request<ViettelSettings>(viettel, { method: 'PUT', body: JSON.stringify(settings) }),
-    resetViettel: () => request<ViettelSettings>(viettel, { method: 'DELETE' }),
-    testViettel: (userId: string) =>
-      request<ConnectionTestResult>(`${viettel}/test`, {
-        method: 'POST',
-        body: JSON.stringify({ userId: userId.trim() }),
       }),
   };
 }
@@ -241,32 +179,9 @@ const codes: Record<string, string> = {
   signing_not_pending: 'Không có lượt ký nào đang chờ. Hãy tải lại trang.',
 };
 
-/** The four checks BHOME runs on an uploaded MySign-signed PDF (UPLOAD_PROOF), in display order. */
-export const UPLOAD_CHECKS = [
-  'Đúng bản hợp đồng đã phát',
-  'Có chữ ký số mới, nguyên vẹn, phủ toàn bộ file',
-  'Tên bên cấp chứng thư khớp cấu hình, còn hiệu lực lúc ký',
-  'Nội dung các trang không thay đổi',
-] as const;
 /** Error code of a failed signing call, if the server sent one. */
 export function signingErrorCode(error: unknown): string {
   return (error as { problem?: { code?: string } } | null)?.problem?.code ?? '';
-}
-/** Which of UPLOAD_CHECKS a refusal points at, or -1. */
-export function failedUploadCheck(error: unknown): number {
-  const code = signingErrorCode(error);
-  if (code === 'signed_pdf_not_from_issued_contract') return 0;
-  if (
-    [
-      'signed_pdf_has_no_new_signature',
-      'signed_pdf_signature_invalid',
-      'signed_pdf_changed_after_signing',
-    ].includes(code)
-  )
-    return 1;
-  if (code.startsWith('signed_pdf_certificate')) return 2;
-  if (code === 'signed_pdf_content_changed') return 3;
-  return -1;
 }
 /** Seconds left until an ISO instant (never negative). */
 export function secondsUntil(iso: string, now = Date.now()) {

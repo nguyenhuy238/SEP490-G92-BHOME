@@ -24,7 +24,9 @@ internal static class BillingAutomationDemoSeed
     }
     public static async Task PrepareAsync(IServiceProvider services, CancellationToken t = default)
     {
-        Guard(services); await using var scope = services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); if (!await db.IsSchemaReadyAsync(t)) throw new LocalTestAccountException("Prepare the reviewed Compact24 schema before seeding; automatic schema migration is disabled.");
+        Guard(services); await using var scope = services.CreateAsyncScope();
+        await using var db = OfflineFixturePersistence.Open(scope.ServiceProvider);
+        if (!await db.IsSchemaReadyAsync(t)) throw new LocalTestAccountException("Prepare the reviewed Compact24 schema before seeding; automatic schema migration is disabled.");
         if (await db.Users.CountAsync(u => new[] { ContractDemoSeed.Id(1), ContractDemoSeed.Id(2), ContractDemoSeed.Id(3), ContractDemoSeed.Id(4), ContractDemoSeed.Id(5) }.Contains(u.Id), t) != 5) throw new LocalTestAccountException("Initialize the isolated contract demo accounts first.");
         var today = BillingAutomationDates.BusinessDate(DateTimeOffset.UtcNow); var period = new DateOnly(today.Year, today.Month, 1);
         await using var tx = await db.Database.BeginTransactionAsync(t); await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({Id(10).ToString()},0))", t);
@@ -54,18 +56,21 @@ internal static class BillingAutomationDemoSeed
     public static async Task RetryAsync(IServiceProvider services, CancellationToken t = default)
     {
         Guard(services); var config = services.GetRequiredService<IConfiguration>();
-        await using var scope = services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); var period = BillingAutomationDates.BusinessDate(DateTimeOffset.UtcNow); period = new(period.Year, period.Month, 1);
+        await using var scope = services.CreateAsyncScope();
+        var runtime = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var db = OfflineFixturePersistence.Open(scope.ServiceProvider);
+        var period = BillingAutomationDates.BusinessDate(DateTimeOffset.UtcNow); period = new(period.Year, period.Month, 1);
         var plan = await scope.ServiceProvider.GetRequiredService<IBillingAutomationSchedules>().ForPeriodAsync(Id(10), period, t) ?? throw new LocalTestAccountException("Configure the automation plan through the demo API first.");
         if (await db.Set<Invoice>().AnyAsync(i => i.RoomId == Id(22) && i.BillingPeriod == period, t)) { Console.WriteLine("Retry fixture already completed; preserved its existing history."); return; }
         if (!await db.Set<Contract>().AnyAsync(c => c.RoomId == Id(22) && c.Status == ContractStatus.Active, t)) throw new LocalTestAccountException("Activate the synthetic retry contract before running the fault scenario.");
         var handler = scope.ServiceProvider.GetServices<IBackgroundJobHandler>().Single(h => h.Name == "billing-draft"); var job = new JobExecution(Guid.NewGuid(), "synthetic-db-lock-retry", JsonSerializer.Serialize(new BillingJobInput(plan.Id, period)));
         await using (var connection = new NpgsqlConnection(config.GetConnectionString("Database")))
         {
-            await connection.OpenAsync(t); await using var tx = await connection.BeginTransactionAsync(t); await using var command = new NpgsqlCommand("SELECT 1 FROM \"Rooms\" WHERE \"Id\"=@room FOR UPDATE", connection, tx); command.Parameters.AddWithValue("room", Id(22)); await command.ExecuteScalarAsync(t);
-            db.Database.SetCommandTimeout(1); var failed = false; try { await handler.ExecuteAsync(job, t); } catch (Exception ex) when (ex is NpgsqlException or TimeoutException or DbUpdateException || ex is InvalidOperationException { InnerException: NpgsqlException }) { failed = true; }
+            await connection.OpenAsync(t); await using var tx = await connection.BeginTransactionAsync(t); await using var command = new NpgsqlCommand("SELECT 1 FROM rooms WHERE id=@room FOR UPDATE", connection, tx); command.Parameters.AddWithValue("room", Id(22)); await command.ExecuteScalarAsync(t);
+            runtime.Database.SetCommandTimeout(1); var failed = false; try { await handler.ExecuteAsync(job, t); } catch (Exception ex) when (ex is NpgsqlException or TimeoutException or DbUpdateException || ex is InvalidOperationException { InnerException: NpgsqlException }) { failed = true; }
             if (!failed) throw new LocalTestAccountException("Expected a real lock timeout; no demo failure was recorded."); await tx.RollbackAsync(t);
         }
-        db.Database.SetCommandTimeout(30); await handler.ExecuteAsync(job, t);
+        runtime.Database.SetCommandTimeout(30); await handler.ExecuteAsync(job, t);
         var e = await db.Set<BillingAutomationExecution>().AsNoTracking().SingleAsync(e => e.PlanId == plan.Id && e.Phase == "Draft" && e.BillingPeriod == period, t);
         if (!await db.Set<BillingAutomationAttempt>().AnyAsync(a => a.ExecutionId == e.Id && a.Status == "Failed", t) || !await db.Set<Invoice>().AnyAsync(i => i.RoomId == Id(22) && i.BillingPeriod == period, t)) throw new LocalTestAccountException("Retry evidence is incomplete.");
         Console.WriteLine("Real PostgreSQL timeout recorded; registered billing-draft handler retried and persisted one room invoice.");

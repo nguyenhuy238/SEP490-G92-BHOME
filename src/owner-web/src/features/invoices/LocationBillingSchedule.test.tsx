@@ -3,11 +3,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
-import { LocationBillingSchedule } from './LocationBillingSchedule';
+import { LocationBillingSchedule } from './components/LocationBillingSchedule';
 import { businessToday } from '../../../../../packages/client-core/src/contracts';
 
 const mocks = vi.hoisted(() => ({ request: vi.fn(), schedule: vi.fn() }));
-vi.mock('./useInvoiceApi', () => ({ useInvoiceApi: () => mocks }));
+vi.mock('./hooks/useInvoiceApi', () => ({ useInvoiceApi: () => mocks }));
 vi.mock('../../../../../packages/client-core/src/auth', () => ({
   useAuth: () => ({ session: { userId: 'owner', roles: ['Owner'] } }),
 }));

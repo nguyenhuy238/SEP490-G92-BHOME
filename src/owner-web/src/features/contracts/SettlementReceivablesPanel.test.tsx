@@ -8,7 +8,7 @@ import {
   type SettlementReceivables,
   type SettlementSummary,
 } from '../../../../../packages/client-core/src/contracts';
-import { SettlementReceivablesPanel } from './SettlementReceivablesPanel';
+import { SettlementReceivablesPanel } from './components/settlement/SettlementReceivablesPanel';
 
 const view = {
   contractId: 'contract',

@@ -25,7 +25,7 @@ internal static class SmsDemoSeed
             throw new LocalTestAccountException("SMS demo requires a dedicated loopback Development database and isolated Mock mode.");
         await Compact24DevelopmentDatabase.PrepareAsync("Development", connection.ConnectionString);
         await using var scope = services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         var password = Environment.GetEnvironmentVariable("BHOME_SMS_DEMO_PASSWORD");
         if (string.IsNullOrWhiteSpace(password)) throw new LocalTestAccountException("Configure BHOME_SMS_DEMO_PASSWORD privately.");
         if (await db.Users.AnyAsync(u => u.Email == null || !u.Email.EndsWith("@sms-demo.example.invalid")))
@@ -40,7 +40,7 @@ internal static class SmsDemoSeed
         foreach (var (id, name, role, phone) in fixtures)
         {
             if (await users.FindByIdAsync(id.ToString()) is not null) continue;
-            var user = new ApplicationUser
+            var user = new User
             {
                 Id = id,
                 UserName = name,

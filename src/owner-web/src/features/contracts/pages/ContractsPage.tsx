@@ -38,10 +38,10 @@ import {
 } from '../../../components/common/PortalUI';
 import { OwnerTable } from '../../../components/common/OwnerWorkspace';
 import { isMockMode } from '../../../services/config';
-import { useContractsApi } from '../useContractsApi';
-import { ContractDraftDialog } from '../ContractDraftDialog';
-import { ContractDetailPanel } from '../ContractDetailPanel';
-import { MainDraftDetailPanel } from '../MainDraftDetailPanel';
+import { useContractsApi } from '../hooks/useContractsApi';
+import { ContractDraftDialog } from '../components/drafts/ContractDraftDialog';
+import { ContractDetailPanel } from '../components/detail/ContractDetailPanel';
+import { MainDraftDetailPanel } from '../components/drafts/MainDraftDetailPanel';
 
 export default function ContractsPage() {
   return isMockMode ? (

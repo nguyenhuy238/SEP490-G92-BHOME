@@ -2,12 +2,12 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 import type { ContractView, Readiness } from '../../../../../packages/client-core/src/contracts';
-import { MainContractProgress } from './MainContractProgress';
+import { MainContractProgress } from './main/MainContractProgress';
 import { Box, Heading, ui } from '../../components/WorkspaceKit';
 import { staffColors as s } from '../../theme/theme';
 
-export { signerState } from './rentalContractState';
-import { rentalContractState, type SignerState } from './rentalContractState';
+export { signerState } from './main/rentalContractState';
+import { rentalContractState, type SignerState } from './main/rentalContractState';
 const labels: Record<SignerState, string> = {
   unsigned: 'Chưa ký',
   waiting: 'Đang chờ ký',

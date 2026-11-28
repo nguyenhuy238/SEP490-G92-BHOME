@@ -114,29 +114,24 @@ internal sealed class PropertySetup(PlanSessions sessions)
     public async Task<IReadOnlyList<JsonElement>> RoomsOfAsync(string locationId, string? token = null)
         => (await ReadAsync($"api/v1/rooms?locationId={locationId}&page=1&pageSize=100", token)).Items();
 
-    // ---- Room Types: PROPERTY_MANAGEMENT.md (payload) + API_RUNTIME_ROUTES.md (routes). LOCATION_ROOM_API.md says they were removed. ----
-
-    public async Task<HttpResponseMessage> PostRoomTypeAsync(string locationId, string name)
-        => await Api.PostAsync(
-            "api/v1/room-types",
-            new { locationId, name, description = "Loại phòng kiểm thử", defaultCapacity = 2, areaM2 = 20.5m, amenities = new[] { "Ban công" }, isActive = true },
-            await OwnerAsync());
-
-    /// <summary>
-    /// Fails with a clear message when the Room Type routes are gone: docs/api/LOCATION_ROOM_API.md (04/11/2026) says
-    /// "/room-types đã bỏ" while API_RUNTIME_ROUTES.md (06/11/2026) still lists them. The plan step cannot be run then.
-    /// </summary>
-    public static async Task RequireRoomTypeRouteAsync(HttpResponseMessage response, string step)
+    public static object RoomDefaultsWrite(string name, string description, int expectedVersion = 0, int capacity = 3) => new
     {
-        if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed)
-        {
-            var body = await response.TextAsync();
-            Assert.Fail(
-                $"{step}: the API answered {(int)response.StatusCode} for /api/v1/room-types. docs/api/LOCATION_ROOM_API.md (04/11/2026) " +
-                "states Room Types were removed (Room belongs directly to Location, no roomTypeId), so this plan step cannot be executed. " +
-                $"Update the plan (SRS UC-04 Room Type steps) to the current model. Body: {body}");
-        }
-    }
+        name,
+        description,
+        defaults = new { capacity, area = 20.5m, amenities = new[] { "Balcony" }, referenceRent = 2500000m },
+        assetTemplateId = (string?)null,
+        expectedVersion,
+        reason = "BF-01 regression",
+        status = "Recorded"
+    };
+    public async Task<HttpResponseMessage> PostRoomTypeAsync(string locationId, string name)
+        => await Api.PostAsync($"api/v1/locations/{locationId}/room-defaults", RoomDefaultsWrite(name, "Synthetic room defaults"), await OwnerAsync());
+    public async Task<JsonElement> ReadRoomDefaultsAsync(string locationId, string id, string? token = null)
+        => (await ReadAsync($"api/v1/locations/{locationId}/room-defaults", token)).Items().Single(d => Id(d) == id);
+    public async Task<HttpResponseMessage> PostConfiguredRoomAsync(string locationId, string defaultsId, int version, string roomNumber, string? token = null)
+        => await Api.PostAsync($"api/v1/locations/{locationId}/configured-rooms",
+            new { rooms = new[] { new { roomNumber, floor = "1", roomDefaultsId = defaultsId, expectedVersion = version, rent = 2500000m } }, effectiveFrom = Day(0) },
+            token ?? await OwnerAsync(), new Dictionary<string, string> { ["Idempotency-Key"] = Guid.NewGuid().ToString() });
 
     public static string NewRoomNumber() => "IT-" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
 }

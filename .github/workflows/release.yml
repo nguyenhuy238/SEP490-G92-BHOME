@@ -291,10 +291,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/download-artifact@v5
         with:
-          name: release-${{ github.sha }}-${{ github.run_attempt }}
+          name: release-${{ github.sha }}-${{ needs.images.outputs.manifest-attempt }}
       - name: Verify release manifest before Production deployment
         env:
           MANIFEST_SHA256: ${{ needs.images.outputs.manifest-sha256 }}
+          RELEASE_MANIFEST_ATTEMPT: ${{ needs.images.outputs.manifest-attempt }}
           API_DIGEST: ${{ needs.images.outputs.api }}
           OWNER_DIGEST: ${{ needs.images.outputs.owner }}
           PUBLIC_DIGEST: ${{ needs.images.outputs.public }}

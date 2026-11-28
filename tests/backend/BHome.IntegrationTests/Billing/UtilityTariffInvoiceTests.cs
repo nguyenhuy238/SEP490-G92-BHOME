@@ -26,7 +26,7 @@ public sealed partial class InvoiceApiTests
         // without using the guarded pricing API. The stored signed terms win.
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var policies = await db.Set<BillingPolicy>().AsNoTracking().Where(p => p.LocationId == w.Location).ToArrayAsync();
             foreach (var p in policies) db.Add(new BillingPolicy
             {
@@ -63,7 +63,7 @@ public sealed partial class InvoiceApiTests
         var original = await w.Owner.Client.GetStringAsync(path);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             foreach (var c in await db.Set<Contract>().Where(c => c.RoomId == w.Room).ToArrayAsync()) c.AgreedPriceSnapshot = "{}";
             await db.SaveChangesAsync();
         }

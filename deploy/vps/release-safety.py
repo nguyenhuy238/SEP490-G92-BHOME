@@ -5,6 +5,8 @@ import json
 import re
 import subprocess
 import sys
+import time
+import stat
 from pathlib import Path
 
 PREFIX = 'ghcr.io/nguyenhuy238/'
@@ -162,17 +164,50 @@ def check_environment(target):
     # private runtime configuration. Reject arbitrary paths; normalize only the
     # reviewed defaults when upgrading an older operator image.
     for key, expected_path in RELEASE_PDF_TOOLS.items():
-        if key in current and current[key] != expected_path:
+        allowed = {expected_path, '/usr/bin/soffice'} if key == 'MainDraft__LibreOfficePath' else {expected_path}
+        if key in current and current[key] not in allowed:
             raise ValueError('Unapproved contract PDF tool path: ' + key)
     # The verified release image supplies these exact OCR defaults. An older
     # image may omit them. Retain every noncanonical value in the fingerprint
     # so disabling OCR or changing the model directory still counts as drift.
     # Explicit Compose overrides (including canonical values) are independently
     # protected by release-config.py's image-only transition check.
-    managed = {k: v for k, v in current.items() if k not in RELEASE_PDF_TOOLS and
+    return environment_fingerprint(current)
+
+
+def environment_fingerprint(current):
+    managed = {k: v for k, v in current.items() if not (k in RELEASE_PDF_TOOLS and v == RELEASE_PDF_TOOLS[k]) and
                not (k in RELEASE_OCR_DEFAULTS and v == RELEASE_OCR_DEFAULTS[k]) and
                (('__' in k and not k.startswith('Deployment__')) or k in ('ASPNETCORE_ENVIRONMENT', 'DOTNET_ENVIRONMENT', 'AllowedHosts'))}
     return hashlib.sha256(json.dumps(managed, sort_keys=True).encode()).hexdigest()
+
+
+def runtime_transition_matches(approval, target, sha, before, after, now):
+    return (target == 'production' and isinstance(approval, dict) and
+            re.fullmatch('[0-9a-f]{40}', sha or '') is not None and
+            approval.get('target') == target and approval.get('sha') == sha and
+            approval.get('beforeConfig') == before and approval.get('afterConfig') == after and
+            all(re.fullmatch('[0-9a-f]{64}', value or '') for value in (before, after)) and
+            isinstance(approval.get('expiresAt'), (int, float)) and
+            now < approval['expiresAt'] <= now + 86400)
+
+
+def verify_unchanged(target, snapshot, sha=None):
+    before = json.loads(Path(snapshot).read_text())
+    after = {'containers': protected(target), 'config': check_environment(target)}
+    if before == after:
+        return
+    if before['containers'] != after['containers']:
+        raise ValueError('Protected containers changed')
+    approval = Path('/opt/bhome-deploy') / target / 'runtime-transition.json'
+    if target == 'production' and sha and approval.exists():
+        metadata = approval.lstat()
+        if (stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0 and
+                stat.S_IMODE(metadata.st_mode) == 0o600 and
+                runtime_transition_matches(json.loads(approval.read_text()), target, sha,
+                                           before['config'], after['config'], time.time())):
+            return
+    raise ValueError('Protected containers or application configuration changed without an exact, unexpired runtime approval')
 
 
 def verify_image(image, sha, app, target):
@@ -182,7 +217,7 @@ def verify_image(image, sha, app, target):
     config = json.loads(docker('image', 'inspect', image))[0]
     if config['Config']['Labels'].get('org.opencontainers.image.revision') != sha:
         raise ValueError('Image OCI revision does not match the release')
-    if target == 'staging' and app == 'api' and config['Config']['Labels'].get('io.bhome.staging-regressions') != 'v1':
+    if app == 'api' and config['Config']['Labels'].get('io.bhome.staging-regressions') != 'v1':
         raise ValueError('API image predates the required Staging hotfix regression gate')
     if image.split('@')[1] not in [v.split('@')[1] for v in config.get('RepoDigests', [])]:
         raise ValueError('Pulled image digest is not the manifest digest')
@@ -209,9 +244,7 @@ def main():
     if command == 'snapshot':
         Path(args[0]).write_text(json.dumps({'containers': protected(target), 'config': check_environment(target)}, sort_keys=True))
     elif command == 'unchanged':
-        before = json.loads(Path(args[0]).read_text())
-        if before != {'containers': protected(target), 'config': check_environment(target)}:
-            raise ValueError('Protected containers or application configuration changed')
+        verify_unchanged(target, args[0], args[1] if len(args) > 1 else None)
     elif command == 'verify-image':
         verify_image(*args, target=target)
     elif command == 'verify-running':

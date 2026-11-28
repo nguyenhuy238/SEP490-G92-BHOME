@@ -40,7 +40,7 @@ public sealed partial class ContractLifecycleApiTests
     private async Task PrepareHoldingSigningData(Workspace workspace)
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         db.Add(new BillingPolicy
         {
             LocationId = workspace.Location,

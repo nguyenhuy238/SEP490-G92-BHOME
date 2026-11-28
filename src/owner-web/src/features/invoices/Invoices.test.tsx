@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { theme } from '../../theme/theme';
 import type { Invoice } from '../../../../../packages/client-core/src/invoices';
 import InvoicesPage, { LiveInvoicesPage } from './pages/InvoicesPage';
-import { BillingConfigurationPage } from './BillingConfigurationPage';
+import { BillingConfigurationPage } from './pages/BillingConfigurationPage';
 
 const mocks = vi.hoisted(() => ({
   api: {
@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
     saveSchedule: vi.fn(),
   },
 }));
-vi.mock('./useInvoiceApi', () => ({ useInvoiceApi: () => mocks.api }));
+vi.mock('./hooks/useInvoiceApi', () => ({ useInvoiceApi: () => mocks.api }));
 vi.mock('../../services/config', () => ({ isMockMode: false, apiBaseUrl: '' }));
 vi.mock('../property-api/propertyApi', () => ({
   usePropertyApi: () => ({

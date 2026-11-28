@@ -25,7 +25,7 @@ public static class MaintenanceDemoSeed
         if (string.IsNullOrWhiteSpace(password)) throw new LocalTestAccountException("Set BHOME_MAINTENANCE_DEMO_PASSWORD for synthetic demo accounts.");
         await Compact24SampleSeed.RunAsync(provider, environment, password);
         await using var scope = provider.CreateAsyncScope(); var services = scope.ServiceProvider;
-        var db = services.GetRequiredService<BHomePersistenceContext>();
+        await using var db = OfflineFixturePersistence.Open(services);
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
         await using (var transaction = await db.Database.BeginTransactionAsync())
         {
@@ -46,7 +46,7 @@ public static class MaintenanceDemoSeed
                     RepresentativeResidentId = Id(40),
                     StartDate = today.AddMonths(-1),
                     EndDate = today.AddYears(1),
-                    MonthlyRent = 1000000,
+                    RentAmount = 1000000,
                     RequiredDeposit = 1000000,
                     Status = ContractStatus.Active,
                     ActivatedByUserId = User(1),
@@ -120,7 +120,7 @@ public static class MaintenanceDemoSeed
                     Status = ContractStatus.Active,
                     StartDate = today.AddMonths(-1),
                     EndDate = today.AddYears(1),
-                    MonthlyRent = 1000000,
+                    RentAmount = 1000000,
                     RequiredDeposit = 1000000,
                     ActivatedByUserId = User(1),
                     ActivatedAt = DateTimeOffset.UtcNow,

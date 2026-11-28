@@ -102,7 +102,7 @@ def smoke(output, ocr_assembly=None, ocr_models=None, ocr_fixtures=None):
             docker('exec', names[-1], 'sh', '-ec',
                    'test -s BHome.DigitalSigning.Application.dll; '
                    'test -s BHome.DigitalSigning.Infrastructure.dll; '
-                   'test -s BHome.DigitalSigning.MySign.dll; '
+                   ''
                    'find /app -name libonnxruntime.so -size +0c | grep .; '
                    'find /app -name libOpenCvSharpExtern.so -size +0c | grep .; '
                    'fc-match :lang=vi | grep .', stdout=log, stderr=log)

@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MobileApi } from '../lib/api';
-import { useTenantInvoicePayment } from '../features/tenant/useTenantInvoicePayment';
+import { useTenantInvoicePayment } from '../features/tenant/billing/useTenantInvoicePayment';
 import { getToastSnapshot } from '../lib/toast';
 
 const mocks = vi.hoisted(() => ({

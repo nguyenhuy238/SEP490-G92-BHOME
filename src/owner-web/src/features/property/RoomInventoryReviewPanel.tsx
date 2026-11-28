@@ -37,6 +37,7 @@ import { usePropertySetupApi } from './usePropertySetupApi';
 import { ConflictReload } from '../locations/components/ConflictReload';
 import { MoneyField } from '../../components/common/MoneyField';
 import { RoomNoAssetsConfirmation } from './RoomNoAssetsConfirmation';
+import { defaultUnitCost, validUnitCost, unitCostHint } from './inventoryUnitCost';
 
 type Evidence = {
   id: string;
@@ -95,21 +96,6 @@ const snapshot = (room: RoomInventoryReviewRow) => ({
 const itemChecked = (item: ReviewItem) => item.checked;
 const itemEvidence = (item: ReviewItem): Evidence[] =>
   item.evidence.map((evidence) => ({ ...evidence }));
-const defaultUnitCost = (item: ReviewItem): string => {
-  const suggested = item.acquisitionUnitCost ?? item.referenceUnitCost;
-  const value = suggested == null ? '' : String(suggested);
-  return /^\d{1,14}$/.test(value) ? value : '';
-};
-const validUnitCost = (value: string): boolean =>
-  value === '' || (/^\d{1,14}$/.test(value) && Number(value) <= 99_999_999_999_999);
-const unitCostHint = (item: ReviewItem): string =>
-  item.acquisitionUnitCost != null
-    ? 'Đã chốt giá vốn'
-    : item.referenceUnitCost != null && defaultUnitCost(item) === ''
-      ? 'Giá mẫu không phải số nguyên VND; vui lòng nhập đơn giá mua.'
-      : item.referenceUnitCost != null
-        ? 'Gợi ý từ mẫu'
-        : 'Chưa có giá tham khảo';
 const checkedCount = (room: RoomInventoryReviewRow) => room.items.filter(itemChecked).length;
 const isCheckedRoom = (room: RoomInventoryReviewRow) =>
   (room.state as string) === 'Matched' || (room.state as string) === 'Checked';

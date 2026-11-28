@@ -169,13 +169,13 @@ và chạy trong một transaction; chỉ chạy lệnh thứ hai sau khi lệnh
 ```bash
 docker exec -i <postgres-container> psql -U <db-user> -d <db-name> \
   -v ON_ERROR_STOP=1 --single-transaction \
-  < src/backend/BHome.Infrastructure/Persistence/Compact24/Migrations/SePayPaymentModes.sql
+  < src/backend/BHome.Api/Data/Compact24/Migrations/SePayPaymentModes.sql
 ```
 
 ```bash
 docker exec -i <postgres-container> psql -U <db-user> -d <db-name> \
   -v ON_ERROR_STOP=1 --single-transaction \
-  < src/backend/BHome.Infrastructure/Persistence/Compact24/Migrations/SePayOwnerConnections.sql
+  < src/backend/BHome.Api/Data/Compact24/Migrations/SePayOwnerConnections.sql
 ```
 
 Không chạy lại toàn bộ file baseline để nâng cấp DB. Kiểm tra lịch sử mã và tài khoản có snapshot

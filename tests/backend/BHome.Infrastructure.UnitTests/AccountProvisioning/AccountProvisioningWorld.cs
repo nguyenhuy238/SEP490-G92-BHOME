@@ -3,6 +3,7 @@ using BHome.Domain.IdentityAccess;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -91,18 +92,21 @@ internal sealed class AccountProvisioningWorld : IAsyncDisposable
         services.AddSingleton<IPasswordResetDelivery>(Email);
         services.RemoveAll<TimeProvider>();
         services.AddSingleton<TimeProvider>(Clock);
+        services.AddScoped<Compact24ArchiveContext>(p => new(
+            p.GetRequiredService<DbContextOptions<Compact24DbContext>>(),
+            p.GetService<Compact24Compatibility>(), p.GetService<TimeProvider>()));
         root = services.BuildServiceProvider();
         scope = root.CreateAsyncScope();
     }
 
     public T Get<T>() where T : notnull => scope.ServiceProvider.GetRequiredService<T>();
-    public Compact24DbContext Db => Get<Compact24DbContext>();
+    public Compact24ArchiveContext Db => Get<Compact24ArchiveContext>();
 
     // A fresh scope = a fresh DbContext, so assertions read what was really committed.
-    public async Task<TResult> ReadAsync<TResult>(Func<Compact24DbContext, Task<TResult>> read)
+    public async Task<TResult> ReadAsync<TResult>(Func<Compact24ArchiveContext, Task<TResult>> read)
     {
         await using var fresh = root!.CreateAsyncScope();
-        return await read(fresh.ServiceProvider.GetRequiredService<Compact24DbContext>());
+        return await read(fresh.ServiceProvider.GetRequiredService<Compact24ArchiveContext>());
     }
 
     public void SignInAsOwner() => CurrentUser.Set(OwnerId, Roles.Owner);
@@ -134,12 +138,12 @@ internal sealed class AccountProvisioningWorld : IAsyncDisposable
         "select count(*) from users where normalized_email = upper(@e)", ("e", email));
 
     // Precondition helper: an account stored the way the system stores it (UserManager + role).
-    public async Task<ApplicationUser> AddUserAsync(Guid id, string email, string role, string password,
+    public async Task<User> AddUserAsync(Guid id, string email, string role, string password,
         string? phone = null, bool active = true, bool emailConfirmed = true)
     {
         await using var setup = root!.CreateAsyncScope();
         var db = setup.ServiceProvider.GetRequiredService<Compact24DbContext>();
-        var user = new ApplicationUser
+        var user = new User
         {
             Id = id,
             UserName = email,
@@ -150,7 +154,7 @@ internal sealed class AccountProvisioningWorld : IAsyncDisposable
             LockoutEnabled = true,
         };
         db.PrepareUserRole(user, role);
-        var result = await setup.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>().CreateAsync(user, password);
+        var result = await setup.ServiceProvider.GetRequiredService<UserManager<User>>().CreateAsync(user, password);
         Assert.True(result.Succeeded, string.Join("; ", result.Errors.Select(e => e.Code)));
         return user;
     }

@@ -230,7 +230,7 @@ vi.mock('../components/WorkspaceQueryState', () => ({
 import {
   TenantRefundRequestsScreen,
   TenantRefundHistoryScreen,
-} from '../screens/TenantRefundRequestsScreen';
+} from '../features/tenant/billing/TenantRefundRequestsScreen';
 
 beforeEach(() => {
   vi.clearAllMocks();

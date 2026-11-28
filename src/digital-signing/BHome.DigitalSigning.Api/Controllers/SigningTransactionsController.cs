@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using BHome.DigitalSigning.Application.Contracts;
 using BHome.DigitalSigning.Application.Services;
-using BHome.Domain.IdentityAccess;
+using BHome.DigitalSigning.Application.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -12,7 +12,7 @@ namespace BHome.DigitalSigning.Api.Controllers;
 // GETs the transaction every few seconds; the GET that finds the signature embeds it. The signed PDF is then downloadable.
 [ApiController]
 [Route("api/v1/digital-signing/transactions")]
-[Authorize(Roles = $"{Roles.Owner},{Roles.Staff},{Roles.Tenant}")]
+[Authorize(Roles = $"{SigningRoles.Owner},{SigningRoles.Staff},{SigningRoles.Tenant}")]
 public sealed class SigningTransactionsController(RemoteSigningService signing) : ControllerBase
 {
     private const long MaxUploadBytes = 12 * 1024 * 1024;

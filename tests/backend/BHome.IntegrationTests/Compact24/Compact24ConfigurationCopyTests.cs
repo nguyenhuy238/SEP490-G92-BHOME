@@ -28,7 +28,7 @@ public sealed partial class Compact24OwnerSetupTests
         var input = await CopySource(owner, source.Location, target.Location);
         Assert.Equal(HttpStatusCode.Forbidden, (await staff.PostAsJsonAsync("/api/v1/location-configuration/copy-preview", input)).StatusCode);
         var plan = await Read<ConfigurationCopyPlan>(await owner.PostAsJsonAsync("/api/v1/location-configuration/copy-preview", input)); Assert.True(plan.CanProceed); Assert.Equal(4, plan.Changes.Length);
-        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>(); var local = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>(); var local = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
         Assert.Empty(await local.ListAsync(target.Location, "RoomDefaults", default)); Assert.False(await db.Set<BHome.Domain.PropertyManagement.BillingPolicy>().AnyAsync(p => p.LocationId == target.Location));
         input = input with { SourceState = plan.SourceState, TargetState = plan.TargetState }; var key = Guid.NewGuid();
         var result = await Read<SharedOperation>(await Keyed(owner, "/api/v1/location-configuration/copy", input, key)); Assert.Equal(4, result.CreatedReferences.Length);
@@ -64,7 +64,7 @@ public sealed partial class Compact24OwnerSetupTests
     {
         var source = await Seed(); var target = await Seed(); using var owner = await Client(source.Owner); var input = await CopySource(owner, source.Location, target.Location);
         var plan = await Read<ConfigurationCopyPlan>(await owner.PostAsJsonAsync("/api/v1/location-configuration/copy-preview", input));
-        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var suffix = Guid.NewGuid().ToString("N"); var name = "test_copy_failure_" + suffix;
         var create = $"CREATE FUNCTION {name}() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN IF NEW.location_id = ''{target.Location}''::uuid AND NEW.task_data->>''recordType''=''SharedConfigurationOperation'' THEN RAISE EXCEPTION ''Synthetic late copy failure''; END IF; RETURN NEW; END'; CREATE TRIGGER {name} BEFORE INSERT ON operational_tasks FOR EACH ROW EXECUTE FUNCTION {name}();";
         await db.Database.ExecuteSqlRawAsync(create);

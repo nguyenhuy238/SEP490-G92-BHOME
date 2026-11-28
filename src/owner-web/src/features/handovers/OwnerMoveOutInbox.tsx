@@ -29,7 +29,7 @@ import {
   displayContractDate,
 } from '../../../../../packages/client-core/src/contracts';
 import { FilterToolbar, StatusChip } from '../../components/common/PortalUI';
-import { useContractsApi } from '../contracts/useContractsApi';
+import { useContractsApi } from '../contracts/hooks/useContractsApi';
 import { OwnerMoveOutReviewPanel } from './OwnerMoveOutReviewPanel';
 
 interface MoveOutInboxItem {

@@ -1,11 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 using BHome.Application.Contracts;
 using BHome.Application.Notifications;
-using BHome.DigitalSigning.Application;
 using BHome.Infrastructure.Contracts;
 using iText.Kernel.Pdf;
 using iText.Signatures;
@@ -16,9 +13,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace BHome.IntegrationTests.Contracts;
 
-// Owner signs with their own certificate outside BHOME (Viettel MySign registered through VNeID; here a synthetic
-// "Viettel-CA" test certificate) and uploads the file; the Tenant then signs in the app with an emailed OTP.
-// Expected behaviour: agreed 09/11/2026 + BHOME_OTP_Signing_Plan.md §7 (SRS v1.3 UC-15, DBR-03).
+// Retired upload requests cannot change the contract. The supported Owner-session and Tenant-OTP
+// workflow must still preserve both PDF signatures, invitation delivery, and idempotent consent.
 public sealed partial class ContractLifecycleApiTests
 {
     [Theory, InlineData(false), InlineData(true)]
@@ -39,8 +35,7 @@ public sealed partial class ContractLifecycleApiTests
             {
                 ["ContractPdf:TemplateId"] = ContractPdfRendererTests.TemplateId,
                 ["MainDraft:LibreOfficeContainerImage"] = "bhome/contract-converter:local",
-                ["ContractSigning:Methods:Otp"] = "true",
-                ["ContractSigning:Methods:UploadProof"] = "true"
+                ["ContractSigning:Methods:Otp"] = "true"
             }));
             b.ConfigureTestServices(s =>
             {
@@ -59,43 +54,30 @@ public sealed partial class ContractLifecycleApiTests
         var owner = As(w.Owner);
         var tenant = As(w.Tenant);
 
-        // Owner is offered UPLOAD_PROOF by default; the Tenant is not offered it at all.
-        Assert.Equal(SigningMethods.OwnerSession, (await owner.Client.GetFromJsonAsync<SigningMethodsView>("/api/v1/contracts/signing-methods"))!.Default);
+        var ownerMethods = (await owner.Client.GetFromJsonAsync<SigningMethodsView>("/api/v1/contracts/signing-methods"))!;
+        Assert.Equal(SigningMethods.OwnerSession, ownerMethods.Default);
+        Assert.DoesNotContain(SigningMethods.UploadProof, ownerMethods.Methods);
         var tenantMethods = (await tenant.Client.GetFromJsonAsync<SigningMethodsView>("/api/v1/contracts/signing-methods"))!;
         Assert.DoesNotContain(SigningMethods.UploadProof, tenantMethods.Methods);
         Assert.Equal(SigningMethods.Otp, tenantMethods.Default);
-        Assert.Equal(HttpStatusCode.Forbidden, (await Post(tenant, Path(id, "signing"),
-            new SigningInput(Guid.Empty, Method: SigningMethods.UploadProof), Guid.NewGuid())).StatusCode);
+        foreach (var actor in new[] { owner, tenant })
+        {
+            var retired = await Post(actor, Path(id, "signing"),
+                new SigningInput(Guid.Empty, Method: SigningMethods.UploadProof), Guid.NewGuid());
+            Assert.Equal(HttpStatusCode.BadRequest, retired.StatusCode);
+            Assert.Contains("signing_method_invalid", await retired.Content.ReadAsStringAsync());
+        }
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.Client.GetAsync(Path(id, "signing/upload-source"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Upload(owner, id, "%PDF-"u8.ToArray())).StatusCode);
+        Assert.Empty((await owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Signatures);
 
-        // 1. Owner starts: BHOME keeps the exact PDF to sign; nothing is sent anywhere.
-        var started = await Success<SignatureView>(await Post(owner, Path(id, "signing"),
-            new SigningInput(Guid.Empty, Method: SigningMethods.UploadProof), Guid.NewGuid()));
-        Assert.Equal("Pending", started.Status);
-        var issued = await owner.Client.GetByteArrayAsync(Path(id, "signing/upload-source"));
-        Assert.Equal("%PDF-"u8.ToArray(), issued[..5]);
-
-        // 2. Owner signs it outside BHOME with their own certificate.
-        using var key = RSA.Create(2048);
-        using var certificate = new CertificateRequest("CN=CHU TRO TONG HOP, O=Viettel-CA Synthetic Test", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
-            .CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
-        X509Certificate2[] chain = [certificate];
-        var signer = host.Services.GetRequiredService<IPdfSigner>();
-        var prepared = signer.Prepare(issued, chain, DateTimeOffset.UtcNow, new VisibleSignature(1, 0.1, 0.75, 0.35, "Ký bởi: CHỦ TRỌ"));
-        var ownerSigned = signer.Complete(prepared.PreparedPdf, prepared.FieldName, prepared.DocumentDigest, chain,
-            key.SignHash(prepared.DataToSignDigest, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
-
-        // Re-uploading the issued PDF without a new signature is refused and changes nothing.
-        var unsigned = await Upload(owner, id, issued);
-        Assert.Equal(HttpStatusCode.BadRequest, unsigned.StatusCode);
-        Assert.Contains("signed_pdf_has_no_new_signature", await unsigned.Content.ReadAsStringAsync());
-
-        // 3. The signed file is accepted once; the Tenant is invited by email.
-        var uploadKey = Guid.NewGuid();
-        var accepted = await Upload(owner, id, ownerSigned, uploadKey);
-        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
-        var afterOwner = (await accepted.Content.ReadFromJsonAsync<ContractView>())!;
+        var sessionInput = new SigningInput(Guid.Empty, Method: SigningMethods.OwnerSession, Consent: true);
+        var sessionKey = Guid.NewGuid();
+        var started = await Success<SignatureView>(await Post(owner, Path(id, "signing"), sessionInput, sessionKey));
+        Assert.Equal("Signed", started.Status);
+        Assert.Equal(started.Id, (await Success<SignatureView>(await Post(owner, Path(id, "signing"), sessionInput, sessionKey))).Id);
+        var afterOwner = (await owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!;
         Assert.Equal("Signed", Assert.Single(afterOwner.Signatures, s => s.SignerUserId == w.Owner.Id).Status);
-        Assert.Equal(HttpStatusCode.OK, (await Upload(owner, id, ownerSigned, uploadKey)).StatusCode);
         Assert.Contains(email.Sent, m => m.EventType == "CONTRACT_SIGNING_INVITATION" && m.Destination == w.Tenant.Id.ToString("N") + "@example.invalid");
 
         // 4. Tenant signs on top of the Owner's signed file with an emailed OTP.
@@ -115,7 +97,6 @@ public sealed partial class ContractLifecycleApiTests
         var names = signatures.GetSignatureNames();
         Assert.Equal(2, names.Count);
         Assert.All(names, name => Assert.True(signatures.ReadSignatureData(name).VerifySignatureIntegrityAndAuthenticity()));
-        Assert.Contains("Viettel-CA", signatures.ReadSignatureData(names[0]).GetSigningCertificate().GetIssuerDN().ToString());
         Assert.True(signatures.SignatureCoversWholeDocument(names[^1]));
     }
 

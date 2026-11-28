@@ -117,16 +117,8 @@ async function main(settings) {
     name: 'SYNTHETIC LIVE LOCATION',
     address: 'Synthetic verification workspace',
   });
-  const type = await post(owner, '/api/v1/room-types', {
-    locationId: location.id,
-    name: 'Synthetic studio',
-    defaultCapacity: 2,
-    areaM2: 20,
-    amenities: [],
-  });
   const room = await post(owner, '/api/v1/rooms', {
     locationId: location.id,
-    roomTypeId: type.id,
     roomNumber: 'LIVE101',
     capacity: 2,
   });

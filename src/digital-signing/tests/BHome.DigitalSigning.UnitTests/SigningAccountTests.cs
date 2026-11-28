@@ -1,9 +1,8 @@
-using BHome.Application.IdentityAccess;
+using BHome.DigitalSigning.Application.Identity;
 using BHome.DigitalSigning.Application;
 using BHome.DigitalSigning.Application.Contracts;
 using BHome.DigitalSigning.Application.Services;
 using BHome.DigitalSigning.Infrastructure.Security;
-using BHome.Domain.IdentityAccess;
 using NSubstitute;
 
 namespace BHome.DigitalSigning.UnitTests;
@@ -14,7 +13,7 @@ public sealed class SigningAccountTests
     private static readonly ViettelAccount Configured = new("https://remotesigning.viettel.vn", "env-client", "env-secret-123456",
         null, "/login", "/credentials/list", "/signHash", "/status", 15);
 
-    private readonly ICurrentUser user = Substitute.For<ICurrentUser>();
+    private readonly ISigningCurrentUser user = Substitute.For<ISigningCurrentUser>();
     private readonly ISigningSettingsStore settings = Substitute.For<ISigningSettingsStore>();
     private readonly AesGcmSecretProtector protector = new(Key);
     private ViettelSettingsRow? saved;
@@ -22,7 +21,7 @@ public sealed class SigningAccountTests
     public SigningAccountTests()
     {
         user.UserId.Returns(Guid.NewGuid());
-        user.IsInRole(Roles.Owner).Returns(true);
+        user.IsInRole(SigningRoles.Owner).Returns(true);
         settings.FindAsync(Arg.Any<CancellationToken>()).Returns(_ => saved);
         settings.SaveAsync(Arg.Do<ViettelSettingsRow>(row => saved = row), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
     }
@@ -65,7 +64,7 @@ public sealed class SigningAccountTests
     [Fact]
     public async Task OnlyAnOwnerChangesTheAccount()
     {
-        user.IsInRole(Roles.Owner).Returns(false);
+        user.IsInRole(SigningRoles.Owner).Returns(false);
 
         var refused = await Assert.ThrowsAsync<DigitalSigningException>(() => Service().SaveAsync(
             new SaveViettelSettings(null, null, null, null, false), CancellationToken.None));

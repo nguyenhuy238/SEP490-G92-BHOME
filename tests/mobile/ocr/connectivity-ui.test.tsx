@@ -2,7 +2,7 @@
 import React, { useEffect } from 'react';
 import { QueryCache } from '../../../src/mobile/src/lib/queryCache';
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 const mocks = vi.hoisted(() => ({
   load: vi.fn(),
   session: {
@@ -93,15 +93,13 @@ vi.mock('../../../src/mobile/src/services/ownerOverview', () => ({
   loadOwnerOverview: mocks.load,
 }));
 import { OwnerOverviewScreen } from '../../../src/mobile/src/screens/OwnerOverviewScreen';
-vi.mock('../../../src/mobile/src/features/owner/OwnerAttentionSummary', () => ({
-  OwnerAttentionSummary: () => null,
-}));
 vi.mock('../../../src/mobile/src/features/owner/OwnerApprovalQueue', async (original) => ({
   ...(await original<object>()),
   OwnerApprovalQueue: () => null,
 }));
 import { beforeEach } from 'vitest';
 beforeEach(() => {
+  mocks.session.session.roles = ['Owner'];
   mocks.session.api.queryCache = new QueryCache();
   mocks.session.api.request.mockImplementation(async (path: string) =>
     path.includes('/debts/summary')
@@ -158,4 +156,59 @@ it('shares the in-flight dashboard read on return and aborts when the session ca
   expect(mocks.load).toHaveBeenCalledTimes(1);
   mocks.session.api.queryCache!.dispose();
   expect(signal.aborted).toBe(true);
+});
+
+it('shows authoritative emergency counts and debt on the current Owner overview, and opens the source incident', async () => {
+  mocks.load.mockResolvedValue({
+    locations: 1,
+    rooms: 2,
+    occupiedRooms: 1,
+    operationalOccupancyRate: 50,
+  });
+  mocks.session.api.request.mockImplementation(async (path: string) => {
+    if (path.includes('/debts/summary'))
+      return { outstandingAmount: '90000', overdueInvoiceCount: 2 };
+    if (path.includes('severity=Emergency&status=Submitted'))
+      return {
+        totalCount: 4,
+        items: [{ id: 'synthetic-emergency', description: 'Sự cố tổng hợp' }],
+      };
+    if (path.includes('severity=Emergency&status=InProgress')) return { totalCount: 7, items: [] };
+    return { items: [], totalCount: 0 };
+  });
+  render(<OwnerOverviewScreen />);
+  const emergency = screen.getByText('Sự cố khẩn cấp').parentElement!;
+  await within(emergency).findByText('11');
+  const debt = screen.getByText('Còn phải thu').parentElement!;
+  await within(debt).findByText(/90[.]000/);
+  expect(within(debt).getByText('2 hóa đơn quá hạn')).toBeTruthy();
+  await screen.findByText('Sự cố tổng hợp');
+  fireEvent.click(screen.getByText('Xem cảnh báo'));
+  expect(mocks.go).toHaveBeenCalledWith('incident-detail', { incidentId: 'synthetic-emergency' });
+});
+
+it('does not show zero for failed emergency and debt reads on the current Owner overview', async () => {
+  mocks.load.mockResolvedValue({
+    locations: 1,
+    rooms: 2,
+    occupiedRooms: 1,
+    operationalOccupancyRate: 50,
+  });
+  mocks.session.api.request.mockImplementation(async (path: string) => {
+    if (path.includes('/debts/summary') || path.includes('severity=Emergency'))
+      throw new MobileApiError(500);
+    return { items: [], totalCount: 0 };
+  });
+  render(<OwnerOverviewScreen />);
+  await screen.findAllByText(/Chưa cập nhật được dữ liệu/);
+  expect(within(screen.getByText('Sự cố khẩn cấp').parentElement!).getByText('—')).toBeTruthy();
+  expect(within(screen.getByText('Còn phải thu').parentElement!).getByText('—')).toBeTruthy();
+});
+
+it('does not query or display Owner overview balances for Tenant', () => {
+  mocks.session.session.roles = ['Tenant'];
+  render(<OwnerOverviewScreen />);
+  expect(screen.queryByText('Còn phải thu')).toBeNull();
+  expect(mocks.session.api.request).not.toHaveBeenCalled();
+  expect(mocks.load).not.toHaveBeenCalled();
 });

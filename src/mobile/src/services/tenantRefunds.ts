@@ -1,10 +1,11 @@
 import type { Page } from '../../../../packages/client-core/src/invoices';
 import type { TenantRefund } from '../../../../packages/client-core/src/refunds';
-import { MobileApiError, type MobileApi } from '../lib/api';
-
-const object = (value: unknown): value is Record<string, unknown> =>
-  !!value && typeof value === 'object' && !Array.isArray(value);
-const instant = (value: unknown) => typeof value === 'string' && Number.isFinite(Date.parse(value));
+import {
+  isResponseRecord as object,
+  isResponseInstant as instant,
+  invalidResponse,
+  type MobileApi,
+} from '../lib/api';
 export async function loadTenantRefunds(
   api: MobileApi,
   path: string,
@@ -21,7 +22,7 @@ export async function loadTenantRefunds(
     data.pageSize !== Number(requested.get('pageSize')) ||
     data.items.length > (data.pageSize as number)
   )
-    throw new MobileApiError(502, 'invalid_response');
+    invalidResponse();
   const rows: TenantRefund[] = [];
   for (const row of data.items) {
     if (
@@ -39,7 +40,7 @@ export async function loadTenantRefunds(
       typeof row.isDevelopmentDemo !== 'boolean' ||
       (row.status === 'COMPLETED' && !instant(row.executedAt))
     )
-      throw new MobileApiError(502, 'invalid_response');
+      invalidResponse();
     // Retain only the Tenant contract even if a future server accidentally adds private metadata.
     rows.push({
       id: row.id,
@@ -52,8 +53,7 @@ export async function loadTenantRefunds(
       isDevelopmentDemo: row.isDevelopmentDemo,
     } as TenantRefund);
   }
-  if (new Set(rows.map((row) => row.id)).size !== rows.length)
-    throw new MobileApiError(502, 'invalid_response');
+  if (new Set(rows.map((row) => row.id)).size !== rows.length) invalidResponse();
   return {
     items: rows,
     page: data.page,

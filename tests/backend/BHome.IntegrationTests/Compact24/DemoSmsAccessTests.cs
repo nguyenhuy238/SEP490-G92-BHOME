@@ -30,7 +30,7 @@ public sealed partial class Compact24NotificationMvpTests
         // Old access token remains within its normal lifetime, but expired OTP content is gone.
         Assert.Empty((await owner.GetFromJsonAsync<DemoSmsView[]>("/api/v1/demo/sms"))!);
         Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync($"/api/v1/demo/sms/{message.Id}")).StatusCode);
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var durable = await db.Database.SqlQuery<string>($"SELECT event_data::text||delivery_history::text AS \"Value\" FROM notifications WHERE id={request.ChallengeId}").SingleAsync();
         Assert.DoesNotContain(otp, durable);
     }

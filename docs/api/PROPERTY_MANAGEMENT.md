@@ -11,7 +11,7 @@ record the implementation SHA, counting methodology and executed validation.
 | Physical Asset | Real Location/Room or common-area asset; condition, version, workflow guards, evidence and history           |
 | BillingPolicy  | Location or explicit Room scope; exact decimal rate; effective dates, overlap checks and audited replacement |
 
-Current DTOs: [PropertyContracts.cs](../../src/backend/BHome.Application/PropertyManagement/PropertyContracts.cs).
+Current DTOs: [PropertyContracts.cs](../../src/backend/BHome.Api/DTOs/PropertyManagement/PropertyContracts.cs).
 LocationWrite, RoomWrite and PolicyWrite reject unmapped fields, including obsolete
 RoomType fields even when null. `roomId:null` selects Location fee scope. Rates use
 decimal strings. Permissions and billing/payment state remain server-authoritative.
@@ -21,7 +21,7 @@ The new method uses the existing Compact24 column and contract snapshot. It does
 not reinterpret existing rates, contracts, or invoice lines.
 
 Deployment: existing Compact24 runtimes can store the new value without a data
-backfill. The reviewed [SQL guard](../../src/backend/BHome.Infrastructure/Persistence/Compact24/Migrations/PersonMonthlyServiceFees.sql)
+backfill. The reviewed [SQL guard](../../src/backend/BHome.Api/Data/Compact24/Migrations/PersonMonthlyServiceFees.sql)
 adds a check for future writes. EF-managed Compact24 databases use migration
 `20261113000100_PersonMonthlyServiceFees`; databases initialized from standalone
 Compact24 SQL without EF history need an explicitly reviewed application of the

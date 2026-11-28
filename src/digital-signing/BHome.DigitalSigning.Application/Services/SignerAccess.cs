@@ -1,16 +1,15 @@
-using BHome.Application.IdentityAccess;
-using BHome.Domain.IdentityAccess;
+using BHome.DigitalSigning.Application.Identity;
 
 namespace BHome.DigitalSigning.Application.Services;
 
 internal static class SignerAccess
 {
     // Every fixed role may hold and use its own certificate; a certificate signs only for the user who declared it.
-    public static Guid RequireSigner(ICurrentUser user)
+    public static Guid RequireSigner(ISigningCurrentUser user)
     {
         if (user.UserId is not { } id || id == Guid.Empty)
             throw new DigitalSigningException(DigitalSigningError.Unauthenticated, "Bạn cần đăng nhập.");
-        if (!Roles.All.Any(user.IsInRole))
+        if (!SigningRoles.All.Any(user.IsInRole))
             throw DigitalSigningException.Forbidden("Vai trò của bạn không được ký số.");
         return id;
     }

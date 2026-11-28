@@ -5,8 +5,8 @@ import { router, useFocusEffect, useLocalSearchParams, usePreventRemove } from '
 import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
 import { Action, Box, Heading, ui } from '../components/WorkspaceKit';
 import { ChoiceField } from '../components/WorkflowControls';
-import { MainContractProgress } from '../features/contracts/MainContractProgress';
-import { MainDraftScreen } from '../features/contracts/MainDraftScreen';
+import { MainContractProgress } from '../features/contracts/main/MainContractProgress';
+import { MainDraftScreen } from '../features/contracts/main/MainDraftScreen';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useSession } from '../lib/SessionProvider';
 import { captureService } from '../services/captureService';
@@ -17,7 +17,7 @@ import { WorkspaceFooter } from '../components/WorkspaceFooter';
 import { IdentityWizard } from '../features/onboarding/IdentityWizard';
 import { ResidentProfile } from '../features/onboarding/ResidentProfile';
 import { OnboardingPeopleStep } from '../features/onboarding/OnboardingPeopleStep';
-import { HoldingMainStart } from '../features/contracts/HoldingMainStart';
+import { HoldingMainStart } from '../features/contracts/holding/HoldingMainStart';
 import { contractClient } from '../../../../packages/client-core/src/contracts';
 import {
   allIdentitiesConfirmed,
@@ -141,7 +141,7 @@ function NewResidentOnboarding() {
         );
     }, [dirty, registerExitGuard, disablePrevention]),
   );
-  useFocusEffect(useCallback(() => () => setIdentityOpen(false), []));
+  useFocusEffect(useCallback(() => () => setIdentityOpen(false), [setIdentityOpen]));
   const openSigning = (contractId = '') => {
     setFinished(true);
     disablePrevention();
@@ -469,6 +469,29 @@ function NewResidentOnboarding() {
             }}
             onLabelChange={(key, label) => patch(key, { label })}
             onEmailChange={(key, email) => patch(key, { email })}
+            onScan={(person, side) => {
+              if (side)
+                setCaptureRequest((before) => ({
+                  side,
+                  personKey: person.key,
+                  id: (before?.id ?? 0) + 1,
+                }));
+              const progress = person.captureProgress;
+              const both = progress?.front === 'recognized' && progress?.back === 'recognized';
+              const started = progress && (progress.front !== 'unscanned' || progress.back !== 'unscanned');
+              if (person.status === 'confirmed') return;
+              void openIdentity(
+                person,
+                side
+                  ? 'capture'
+                  : both || (!started && person.status === 'pending')
+                    ? 'verify'
+                    : 'capture',
+              );
+            }}
+            onManual={(person) => void openIdentity(person, 'verify')}
+            personLabel={personLabel}
+            disabledFor={(person) => busy || recognizing || !!person.creationUncertain}
             onBack={() => move(0)}
             onContinue={() => move(2)}
           />

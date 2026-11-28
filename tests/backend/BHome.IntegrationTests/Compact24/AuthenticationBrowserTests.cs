@@ -29,7 +29,7 @@ public sealed class AuthenticationBrowserTests
             })));
             var email = Guid.NewGuid().ToString("N") + "@example.invalid";
             await using (var scope = host.Services.CreateAsyncScope())
-                await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, new ApplicationUser { Id = Guid.NewGuid(), UserName = email, Email = email, EmailConfirmed = true }, "Owner", WorkflowTestUsers.Password);
+                await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, new User { Id = Guid.NewGuid(), UserName = email, Email = email, EmailConfirmed = true }, "Owner", WorkflowTestUsers.Password);
             await using var bridge = new LoopbackBrowserApiBridge(host.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false }), apiPort);
             var configPath = Path.Combine(directory, "fixture.private.json");
             await File.WriteAllTextAsync(configPath, JsonSerializer.Serialize(new { api = apiUrl, web = webUrl, email, password = WorkflowTestUsers.Password, output = directory }));

@@ -84,6 +84,17 @@ def require_inventory(project, expected, actual):
     groups = expected['cases']
     require(groups and expected['count'] == sum(len(ids) for ids in groups.values()),
             f'{project}: invalid or empty committed inventory')
+    # A reviewed assembly relocation may change an xUnit theory row ID because
+    # the serialized enum parameter includes its assembly-qualified type name.
+    # Preserve every original ID and require its specific measured successor in
+    # the same identity group; do not accept a replacement merely by display name.
+    baseline_ids = {test_id for ids in groups.values() for test_id in ids}
+    transitions = expected.get('reviewedIdTransitions', {})
+    require(isinstance(transitions, dict) and set(transitions).issubset(baseline_ids)
+            and all(isinstance(value, str) and value and value not in baseline_ids
+                    for value in transitions.values())
+            and len(set(transitions.values())) == len(transitions),
+            f'{project}: invalid reviewed test ID transitions')
     for key, ids in groups.items():
         require(isinstance(ids, list) and ids and len(set(ids)) == len(ids),
                 f'{project}: invalid committed test identity {key}')
@@ -91,7 +102,8 @@ def require_inventory(project, expected, actual):
         require(len(found) >= len(ids), f'{project}: missing test identity {key}')
         # All five measured Linux/Windows assemblies have identical test IDs.
         # Require those IDs even when a display name is unique.
-        require(set(ids).issubset(found), f'{project}: missing or changed test ID {key}')
+        required_ids = {transitions.get(test_id, test_id) for test_id in ids}
+        require(required_ids.issubset(found), f'{project}: missing or changed test ID {key}')
 
 
 def require_discovery(project, discovered, actual):

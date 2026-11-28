@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
-import { deliverWebDocument, openPdfWindow } from '../features/contracts/webContractDocument';
+import {
+  deliverWebDocument,
+  openPdfWindow,
+} from '../features/contracts/signing/webContractDocument';
 const bytes = () => new TextEncoder().encode('%PDF-1.7\nsynthetic-test-only');
 afterEach(() => {
   vi.restoreAllMocks();

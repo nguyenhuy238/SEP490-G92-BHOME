@@ -13,8 +13,12 @@ import { contractClient, type ContractView } from '../../../../packages/client-c
 import { ApiError } from '../../../../packages/client-core/src/api';
 import { type InternalSigningStatus } from '../../../../packages/client-core/src/internalSigning';
 vi.mock('../theme/theme', () => ({ staffColors: {} }));
-vi.mock('../features/contracts/ContractSigningPanel', () => ({ ContractSigningPanel: () => null }));
-vi.mock('../features/contracts/SigningSetup', () => ({ SignaturePlacementField: () => null }));
+vi.mock('../features/contracts/signing/ContractSigningPanel', () => ({
+  ContractSigningPanel: () => null,
+}));
+vi.mock('../features/contracts/signing/SigningSetup', () => ({
+  SignaturePlacementField: () => null,
+}));
 vi.mock('../components/WorkflowControls', () => ({
   Input: ({
     label,
@@ -103,16 +107,19 @@ vi.mock('../components/WorkspaceKit', () => ({
 vi.mock('../features/contracts/ContractEvidence', () => ({
   ContractEvidence: ({ label }: { label?: string }) => <span>{label || 'Tài liệu ký số'}</span>,
 }));
-vi.mock('../features/contracts/HoldingDepositAllocation', () => ({
+vi.mock('../features/contracts/holding/HoldingDepositAllocation', () => ({
   HoldingDepositAllocation: () => <span>Đối chiếu giao dịch Owner</span>,
 }));
 vi.mock('../features/contracts/ContractActionForm', () => ({
   ContractActionForm: () => <span>Biểu mẫu thao tác có xác nhận</span>,
   SigningCertificates: () => <span>Chọn chứng thư ký số</span>,
 }));
-import { HoldingContractFlow, invitationLabel } from '../features/contracts/HoldingContractFlow';
+import {
+  HoldingContractFlow,
+  invitationLabel,
+} from '../features/contracts/holding/HoldingContractFlow';
 const request = vi.fn();
-vi.mock('../features/contracts/HoldingProgress', () => ({
+vi.mock('../features/contracts/holding/HoldingProgress', () => ({
   HoldingProgress: ({ current }: { current: number }) => <span>Bước {current + 1}/8</span>,
 }));
 const api = contractClient(request);

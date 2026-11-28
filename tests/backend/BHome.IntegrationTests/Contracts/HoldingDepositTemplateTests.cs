@@ -26,7 +26,7 @@ public sealed class HoldingDepositTemplateTests
             StartDate = new(2026, 11, 22),
             EndDate = new(2027, 1, 22),
             HoldingExpiryAt = new DateTimeOffset(2026, 11, 24, 17, 0, 0, TimeSpan.Zero),
-            MonthlyRent = 2300000,
+            RentAmount = 2300000,
             RequiredDeposit = 2300000,
             Terms = "Điều khoản bổ sung kiểm thử.",
             Room = new Room

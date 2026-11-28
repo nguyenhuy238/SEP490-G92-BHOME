@@ -76,8 +76,8 @@ public sealed class LocationAssignmentTests(PlanSessions sessions)
         // The data is saved as described in UC-04 to UC-06.
         // Room Type: route/body from the Room Type section of docs/api/PROPERTY_MANAGEMENT.md (the plan names this step).
         var roomType = await _api.PostAsync(
-            "api/v1/room-types",
-            new { locationId, name = PlanData.Unique("Studio"), description = "Phong co ban cong", defaultCapacity = 2, areaM2 = 20.5m, amenities = new[] { "Ban cong" }, isActive = true },
+            $"api/v1/locations/{locationId}/room-defaults",
+            new { name = PlanData.Unique("Studio"), description = "Phong co ban cong", defaults = new { capacity = 2, area = 20.5m, amenities = new[] { "Ban cong" }, referenceRent = 2500000m }, assetTemplateId = (string?)null },
             owner);
         await PlanAssert.SuccessAsync(roomType, "create Room Type");
 

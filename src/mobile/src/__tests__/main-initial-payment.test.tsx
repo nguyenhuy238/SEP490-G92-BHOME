@@ -37,7 +37,7 @@ vi.mock('../components/WorkspaceKit', () => ({
   Box: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Heading: ({ title }: { title: string }) => <h2>{title}</h2>,
 }));
-import { MainInitialPaymentCard } from '../features/contracts/MainInitialPaymentCard';
+import { MainInitialPaymentCard } from '../features/contracts/main/MainInitialPaymentCard';
 const request = vi.fn();
 const paid = vi.fn();
 const api = contractClient(request as ContractRequest);

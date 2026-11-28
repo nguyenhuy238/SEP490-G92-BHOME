@@ -53,7 +53,7 @@ internal static class ContractVerificationCli
                     "IdentityProtection:ActiveHmacVersion", "IdentityProtection:EncryptionKeys:test", "IdentityProtection:HmacKeys:test" })
                     settings[key] = config[key];
                 // Record that this harness is using the actual fail-closed integrations, not test replacements.
-                if (scope.ServiceProvider.GetRequiredService<IContractSigningProvider>().GetType().Name != "ViettelMySignContractAdapter" ||
+                if (scope.ServiceProvider.GetRequiredService<IContractSigningProvider>().GetType().Name != "ContractSigningRouter" ||
                     scope.ServiceProvider.GetRequiredService<IContractSettlementLedger>().GetType().Name != "PendingContractSettlementLedger" ||
                     scope.ServiceProvider.GetRequiredService<IContractHoldingLedger>().GetType().Name != "UnconfiguredContractHoldingLedger")
                     throw new InvalidOperationException("Unexpected provider replacement: live verification refused.");
@@ -63,12 +63,12 @@ internal static class ContractVerificationCli
             var password = "Synthetic!" + Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
             await using (var scope = fixture.Factory.Services.CreateAsyncScope())
             {
-                var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+                var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
                 foreach (var (name, role) in new[] { ("owner", Roles.Owner), ("staff", Roles.Staff), ("tenant", Roles.Tenant),
                     ("otherStaff", Roles.Staff), ("otherTenant", Roles.Tenant) })
                 {
                     var id = Guid.NewGuid(); var email = $"{name}-{id:N}@example.invalid";
-                    var user = new ApplicationUser { Id = id, UserName = email, Email = email, IsActive = true };
+                    var user = new User { Id = id, UserName = email, Email = email, IsActive = true };
                     if (!(await users.CreateAsync(user, password)).Succeeded || !(await users.AddToRoleAsync(user, role)).Succeeded)
                         throw new InvalidOperationException("Synthetic account provisioning failed.");
                     actors[name] = new { id, email, password };
@@ -173,7 +173,7 @@ internal static class ContractVerificationCli
             var db = verification.ServiceProvider.GetRequiredService<BHomeDbContext>();
             if (await db.Set<Contract>().CountAsync() != 2 || await db.Set<Contract>().AnyAsync(c => (c.Status != ContractStatus.Draft && c.Status != ContractStatus.PendingSigning) || c.PreviousContractId != null) ||
                 await db.Set<Room>().AnyAsync(r => r.Status == RoomStatus.Occupied) || await db.Set<DepositVerification>().CountAsync() != 1 ||
-                await db.Set<DepositVerification>().SumAsync(d => d.Amount) != 3000000 || await db.Set<ContractSignature>().AnyAsync() ||
+                await db.Set<DepositVerification>().SumAsync(d => d.Amount) != 3000000 || await db.Set<ContractSigning>().AnyAsync() ||
                 await db.Set<BHome.DigitalSigning.Domain.SigningCertificate>().AnyAsync() || await db.Set<ContractMoveOut>().AnyAsync() ||
                 await db.SecurityAudit.CountAsync(a => a.Event == "ContractDepositVerified") != 1)
                 throw new InvalidOperationException("Unexpected business effects after blocked signing/activation.");

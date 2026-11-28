@@ -65,7 +65,10 @@ vi.mock('../components/TenantMeterReadingEvidence', () => ({
   ),
 }));
 
-import { TenantDashboard, tenantMonthlyUtility } from '../screens/TenantDashboard';
+import {
+  TenantDashboard,
+  tenantMonthlyUtility,
+} from '../features/tenant/dashboard/TenantDashboard';
 
 afterEach(() => {
   cleanup();

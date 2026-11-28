@@ -22,7 +22,7 @@ vi.mock('../theme/theme', () => ({
   colors: { navy: '#000', white: '#fff', border: '#eee', red: '#b00' },
 }));
 
-import { TenantMoveOutExcessPayment } from '../features/contracts/TenantMoveOutExcessPayment';
+import { TenantMoveOutExcessPayment } from '../features/contracts/moveOut/TenantMoveOutExcessPayment';
 
 afterEach(() => {
   cleanup();

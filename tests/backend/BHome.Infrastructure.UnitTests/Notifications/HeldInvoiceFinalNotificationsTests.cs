@@ -14,17 +14,17 @@ public sealed class HeldInvoiceFinalNotificationsTests
         var options = new DbContextOptionsBuilder<Compact24DbContext>()
             .UseNpgsql("Host=127.0.0.1;Database=unused;Username=unused;Password=unused")
             .Options;
-        using var db = new Compact24DbContext(options);
+        using var db = new Compact24ArchiveContext(options);
         var original = Guid.NewGuid();
         var heldSql = HeldInvoiceFinalNotifications.StillHeldForOriginal(
-            db.Set<InvoiceAdjustmentRequest>(), original, new DateOnly(2026, 11, 16))
+            db.Set<InvoiceAdjustment>(), original, new DateOnly(2026, 11, 16))
             .Select(r => r.Id).ToQueryString();
         Assert.Contains("EXISTS", heldSql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("invoice_id", heldSql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("decision", heldSql, StringComparison.OrdinalIgnoreCase);
 
         var pendingSql = HeldInvoiceFinalNotifications.PendingForInvoice(
-            db.Set<InvoiceAdjustmentRequest>(), Guid.NewGuid())
+            db.Set<InvoiceAdjustment>(), Guid.NewGuid())
             .Select(r => r.Id).ToQueryString();
         Assert.Contains("ORDER BY", pendingSql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("SubmittedAt", pendingSql, StringComparison.OrdinalIgnoreCase);
@@ -109,10 +109,10 @@ public sealed class HeldInvoiceFinalNotificationsTests
         ScheduledFinalDate = due
     };
 
-    private static InvoiceAdjustmentRequest Request(Invoice invoice, DateTimeOffset submitted,
+    private static InvoiceAdjustment Request(Invoice invoice, DateTimeOffset submitted,
         bool decided = false)
     {
-        var request = new InvoiceAdjustmentRequest
+        var request = new InvoiceAdjustment
         {
             InvoiceId = invoice.Id,
             Invoice = invoice,

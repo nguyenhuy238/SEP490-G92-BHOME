@@ -1,7 +1,13 @@
 import type { DebtInvoice, PaymentHistory } from '../../../../packages/client-core/src/payments';
 import type { Page } from '../../../../packages/client-core/src/invoices';
-import { dateOnly } from '../../../../packages/client-core/src/contracts';
-import { MobileApiError, type MobileApi } from '../lib/api';
+import {
+  isResponseRecord as object,
+  isResponseMoney as money,
+  isResponseDate as day,
+  isResponseInstant as instant,
+  invalidResponse as invalid,
+  type MobileApi,
+} from '../lib/api';
 
 export type LedgerItem = PaymentHistory | DebtInvoice;
 export type LedgerPage = Page<LedgerItem>;
@@ -11,21 +17,7 @@ export interface LedgerFilters {
   roomId: string;
   overdueOnly: boolean;
 }
-const object = (v: unknown): v is Record<string, unknown> =>
-  !!v && typeof v === 'object' && !Array.isArray(v);
-const money = (v: unknown): v is string => typeof v === 'string' && /^\d+$/.test(v);
 const signed = (v: unknown) => typeof v === 'string' && /^-?\d+$/.test(v);
-const day = (v: unknown) => {
-  try {
-    return typeof v === 'string' && dateOnly(v) === v;
-  } catch {
-    return false;
-  }
-};
-const instant = (v: unknown) => typeof v === 'string' && Number.isFinite(Date.parse(v));
-function invalid(): never {
-  throw new MobileApiError(502, 'invalid_response');
-}
 export function ledgerPeriod(input: string) {
   if (!input.trim()) return '';
   if (!/^(0[1-9]|1[0-2])\/\d{4}$/.test(input.trim())) throw new Error('Nhập kỳ theo MM/YYYY.');

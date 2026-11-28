@@ -25,7 +25,7 @@ public sealed partial class Compact24OwnerSetupTests
         Guid roomId, otherId, physicalId;
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var rooms = await db.Set<Room>().Where(r => r.LocationId == location).OrderBy(r => r.RoomNumber).ToArrayAsync();
             roomId = rooms[0].Id; otherId = rooms[1].Id;
             var physical = new Asset { LocationId = location, RoomId = roomId, Code = "SYN-CHAIR", Name = "Chair", Category = "Furniture", Condition = "Good" };
@@ -76,7 +76,7 @@ public sealed partial class Compact24OwnerSetupTests
         var store = check.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
         var history = await store.HistoryAsync(view.Provenance.Id, "RoomProvenance", default);
         Assert.Equal(25m, history[0].Data.GetProperty("area").GetDecimal());
-        var dbCheck = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var dbCheck = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var policies = await dbCheck.Set<BillingPolicy>().AsNoTracking().Where(p => p.RoomId == roomId).OrderBy(p => p.EffectiveFrom).ToArrayAsync();
         Assert.Equal(2, policies.Length); Assert.Equal(2700000m, policies[0].Rate); Assert.Equal(Today, policies[0].EffectiveTo);
         Assert.Equal(3200000m, policies[1].Rate); Assert.Equal(Today.AddDays(1), policies[1].EffectiveFrom);
@@ -98,7 +98,7 @@ public sealed partial class Compact24OwnerSetupTests
         var protectedRooms = new List<Guid>();
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var rooms = await db.Set<Room>().Where(r => r.LocationId == location).ToArrayAsync();
             eligible = rooms.Single(r => r.RoomNumber == "101").Id; other = rooms.Single(r => r.RoomNumber == "201").Id;
             var unconfigured = new Room { LocationId = location, RoomNumber = "LEGACY", Capacity = 2, Status = RoomStatus.Available };
@@ -117,7 +117,7 @@ public sealed partial class Compact24OwnerSetupTests
                     Status = states[i],
                     StartDate = Today,
                     EndDate = Today.AddMonths(6),
-                    MonthlyRent = 2700000m,
+                    RentAmount = 2700000m,
                     Terms = "Synthetic protected contract",
                     Residents = [new ContractResident { ResidentId = resident.Id, Role = ResidentType.Representative, ResidenceFrom = Today }]
                 };

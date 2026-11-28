@@ -1,6 +1,6 @@
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
-using BHome.Application.IdentityAccess;
+using BHome.DigitalSigning.Application.Identity;
 using BHome.DigitalSigning.Api;
 using BHome.DigitalSigning.Api.Controllers;
 using BHome.DigitalSigning.Application;
@@ -21,7 +21,7 @@ if (string.IsNullOrWhiteSpace(builder.Configuration["DigitalSigning:SecretKey"])
     builder.Configuration["DigitalSigning:SecretKey"] = SandboxData.SecretKey();
 
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
+builder.Services.AddScoped<ISigningCurrentUser, HttpCurrentUser>();
 builder.Services.AddDigitalSigning(builder.Configuration);
 if (useMemory)
 {

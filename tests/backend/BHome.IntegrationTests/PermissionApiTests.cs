@@ -83,7 +83,7 @@ public sealed class PermissionApiTests(AuthenticationDatabaseFixture fixture) : 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/test-probes/permission-owner")).StatusCode);
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         var user = (await users.FindByIdAsync(session.UserId.ToString()))!;
         Assert.True((await users.RemoveFromRoleAsync(user, Roles.Owner)).Succeeded);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/test-probes/permission-owner")).StatusCode);
@@ -92,9 +92,9 @@ public sealed class PermissionApiTests(AuthenticationDatabaseFixture fixture) : 
     private async Task<LoginResult> Login(HttpClient client, string role)
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         var id = Guid.NewGuid();
-        var user = new ApplicationUser { Id = id, UserName = id.ToString(), Email = $"{id:N}@example.invalid" };
+        var user = new User { Id = id, UserName = id.ToString(), Email = $"{id:N}@example.invalid" };
         Assert.True((await users.CreateAsync(user, Password)).Succeeded);
         Assert.True((await users.AddToRoleAsync(user, role)).Succeeded);
         var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = Password });

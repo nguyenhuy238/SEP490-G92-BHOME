@@ -50,7 +50,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, sourceRoute, new RefundInput(wrong, 50000, "Synthetic wrong beneficiary", true))).StatusCode);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             Assert.Equal(0, await db.Set<PaymentAllocation>().CountAsync(a => a.TransferId == extra.Id));
             Assert.Equal(1, await db.Set<PaymentAllocation>().CountAsync(a => a.InvoiceId == w.Invoice));
             var person = await db.Set<BHome.Domain.TenantContracts.Resident>().SingleAsync(r => r.Id == payer.ResidentId); person.RoomId = null; await db.SaveChangesAsync();
@@ -108,7 +108,7 @@ public sealed partial class PaymentLedgerTests
             Terms = "SYNTHETIC CLOSED HOLDING",
             Residents = [new BHome.Domain.TenantContracts.ContractResident { ResidentId = resident.Id, Role = BHome.Domain.TenantContracts.ResidentType.Representative }]
         };
-        await using (var scope = fixture.Factory.Services.CreateAsyncScope()) { var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); db.AddRange(resident, holding); await db.SaveChangesAsync(); }
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope()) { var db = scope.ServiceProvider.GetFixturePersistence(); db.AddRange(resident, holding); await db.SaveChangesAsync(); }
         var extra = await As(w.Owner, Roles.Owner, s => s.RegisterAsync(Input(w, 35000) with { ProposedInvoiceId = null, TransferDescription = PaymentRules.DepositReference(holding.Id) }, Guid.NewGuid(), default));
         var route = $"/api/v1/payment-transactions/{extra.Id}/excess-disposition";
         var target = main ? new ReceiptExcessTarget(DepositContractId: holding.Id) : new ReceiptExcessTarget(HoldingContractId: holding.Id);
@@ -126,7 +126,7 @@ public sealed partial class PaymentLedgerTests
         refund = await RefundValue<RefundView>(await Post(owner, $"/api/v1/refund-requests/{refund.Id}/decision", new RefundDecision(refund.Version, true, "Synthetic payer proof checked", true)));
         using var picture = new Mat(40, 100, MatType.CV_8UC3, Scalar.White);
         Assert.Equal("COMPLETED", (await RefundValue<RefundView>(await DepositExecute(owner, refund, Guid.NewGuid(), DateTimeOffset.UtcNow, picture.ImEncode(".png")))).Status);
-        await using var finalScope = fixture.Factory.Services.CreateAsyncScope(); var finalDb = finalScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var finalScope = fixture.Factory.Services.CreateAsyncScope(); var finalDb = finalScope.ServiceProvider.GetFixturePersistence();
         Assert.Null((await finalDb.Set<BHome.Domain.TenantContracts.Resident>().SingleAsync(r => r.Id == resident.Id)).TenantUserId);
         Assert.Equal(0, await finalDb.Set<PaymentAllocation>().CountAsync(a => a.TransferId == extra.Id));
         Assert.Equal("ExcessRefundCompleted", (await As(w.Owner, Roles.Owner, s => s.TransferAsync(extra.Id, default))).Status);
@@ -137,7 +137,7 @@ public sealed partial class PaymentLedgerTests
     {
         var (w, proof, photo) = await DamageFixture(true); using var owner = await Client(w.Owner);
         var root = $"/api/v1/contracts/{w.Contract}/move-out/receivables";
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var inspection = await db.Set<BHome.Domain.TenantContracts.ContractFinalInspection>().SingleAsync(i => i.ContractId == w.Contract);
         var view = await RefundValue<SettlementReceivablesView>(await owner.GetAsync(root));
         var charge = await RefundValue<SettlementReceivable>(await Post(owner, root + "/damage", new DamageChargeInput(view.Reference, inspection.Id, inspection.Version, null, 400000, "Synthetic covered damage", [proof], true)));

@@ -174,7 +174,7 @@ public sealed class Compact24MigrationTests
         await using (var scope = sourceHost.Services.CreateAsyncScope())
         {
             var account = await WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
-                new ApplicationUser { UserName = "synthetic-import-owner", Email = "synthetic-import-owner@example.invalid" }, "Owner", "Synthetic!Import-493");
+                new User { UserName = "synthetic-import-owner", Email = "synthetic-import-owner@example.invalid" }, "Owner", "Synthetic!Import-493");
             var location = new Location("Synthetic historical property") { ChainId = await pair.Source.Set<Chain>().Select(c => c.Id).SingleAsync(), Address = "Synthetic address" };
             var asset = new Asset { LocationId = location.Id, Name = "Synthetic asset", Category = "Equipment", Condition = "Good", CommonArea = "Lobby" };
             pair.Source.AddRange(location, asset, new PropertyChange
@@ -389,7 +389,7 @@ public sealed class Compact24MigrationTests
     public async Task AmbiguousEmailAndDevelopmentDatabaseNamesFailClosed()
     {
         await using var pair = await Pair.Create(); var first = await pair.Seed();
-        var duplicate = new ApplicationUser
+        var duplicate = new User
         {
             Id = Guid.NewGuid(),
             UserName = Guid.NewGuid().ToString(),
@@ -417,7 +417,7 @@ public sealed class Compact24MigrationTests
         private string sourceName = "";
         public Compact24Fixture Fixture { get; } = new();
         public BHomeDbContext Source { get; private set; } = null!;
-        public Compact24DbContext Target { get; private set; } = null!;
+        public Compact24ArchiveContext Target { get; private set; } = null!;
         public static async Task<Pair> Create()
         {
             var pair = new Pair { admin = Environment.GetEnvironmentVariable("BHOME_COMPACT24_TEST_ADMIN")! };
@@ -433,14 +433,14 @@ public sealed class Compact24MigrationTests
                 settings.Database = pair.sourceName;
                 pair.Source = new BHomeDbContext(new DbContextOptionsBuilder<BHomeDbContext>().UseNpgsql(settings.ConnectionString).Options);
                 await pair.Source.Database.MigrateAsync();
-                pair.Target = new Compact24DbContext(new DbContextOptionsBuilder<Compact24DbContext>().UseNpgsql(pair.Fixture.Connection).Options);
+                pair.Target = new Compact24ArchiveContext(new DbContextOptionsBuilder<Compact24DbContext>().UseNpgsql(pair.Fixture.Connection).Options);
                 return pair;
             }
             catch { await pair.DisposeAsync(); throw; }
         }
-        public async Task<ApplicationUser> Seed()
+        public async Task<User> Seed()
         {
-            var id = Guid.NewGuid(); var user = new ApplicationUser
+            var id = Guid.NewGuid(); var user = new User
             {
                 Id = id,
                 UserName = id.ToString(),
@@ -452,7 +452,7 @@ public sealed class Compact24MigrationTests
                 ConcurrencyStamp = Guid.NewGuid().ToString(),
                 LockoutEnabled = true
             };
-            user.PasswordHash = new PasswordHasher<ApplicationUser>().HashPassword(user, Password);
+            user.PasswordHash = new PasswordHasher<User>().HashPassword(user, Password);
             Source.Users.Add(user); Source.UserRoles.Add(new IdentityUserRole<Guid> { UserId = id, RoleId = Guid.Parse("00000000-0000-0000-0000-000000000001") });
             await Source.SaveChangesAsync(); return user;
         }

@@ -4,7 +4,7 @@ import {
   validPreviewInfo,
   previewError,
   requiresNewDocument,
-} from '../features/contracts/pdfPreview';
+} from '../features/contracts/signing/pdfPreview';
 
 it('encodes binary pages exactly without native or browser-only base64 APIs', () => {
   for (const tail of [0, 1, 2, 3, 12345]) {

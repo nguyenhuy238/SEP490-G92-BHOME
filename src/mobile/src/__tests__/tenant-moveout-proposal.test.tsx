@@ -124,13 +124,13 @@ vi.mock('../features/contracts/ContractEvidence', () => ({
     </div>
   ),
 }));
-vi.mock('../features/contracts/TenantMoveOutExcessPayment', () => ({
+vi.mock('../features/contracts/moveOut/TenantMoveOutExcessPayment', () => ({
   TenantMoveOutExcessPayment: () => (
     <div data-testid="excess-payment">Đang kiểm tra phần vượt cọc</div>
   ),
 }));
 
-import { TenantMoveOutProposalPanel } from '../features/contracts/TenantMoveOutProposalPanel';
+import { TenantMoveOutProposalPanel } from '../features/contracts/moveOut/TenantMoveOutProposalPanel';
 
 afterEach(() => {
   cleanup();

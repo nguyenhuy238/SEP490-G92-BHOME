@@ -27,7 +27,7 @@ vi.mock('../components/WorkspaceKit', () => ({
 vi.mock('../features/contracts/ContractEvidence', () => ({
   ContractEvidence: ({ previewId }: { previewId: string }) => <span>PDF {previewId}</span>,
 }));
-vi.mock('../features/contracts/HoldingDepositAllocation', () => ({
+vi.mock('../features/contracts/holding/HoldingDepositAllocation', () => ({
   HoldingDepositAllocation: () => null,
 }));
 vi.mock('../features/workspace/useWorkspaceQuery', () => ({

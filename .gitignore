@@ -19,6 +19,9 @@ TestResults/
 *.log
 .idea/
 .vs/
+# Visual Studio solution-upgrade artifacts (not application source)
+/src/backend/Backup/
+/src/backend/UpgradeLog.htm
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json

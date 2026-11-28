@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { MoveOut, SettlementSummary } from '../../../../../packages/client-core/src/contracts';
-import { financialState, historyNote, moveOutProgress, offsetAmountError } from './termination';
+import {
+  financialState,
+  historyNote,
+  moveOutProgress,
+  offsetAmountError,
+} from './components/settlement/termination';
 import { moveOutActionLabel } from '../../../../../packages/client-core/src/useContractLifecycle';
 
 describe('move-out status and settlement remain independent', () => {

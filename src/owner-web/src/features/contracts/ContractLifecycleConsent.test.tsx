@@ -6,7 +6,7 @@ import type {
   ContractView,
   MoveOut,
 } from '../../../../../packages/client-core/src/contracts';
-import { ContractLifecyclePanel } from './ContractLifecyclePanel';
+import { ContractLifecyclePanel } from './components/settlement/ContractLifecyclePanel';
 
 const state = vi.hoisted(() => ({ version: 1, reload: vi.fn() }));
 vi.mock('../../../../../packages/client-core/src/useContractLifecycle', async (original) => {

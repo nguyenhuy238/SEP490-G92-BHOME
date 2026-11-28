@@ -30,7 +30,7 @@ public sealed class MainDocxTemplateTests
             RepresentativeResidentId = Guid.NewGuid(),
             StartDate = new(2026, 11, 18),
             EndDate = new(2027, 11, 18),
-            MonthlyRent = 2300000,
+            RentAmount = 2300000,
             RequiredDeposit = 2300000,
             Terms = "Nội quy kiểm thử\nThanh toán đúng hạn."
         };

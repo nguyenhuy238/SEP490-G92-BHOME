@@ -20,8 +20,8 @@ public sealed partial class ContractLifecycleApiTests
         var outside = await User("Tenant");
         Assert.Equal(HttpStatusCode.NotFound, (await outside.Client.GetAsync(path)).StatusCode);
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-        var signature = await db.Set<ContractSignature>().Where(s => s.ContractId == id && s.SignerUserId == w.Tenant.Id).SingleAsync();
+        var db = scope.ServiceProvider.GetFixturePersistence();
+        var signature = await db.Set<ContractSigning>().Where(s => s.ContractId == id && s.SignerUserId == w.Tenant.Id).SingleAsync();
         var storage = scope.ServiceProvider.GetRequiredService<IObjectStorage>();
         var altered = original.ToArray(); altered[^1] ^= 1;
         using (var content = new MemoryStream(altered)) await storage.PutAsync(signature.SignedObjectKey!, content, altered.Length, "application/pdf", default);

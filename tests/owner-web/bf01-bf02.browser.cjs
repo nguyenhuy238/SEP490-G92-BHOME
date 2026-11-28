@@ -226,27 +226,32 @@ async function scenario(id, run) {
 
     await scenario('BF01-03-04', async () => {
       await page.goto(`https://localhost:5173/locations/${locationId}/room-types`);
-      await page.getByRole('button', { name: 'Thêm loại phòng' }).click();
-      await page.getByLabel('Tên loại phòng').fill(names.roomType);
+      await page.getByRole('button', { name: 'Thêm gợi ý tạo phòng' }).click();
+      await page.getByLabel('Tên gợi ý').fill(names.roomType);
       await page.getByLabel('Mô tả').fill('Synthetic browser room type');
       await page.getByLabel('Sức chứa mặc định').fill('2');
+      await page.getByLabel('Diện tích (m²)').fill('20');
+      await page.getByLabel('Giá thuê tham khảo (VND)').fill('2500000');
       const created = await apiAction(
         page,
         'POST',
-        '/api/v1/room-types',
+        `/api/v1/locations/${locationId}/room-defaults`,
         () => page.getByRole('button', { name: 'Lưu' }).click(),
-        [201],
+        [200],
       );
       roomTypeId = (await created.json()).id;
       await page.getByText(names.roomType).waitFor();
       await page
         .getByRole('row', { name: new RegExp(names.roomType) })
-        .getByRole('button', { name: 'Sửa' })
+        .getByRole('button', { name: 'Chỉnh sửa' })
         .click();
       await page.getByLabel('Mô tả').fill('Synthetic browser room type updated');
-      await page.getByLabel('Lý do thay đổi').fill('Browser E2E update');
-      await apiAction(page, 'PUT', `/api/v1/room-types/${roomTypeId}`, () =>
-        page.getByRole('button', { name: 'Lưu' }).click(),
+      await page.getByLabel(/Lý do/).fill('Browser E2E update');
+      await apiAction(
+        page,
+        'PUT',
+        `/api/v1/locations/${locationId}/room-defaults/${roomTypeId}`,
+        () => page.getByRole('button', { name: 'Lưu' }).click(),
       );
       await page.reload();
       await page.getByText(names.roomType).waitFor();
@@ -255,24 +260,24 @@ async function scenario(id, run) {
     await scenario('BF01-05-06-12', async () => {
       await page.goto(`https://localhost:5173/locations/${locationId}/rooms`);
       await page.getByRole('button', { name: 'Thêm phòng' }).click();
-      await selectMui(page, 'Loại phòng', names.roomType);
+      await selectMui(page, 'Gợi ý tạo phòng', `${names.roomType} · v2`);
       await page.getByLabel('Số phòng').fill(names.room);
       await page.getByLabel('Tầng').fill('1');
       const created = await apiAction(
         page,
         'POST',
-        '/api/v1/rooms',
-        () => page.getByRole('button', { name: 'Lưu' }).click(),
-        [201],
+        `/api/v1/locations/${locationId}/configured-rooms`,
+        () => page.getByRole('button', { name: 'Lưu cấu hình' }).click(),
+        [200],
       );
-      roomId = (await created.json()).id;
+      roomId = (await created.json()).rooms[0].id;
       await page.getByRole('link', { name: names.room }).waitFor();
       await page
         .getByRole('row', { name: new RegExp(names.room) })
-        .getByRole('button', { name: 'Sửa' })
+        .getByRole('button', { name: 'Chỉnh sửa' })
         .click();
       await page.getByLabel('Tầng').fill('2');
-      await page.getByLabel('Lý do thay đổi').fill('Browser E2E update');
+      await page.getByLabel(/Lý do/).fill('Browser E2E update');
       await apiAction(page, 'PUT', `/api/v1/rooms/${roomId}`, () =>
         page.getByRole('button', { name: 'Lưu' }).click(),
       );

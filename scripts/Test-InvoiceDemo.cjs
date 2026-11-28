@@ -62,10 +62,10 @@ async function main() {
     await owner.getByText('Giá ELECTRICITY tổng hợp demo', { exact: false }).waitFor();
     const saved = owner.waitForResponse(
       (response) =>
-        new URL(response.url()).pathname === '/api/v1/billing-schedules' &&
+        /^\/api\/v1\/billing-automation\/[^/]+\/schedule$/.test(new URL(response.url()).pathname) &&
         response.request().method() === 'PUT',
     );
-    await owner.getByRole('button', { name: 'Lưu quy tắc hóa đơn', exact: true }).click();
+    await owner.getByRole('button', { name: 'Lưu cấu hình lịch', exact: true }).click();
     assert.equal((await saved).status(), 200);
     await owner.screenshot({
       path: path.join(output, 'invoice-owner-configuration.png'),
