@@ -352,8 +352,8 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
                 {
                     Cv2.Rotate(source, reversed, RotateFlags.Rotate180);
                     var flipped = Detect(reversed, retryRun, retry.Token);
-                var alternative = ReadPage(reversed, flipped, kind, retryRun, retry.Token,
-                    identityClock: kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack ? clock : null);
+                    var alternative = ReadPage(reversed, flipped, kind, retryRun, retry.Token,
+                        identityClock: kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack ? clock : null);
                     var alternativeProposal = OcrFieldParser.Parse(alternative, kind);
                     var conflicting = proposal.ProposedFields.Any(field => alternativeProposal.ProposedFields.TryGetValue(field.Key, out var value) && value != field.Value);
                     if (!conflicting && alternativeProposal.ProposedFields.Count > proposal.ProposedFields.Count)
