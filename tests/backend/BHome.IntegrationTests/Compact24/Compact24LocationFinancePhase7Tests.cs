@@ -261,7 +261,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(confirmed.StateToken, replay.StateToken);
 
         await using var scope = host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var asset = await db.Set<Asset>().AsNoTracking()
             .SingleAsync(value => value.LocationId == location && value.RoomId == null);
         Assert.Equal("Hành lang", asset.CommonArea);
@@ -326,7 +326,7 @@ public sealed partial class Compact24OwnerSetupTests
         AssetMetadata metadata;
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             id = await db.Set<Asset>().Where(asset => asset.LocationId == location)
                 .Select(asset => asset.Id).SingleAsync();
             metadata = (await scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>()
@@ -424,7 +424,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(expectedCommon.ToString("0"), capital.CommonTotal);
         Assert.Equal(0, capital.UnpricedCount);
         await using var scope = host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal(2, await db.Set<Asset>().CountAsync(item => item.LocationId == location));
         var roomAsset = await db.Set<Asset>().AsNoTracking()
             .SingleAsync(item => item.LocationId == location && item.RoomId != null);

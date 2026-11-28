@@ -46,7 +46,7 @@ public sealed partial class InvoiceApiTests
             new AdjustmentDecisionInput(1, draft.Version, 0, 2990000, "RENT", "Approved synthetic correction", true)));
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             db.Add(new BillingPolicy { LocationId = w.Location, RoomId = w.Room, Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Changed synthetic source", Method = ChargingMethod.FixedPerRoomPerMonth, Rate = 4000000, EffectiveFrom = w.Period }); await db.SaveChangesAsync();
         }
         var refresh = await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync($"/api/v1/invoices/{draft.Id}/refresh", new InvoiceFinalizeInput(approved.CurrentInvoice!.Version)));
@@ -66,7 +66,7 @@ public sealed partial class InvoiceApiTests
         var decision = await w.Owner.Client.GetFromJsonAsync<AdjustmentView>($"/api/v1/invoice-adjustments/{request.Id}");
         var invoice = await w.Tenant.Client.GetFromJsonAsync<InvoiceView>($"/api/v1/invoices/{draft.Id}");
         Assert.Equal(decision!.Status == "Approved" ? 3111000 : 3121000, invoice!.Total);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(1, await db.Set<InvoiceAdjustmentDecision>().CountAsync(d => d.RequestId == request.Id));
     }
 }

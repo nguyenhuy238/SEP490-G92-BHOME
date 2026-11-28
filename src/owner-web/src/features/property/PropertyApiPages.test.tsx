@@ -262,6 +262,10 @@ it('keeps the selected room defaults revision until the Owner explicitly reloads
   fireEvent.click(await screen.findByRole('option', { name: 'Studio · v3' }));
   const dialog = within(screen.getByRole('dialog'));
   expect(dialog.getByLabelText('Sức chứa')).toBeDisabled();
+  expect(dialog.getByLabelText('Sức chứa')).toHaveValue('2');
+  expect(state.request.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(
+    true,
+  );
   expect(dialog.queryByLabelText('Trạng thái')).toBeNull();
   fireEvent.change(dialog.getByLabelText(/Số phòng/), { target: { value: 'A101' } });
   const rent = dialog.getByLabelText(/Giá thuê xác nhận/);

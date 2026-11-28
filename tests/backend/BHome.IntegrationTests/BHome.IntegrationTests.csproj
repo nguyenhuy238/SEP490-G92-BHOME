@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="../../../src/backend/BHome.Api/BHome.Api.csproj" />
+    <ProjectReference Include="../../../tools/BHome.LegacyPersistence/BHome.LegacyPersistence.csproj" />
     <ProjectReference Include="../../../tools/BHome.LocalDevelopment/BHome.LocalDevelopment.csproj" />
     <ProjectReference Include="../../../tools/BHome.DatabaseCheck/BHome.DatabaseCheck.csproj" />
     <ProjectReference Include="../../../tools/BHome.Compact24Migration/BHome.Compact24Migration.csproj" ReferenceOutputAssembly="false" />

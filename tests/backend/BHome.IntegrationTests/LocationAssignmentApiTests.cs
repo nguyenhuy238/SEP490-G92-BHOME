@@ -158,12 +158,12 @@ public sealed class LocationAssignmentApiTests(AuthenticationDatabaseFixture fix
         }
     }
 
-    private async Task<ApplicationUser> CreateUserAsync(string role)
+    private async Task<User> CreateUserAsync(string role)
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         var id = Guid.NewGuid();
-        var user = new ApplicationUser
+        var user = new User
         {
             Id = id,
             UserName = id.ToString(),
@@ -174,7 +174,7 @@ public sealed class LocationAssignmentApiTests(AuthenticationDatabaseFixture fix
         return user;
     }
 
-    private async Task<HttpClient> AuthenticatedClientAsync(ApplicationUser user)
+    private async Task<HttpClient> AuthenticatedClientAsync(User user)
     {
         var client = fixture.Factory.CreateClient();
         var session = await LoginAsync(client, user);
@@ -182,7 +182,7 @@ public sealed class LocationAssignmentApiTests(AuthenticationDatabaseFixture fix
         return client;
     }
 
-    private static async Task<LoginResult> LoginAsync(HttpClient client, ApplicationUser user)
+    private static async Task<LoginResult> LoginAsync(HttpClient client, User user)
     {
         var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = Password });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

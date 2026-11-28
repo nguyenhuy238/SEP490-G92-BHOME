@@ -1,6 +1,6 @@
 using BHome.DigitalSigning.Application.Contracts;
 using BHome.DigitalSigning.Application.Services;
-using BHome.Domain.IdentityAccess;
+using BHome.DigitalSigning.Application.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -10,7 +10,7 @@ namespace BHome.DigitalSigning.Api.Controllers;
 // "Ảnh chữ ký" of the signed-in signer: a transparent PNG drawn where they place their signature.
 [ApiController]
 [Route("api/v1/digital-signing/signature-image")]
-[Authorize(Roles = $"{Roles.Owner},{Roles.Staff},{Roles.Tenant}")]
+[Authorize(Roles = $"{SigningRoles.Owner},{SigningRoles.Staff},{SigningRoles.Tenant}")]
 public sealed class SignatureImageController(SignatureImageService images) : ControllerBase
 {
     private const long MaxUploadBytes = 2 * 1024 * 1024;

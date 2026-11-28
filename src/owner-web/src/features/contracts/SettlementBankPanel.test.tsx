@@ -6,7 +6,7 @@ import {
   type ContractRequest,
   type SettlementReceivables,
 } from '../../../../../packages/client-core/src/contracts';
-import { SettlementBankPanel } from './SettlementBankPanel';
+import { SettlementBankPanel } from './components/settlement/SettlementBankPanel';
 vi.mock('../payments/RefundPanel', () => ({ RefundPanel: () => <div>Refund workflow</div> }));
 vi.mock('../payments/ReceiptExcessPanel', () => ({
   ReceiptExcessPanel: () => <div>Whole receipt excess workflow</div>,

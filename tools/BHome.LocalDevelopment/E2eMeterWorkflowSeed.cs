@@ -95,7 +95,8 @@ public static class E2eMeterWorkflowSeed
         Console.WriteLine($"Dataset Prefix   : {Namespace}");
 
         await using var scope = provider.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var identity = scope.ServiceProvider.GetRequiredService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>();
+        await using var db = OfflineFixturePersistence.Open(scope.ServiceProvider, identity);
         if (!await db.IsSchemaReadyAsync(t))
             throw new LocalTestAccountException("Schema Compact24 chưa sẵn sàng hoặc không tương thích.");
 
@@ -143,7 +144,7 @@ public static class E2eMeterWorkflowSeed
             ?? throw new LocalTestAccountException("Không tìm thấy tài khoản Owner trong database.");
         ownerId = owner.Id;
 
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         var storage = scope.ServiceProvider.GetService<IObjectStorage>();
 
         var tenantUserId = Id(1);
@@ -193,7 +194,7 @@ public static class E2eMeterWorkflowSeed
             }
         }
 
-        await using var tx = await db.Database.BeginTransactionAsync(t);
+        await using var tx = await OfflineFixturePersistence.BeginAsync(db, identity, t);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({Namespace}, 0))", t);
 
         // 1. Verify Location & Staff Assignment
@@ -209,7 +210,7 @@ public static class E2eMeterWorkflowSeed
         {
             if (await db.Users.AnyAsync(u => u.Id == tenantUserId, t))
                 throw new LocalTestAccountException("Trùng UUID tài khoản Tenant E2E.");
-            tenantUser = new ApplicationUser
+            tenantUser = new User
             {
                 Id = tenantUserId,
                 UserName = TenantUserName,
@@ -221,7 +222,7 @@ public static class E2eMeterWorkflowSeed
                 LockoutEnabled = true
             };
             db.Entry(tenantUser).Property("full_name").CurrentValue = TenantDisplayName;
-            db.PrepareUserRole(tenantUser, Roles.Tenant);
+            identity.PrepareUserRole(tenantUser, Roles.Tenant);
             var created = await users.CreateAsync(tenantUser, password);
             if (!created.Succeeded)
                 throw new LocalTestAccountException("Không thể tạo tài khoản Tenant E2E: " + string.Join(", ", created.Errors.Select(e => e.Code)));
@@ -468,11 +469,11 @@ public static class E2eMeterWorkflowSeed
                 Status = ContractStatus.Active,
                 StartDate = new DateOnly(2026, 10, 1),
                 EndDate = new DateOnly(2027, 9, 30),
-                MonthlyRent = 3_500_000m,
+                RentAmount = 3_500_000m,
                 RequiredDeposit = 3_500_000m,
                 AppliedHoldingDeposit = 0m,
                 Terms = $"{Namespace}: Hợp đồng thuê chính thức phục vụ kiểm thử E2E ghi chỉ số điện nước -> hóa đơn -> VietQR.",
-                SnapshotHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Namespace + ":MAIN_CONTRACT"))).ToLowerInvariant(),
+                SnapshotHashOrEmpty = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Namespace + ":MAIN_CONTRACT"))).ToLowerInvariant(),
                 IsDevelopmentDemo = true,
                 ActivatedByUserId = ownerId,
                 ActivatedAt = contractActivatedAt,
@@ -635,20 +636,20 @@ public static class E2eMeterWorkflowSeed
             octTask = new OperationalTask
             {
                 Kind = OperationalTaskKind.MeterReading,
-                LocationId = locationId,
+                RequiredLocationId = locationId,
                 MeterId = meterId,
                 BillingRoomId = roomId,
                 BillingUtilityType = utilityType,
                 Purpose = ReadingPurpose.Periodic,
                 BillingPeriod = OctoberPeriod,
                 ReadingDate = OctoberReadingDate,
-                Status = MeterTaskStatus.Completed,
+                MeterStatus = MeterTaskStatus.Completed,
                 AssignedStaffUserId = staffId,
                 AssignmentId = assignmentId,
                 AssignedAt = assignedAt,
                 CompletedAt = confirmedAt,
                 DueAt = dueAt,
-                Title = title,
+                TaskTitle = title,
                 Requirements = $"{Namespace}: Chỉ số chốt kỳ 10/2026 làm mốc cho kỳ 11/2026.",
                 EvidenceRequired = true,
                 OcrProposedValue = confirmedValue,
@@ -660,7 +661,7 @@ public static class E2eMeterWorkflowSeed
         else
         {
             taskId = octTask.Id;
-            octTask.Status = MeterTaskStatus.Completed;
+            octTask.MeterStatus = MeterTaskStatus.Completed;
             octTask.CompletedAt = confirmedAt;
         }
 
@@ -730,30 +731,30 @@ public static class E2eMeterWorkflowSeed
         CancellationToken t)
     {
         var existingTask = await db.Set<OperationalTask>()
-            .FirstOrDefaultAsync(x => x.MeterId == meterId && x.BillingPeriod == NovemberPeriod && x.Purpose == ReadingPurpose.Periodic && x.Status != MeterTaskStatus.Cancelled, t);
+            .FirstOrDefaultAsync(x => x.MeterId == meterId && x.BillingPeriod == NovemberPeriod && x.Purpose == ReadingPurpose.Periodic && x.MeterStatus != MeterTaskStatus.Cancelled, t);
 
         if (existingTask is not null)
         {
-            Console.WriteLine($"Nov {utilityType,-11}: REUSED (TaskId={existingTask.Id}, Status={existingTask.Status}, ReadingDate={existingTask.ReadingDate})");
+            Console.WriteLine($"Nov {utilityType,-11}: REUSED (TaskId={existingTask.Id}, Status={existingTask.MeterStatus}, ReadingDate={existingTask.ReadingDate})");
             return;
         }
 
         var novTask = new OperationalTask
         {
             Kind = OperationalTaskKind.MeterReading,
-            LocationId = locationId,
+            RequiredLocationId = locationId,
             MeterId = meterId,
             BillingRoomId = roomId,
             BillingUtilityType = utilityType,
             Purpose = ReadingPurpose.Periodic,
             BillingPeriod = NovemberPeriod,
             ReadingDate = NovemberReadingDate,
-            Status = MeterTaskStatus.Assigned,
+            MeterStatus = MeterTaskStatus.Assigned,
             AssignedStaffUserId = staffId,
             AssignmentId = assignmentId,
             AssignedAt = assignedAt,
             DueAt = dueAt,
-            Title = title,
+            TaskTitle = title,
             Requirements = requirements,
             EvidenceRequired = true
         };
@@ -767,11 +768,11 @@ public static class E2eMeterWorkflowSeed
     {
         await using var tx = await db.Database.BeginTransactionAsync(t);
         var pendingNovTasks = await db.Set<OperationalTask>()
-            .Where(x => (x.Id == Id(80) || x.Id == Id(81)) && x.Status == MeterTaskStatus.Assigned)
+            .Where(x => (x.Id == Id(80) || x.Id == Id(81)) && x.MeterStatus == MeterTaskStatus.Assigned)
             .ToListAsync(t);
         foreach (var task in pendingNovTasks)
         {
-            task.Status = MeterTaskStatus.Cancelled;
+            task.MeterStatus = MeterTaskStatus.Cancelled;
             task.Version++;
         }
         await db.SaveChangesAsync(t);
@@ -830,7 +831,7 @@ public static class E2eMeterWorkflowSeed
         {
             var contract = await db.Set<Contract>().AsNoTracking().Include(c => c.Residents)
                 .SingleOrDefaultAsync(c => c.RoomId == room.Id && c.Kind == ContractKind.Main && c.Status == ContractStatus.Active, t);
-            Console.WriteLine($"Main Contract    : {(contract is null ? "MISSING" : $"Id={contract.Id}, Status={contract.Status}, Start={contract.StartDate}, End={contract.EndDate}, Rent={contract.MonthlyRent:N0} VND, TenantUserId={contract.TenantUserId}, Residents={contract.Residents.Count}")}");
+            Console.WriteLine($"Main Contract    : {(contract is null ? "MISSING" : $"Id={contract.Id}, Status={contract.Status}, Start={contract.StartDate}, End={contract.EndDate}, Rent={contract.RentAmount:N0} VND, TenantUserId={contract.TenantUserId}, Residents={contract.Residents.Count}")}");
 
             var meters = await db.Set<Meter>().AsNoTracking().Where(m => m.RoomId == room.Id).OrderBy(m => m.UtilityType).ToListAsync(t);
             foreach (var m in meters)
@@ -847,12 +848,12 @@ public static class E2eMeterWorkflowSeed
                 .ToListAsync(t);
             foreach (var task in tasks)
             {
-                var prevConfirmed = task.Status == MeterTaskStatus.Completed
+                var prevConfirmed = task.MeterStatus == MeterTaskStatus.Completed
                     ? await db.Set<MeterReading>().AsNoTracking().Where(r => r.TaskId == task.Id).Select(r => r.PreviousValue).FirstOrDefaultAsync(t)
                     : await db.Set<MeterReading>().AsNoTracking()
                         .Where(r => r.MeterId == task.MeterId && db.Set<OperationalTask>().Any(prev => prev.Id == r.TaskId && prev.ReadingDate < task.ReadingDate))
                         .OrderByDescending(r => r.ConfirmedAt).Select(r => (decimal?)r.ConfirmedValue).FirstOrDefaultAsync(t);
-                Console.WriteLine($"Meter Task       : Id={task.Id}, Utility={task.BillingUtilityType}, Period={task.BillingPeriod}, ReadingDate={task.ReadingDate}, Status={task.Status}, AssignedStaff={task.AssignedStaffUserId}, PrevConfirmed={prevConfirmed}");
+                Console.WriteLine($"Meter Task       : Id={task.Id}, Utility={task.BillingUtilityType}, Period={task.BillingPeriod}, ReadingDate={task.ReadingDate}, Status={task.MeterStatus}, AssignedStaff={task.AssignedStaffUserId}, PrevConfirmed={prevConfirmed}");
             }
         }
     }

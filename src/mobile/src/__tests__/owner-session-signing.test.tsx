@@ -3,7 +3,7 @@ import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { contractClient, type ContractView } from '../../../../packages/client-core/src/contracts';
-import { ContractSigningPanel } from '../features/contracts/ContractSigningPanel';
+import { ContractSigningPanel } from '../features/contracts/signing/ContractSigningPanel';
 
 vi.mock('react-native', () => ({
   Platform: { OS: 'web' },
@@ -41,8 +41,8 @@ vi.mock('../components/WorkspaceKit', () => ({
   ),
 }));
 vi.mock('../components/WorkflowControls', () => ({ ChoiceField: () => null }));
-vi.mock('../features/contracts/SignaturePad', () => ({ SignaturePad: () => null }));
-vi.mock('../features/contracts/SigningSetup', () => ({
+vi.mock('../features/contracts/signing/SignaturePad', () => ({ SignaturePad: () => null }));
+vi.mock('../features/contracts/signing/SigningSetup', () => ({
   SignaturePlacementField: () => <div>Reviewed PDF</div>,
   SignatureImageSection: () => null,
 }));

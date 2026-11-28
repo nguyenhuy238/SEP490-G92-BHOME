@@ -192,12 +192,6 @@ export function invoiceClient(request: <T>(path: string, init?: RequestInit) => 
       request<BillingSchedule | undefined>(`/api/v1/billing-schedules/${encodeURIComponent(id)}`, {
         signal,
       }),
-    saveSchedule: (schedule: BillingSchedule) =>
-      json<BillingSchedule>(
-        '/api/v1/billing-schedules',
-        { ...schedule, expectedVersion: schedule.version },
-        'PUT',
-      ),
     policies: (locationId: string, page: number, signal?: AbortSignal) =>
       request<Page<Policy>>(
         `/api/v1/billing-policies?locationId=${encodeURIComponent(locationId)}&page=${page}&pageSize=20`,

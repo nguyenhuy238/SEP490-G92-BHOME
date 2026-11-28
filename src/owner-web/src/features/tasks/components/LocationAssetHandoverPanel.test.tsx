@@ -21,7 +21,7 @@ vi.mock('../../meters/useMeterApi', () => ({
 vi.mock('../../../components/common/OwnerWorkspace', () => ({
   OwnerFeedback: () => null,
 }));
-vi.mock('../../contracts/OwnerSigningPanel', () => ({
+vi.mock('../../contracts/components/signing/OwnerSigningPanel', () => ({
   DrawPad: ({ onChange }: { onChange: (drawing: unknown) => void }) => (
     <>
       <button

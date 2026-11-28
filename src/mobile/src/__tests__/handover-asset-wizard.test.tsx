@@ -82,7 +82,7 @@ vi.mock('../components/WorkspaceKit', () => ({
   ),
 }));
 
-import { HandoverAssetFields } from '../features/contracts/HandoverAssetFields';
+import { HandoverAssetFields } from '../features/contracts/handover/HandoverAssetFields';
 
 const asset = {
   id: 'asset-1',

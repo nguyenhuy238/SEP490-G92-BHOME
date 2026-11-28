@@ -6,7 +6,7 @@ import type { TerminationReview } from '../../../../../../packages/client-core/s
 import TerminationReviewPage from './TerminationReviewPage';
 
 const api = vi.hoisted(() => ({ terminationReview: vi.fn(), mutate: vi.fn() }));
-vi.mock('../useContractsApi', () => ({ useContractsApi: () => api }));
+vi.mock('../hooks/useContractsApi', () => ({ useContractsApi: () => api }));
 vi.mock('../../../../../../packages/client-core/src/auth', () => ({
   useAuth: () => ({ session: { userId: 'owner' } }),
 }));

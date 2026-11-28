@@ -19,7 +19,7 @@ vi.mock('react-native-paper', () => ({
     accessibilityLabel: string;
   }) => <progress aria-label={accessibilityLabel} value={progress} max={1} />,
 }));
-import { HoldingProgress } from '../features/contracts/HoldingProgress';
+import { HoldingProgress } from '../features/contracts/holding/HoldingProgress';
 afterEach(cleanup);
 it('shows only current and next steps until the process is expanded', () => {
   const view = render(<HoldingProgress current={0} />);

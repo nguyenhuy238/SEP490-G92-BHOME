@@ -24,7 +24,7 @@ public sealed partial class Compact24NotificationMvpTests
     {
         var w = await Seed(); var probe = new SmtpProbe(); using var host = EmailHost(probe);
         await using var scope = host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var contract = await AddSyntheticHolding(db, w, active: false);
         contract.Kind = kind;
         var action = kind == ContractKind.Holding ? "HoldingSigningSubmitted" : "MainSigningSubmitted";
@@ -80,7 +80,7 @@ public sealed partial class Compact24NotificationMvpTests
         Guid id, delivery;
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var c = await AddSyntheticHolding(db, w, active: true, storage); id = c.Id;
             if (corruptDocument)
             {
@@ -160,7 +160,7 @@ public sealed partial class Compact24NotificationMvpTests
         }
         else Assert.Empty(probe.Messages);
         await using var check = host.Services.CreateAsyncScope();
-        var data = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var data = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var state = await data.Database.SqlQuery<string>($"SELECT delivery_status AS \"Value\" FROM notifications WHERE id={delivery}").SingleAsync();
         Assert.Equal(corruptDocument ? "PermanentlyFailed" : missingDocument ? "Pending" : smtpUnknown ? "PendingReview" : "Sent", state);
         var held = await data.Set<Contract>().Include(c => c.Room).SingleAsync(c => c.Id == id);
@@ -179,7 +179,7 @@ public sealed partial class Compact24NotificationMvpTests
             OwnerSignerId = w.Owner.Id,
             RepresentativeResidentId = resident.Id,
             SigningMode = ContractSigningModes.Internal,
-            SnapshotHash = new string('A', 64),
+            SnapshotHashOrEmpty = new string('A', 64),
             StartDate = Today,
             EndDate = Today.AddMonths(1),
             HoldingExpiryAt = DateTimeOffset.UtcNow.AddDays(2),
@@ -197,7 +197,7 @@ public sealed partial class Compact24NotificationMvpTests
                 ContractId = c.Id,
                 ResidentId = resident.Id,
                 ApprovedByUserId = w.Owner.Id,
-                SnapshotHash = c.SnapshotHash,
+                SnapshotHash = c.SnapshotHashOrEmpty,
                 TokenHash = new string('B', 64),
                 DocumentHash = new string('C', 64),
                 RecipientEmail = "staff-entered@example.invalid",
@@ -210,7 +210,7 @@ public sealed partial class Compact24NotificationMvpTests
             var hash = Convert.ToHexString(SHA256.HashData(signed));
             using var bytes = new MemoryStream(signed);
             await storage!.PutAsync(signedKey, bytes, bytes.Length, "application/pdf", default);
-            c.InternalAcceptance = JsonSerializer.Serialize(new InternalAcceptanceEvidence(invitation.Id, resident.Id, c.SnapshotHash,
+            c.InternalAcceptance = JsonSerializer.Serialize(new InternalAcceptanceEvidence(invitation.Id, resident.Id, c.SnapshotHashOrEmpty,
                 invitation.DocumentHash, "synthetic-stroke", signedKey, hash, DateTimeOffset.UtcNow,
                 w.Owner.Id, DateTimeOffset.UtcNow, signedKey, hash));
             db.Add(invitation);

@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using BHome.IntegrationTests.Fixtures;
+using BHome.Infrastructure.Persistence.Compact24;
+using Microsoft.EntityFrameworkCore;
 
 namespace BHome.IntegrationTests;
 
@@ -36,6 +38,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             services.Insert(0, ServiceDescriptor.Singleton<Microsoft.AspNetCore.Diagnostics.IExceptionHandler, FixtureDiagnostics>());
             services.AddControllers().AddApplicationPart(typeof(TestProbeController).Assembly);
             if (!UseCompact24) services.UseLegacyPersistenceForTesting();
+            else services.AddScoped<Compact24ArchiveContext>(p => new(
+                p.GetRequiredService<DbContextOptions<Compact24DbContext>>(),
+                p.GetService<Compact24Compatibility>(), p.GetService<TimeProvider>()));
         });
         ConfigureTestHost?.Invoke(builder);
     }

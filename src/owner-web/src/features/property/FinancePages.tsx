@@ -25,7 +25,7 @@ import { isMockMode } from '../../services/config';
 import {
   BillingConfigurationPage,
   DemoBillingConfigurationGuide,
-} from '../invoices/BillingConfigurationPage';
+} from '../invoices/pages/BillingConfigurationPage';
 import { ExpensesApiPage } from '../expenses/ExpensesApiPage';
 
 export function Pricing() {

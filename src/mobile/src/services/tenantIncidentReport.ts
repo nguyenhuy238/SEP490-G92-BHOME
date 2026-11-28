@@ -1,4 +1,4 @@
-import { MobileApiError, type MobileApi } from '../lib/api';
+import { isResponseRecord as obj, invalidResponse, type MobileApi } from '../lib/api';
 import {
   incidentClient,
   validateIncidentPhoto,
@@ -13,8 +13,6 @@ const id = (value: unknown): value is string =>
   typeof value === 'string' &&
   /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(value) &&
   !/^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(value);
-const obj = (value: unknown): value is Record<string, unknown> =>
-  !!value && typeof value === 'object' && !Array.isArray(value);
 async function lookup(
   api: MobileApi,
   path: string,
@@ -33,7 +31,7 @@ async function lookup(
     value.items.length > 20 ||
     !value.items.every((row) => obj(row) && valid(row))
   )
-    throw new MobileApiError(502, 'invalid_response');
+    invalidResponse();
   return value;
 }
 export async function loadReportingRooms(
@@ -128,6 +126,6 @@ export async function submitTenantIncident(
     (result.workOrderId !== null && !id(result.workOrderId)) ||
     (result.resourceId !== null && !id(result.resourceId))
   )
-    throw new MobileApiError(502, 'invalid_response');
+    invalidResponse();
   return { ...result, incidentId: result.incidentId };
 }

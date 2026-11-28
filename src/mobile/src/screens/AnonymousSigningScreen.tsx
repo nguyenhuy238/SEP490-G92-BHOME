@@ -9,7 +9,7 @@ import {
   type SigningAccess,
 } from '../../../../packages/client-core/src/internalSigning';
 import { useSession } from '../lib/SessionProvider';
-import { previewPngUri } from '../features/contracts/pdfPreview';
+import { previewPngUri } from '../features/contracts/signing/pdfPreview';
 
 export default function AnonymousSigningScreen() {
   const { baseUrl } = useSession();

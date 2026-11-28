@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { InlineHandoverEvidence } from './InlineHandoverEvidence';
+import { InlineHandoverEvidence } from './components/handover/InlineHandoverEvidence';
 
 const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]);
 const create = vi.fn(() => 'blob:handover-image-1');

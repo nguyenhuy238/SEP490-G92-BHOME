@@ -5,8 +5,8 @@ import { router, useFocusEffect, useLocalSearchParams, usePreventRemove } from '
 import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
 import { Action, Box, Heading, ui } from '../components/WorkspaceKit';
 import { ChoiceField } from '../components/WorkflowControls';
-import { MainContractProgress } from '../features/contracts/MainContractProgress';
-import { MainDraftScreen } from '../features/contracts/MainDraftScreen';
+import { MainContractProgress } from '../features/contracts/main/MainContractProgress';
+import { MainDraftScreen } from '../features/contracts/main/MainDraftScreen';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useSession } from '../lib/SessionProvider';
 import { captureService } from '../services/captureService';
@@ -17,7 +17,7 @@ import { WorkspaceFooter } from '../components/WorkspaceFooter';
 import { IdentityWizard } from '../features/onboarding/IdentityWizard';
 import { ResidentProfile } from '../features/onboarding/ResidentProfile';
 import { OnboardingPeopleStep } from '../features/onboarding/OnboardingPeopleStep';
-import { HoldingMainStart } from '../features/contracts/HoldingMainStart';
+import { HoldingMainStart } from '../features/contracts/holding/HoldingMainStart';
 import { contractClient } from '../../../../packages/client-core/src/contracts';
 import {
   allIdentitiesConfirmed,

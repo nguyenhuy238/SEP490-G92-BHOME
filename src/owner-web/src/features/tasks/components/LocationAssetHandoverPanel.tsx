@@ -24,7 +24,7 @@ import { OwnerFeedback } from '../../../components/common/OwnerWorkspace';
 import { PrivateEvidenceViewer } from '../../../components/common/PrivateEvidenceViewer';
 import { useOwnerAction } from '../../../hooks/useOwnerWorkspace';
 import { useMeterApi } from '../../meters/useMeterApi';
-import { DrawPad } from '../../contracts/OwnerSigningPanel';
+import { DrawPad } from '../../contracts/components/signing/OwnerSigningPanel';
 import type { OwnerTask } from '../taskContracts';
 import { taskRoot } from '../useOperationalTasksApi';
 

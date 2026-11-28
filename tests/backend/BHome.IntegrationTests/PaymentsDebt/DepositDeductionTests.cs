@@ -16,7 +16,7 @@ public sealed partial class PaymentLedgerTests
     // Explicit pre-existing legacy history fixture. Never use the retired production command to manufacture historical data.
     private async Task<DepositDeductionPlan> SeedHistoricalDeduction(Workspace w, DepositDeductionInput input, ContractSettlementSummary summary, Guid key)
     {
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var inspection = await db.Set<ContractFinalInspection>().SingleAsync(i => i.ContractId == w.Contract);
         var items = DepositDeductionPolicy.Normalize(input, 999999999999999999m, input.Items.Where(i => i.AssetId != null).Select(i => i.AssetId!.Value).ToArray(), input.Items.SelectMany(i => i.EvidenceIds).ToArray());
         var normalized = input with { Reason = input.Reason.Trim(), Items = items };
@@ -38,7 +38,7 @@ public sealed partial class PaymentLedgerTests
             await AdjustRequest(tenant, w.Invoice, 1, 150000);
         }
         await ReadySettlementFixture(w, otherResidents, agreedDeposit: 400000);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         using var image = new Mat(40, 100, MatType.CV_8UC3, Scalar.White); var photo = image.ImEncode(".png");
         var proof = new ContractInspectionEvidence
         {
@@ -114,7 +114,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal("200000", report.Total.OperatingProfit); Assert.Equal("200000", report.Total.NetOperatingCashFlow);
         var future = await RefundValue<FinancialReport>(await owner.GetAsync("/api/v1/financial-reports?from=2100-01-01&to=2100-12-31"));
         Assert.Equal("0", future.VerifiedDepositReturns);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(1, await db.SecurityAudit.CountAsync(a => a.TargetId == plan.Id && a.Event == "DepositDeductionApproved"));
         var room = await db.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == w.Room);
         var emptyRoom = new BHome.Domain.PropertyManagement.Room
@@ -146,7 +146,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, route, revision)).StatusCode);
         var revised = await SeedHistoricalDeduction(w, revision, summary, Guid.NewGuid());
         Assert.Equal(2, revised.Version); Assert.NotEqual(first.Id, revised.Id);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(2, await db.Database.SqlQuery<int>($"SELECT jsonb_array_length(jsonb_path_query_array(history,'$[*] ? (@.recordType == \"DepositDeductionV1\")')) AS \"Value\" FROM contracts WHERE id={w.Contract}").SingleAsync());
         var file = await db.Set<ContractInspectionEvidence>().SingleAsync(e => e.Id == proof);
         using var image = new Mat(40, 100, MatType.CV_8UC3, Scalar.Black); var changed = image.ImEncode(".png");

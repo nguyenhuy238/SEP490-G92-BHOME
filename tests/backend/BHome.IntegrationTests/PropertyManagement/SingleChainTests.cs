@@ -21,9 +21,9 @@ public sealed class SingleChainTests(AuthenticationDatabaseFixture fixture) : IC
     private async Task<HttpClient> Client(string role)
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         var id = Guid.NewGuid();
-        var account = new ApplicationUser { Id = id, UserName = id.ToString(), Email = $"{id:N}@example.invalid" };
+        var account = new User { Id = id, UserName = id.ToString(), Email = $"{id:N}@example.invalid" };
         const string password = "Synthetic-SingleChain!493";
         Assert.True((await users.CreateAsync(account, password)).Succeeded);
         Assert.True((await users.AddToRoleAsync(account, role)).Succeeded);

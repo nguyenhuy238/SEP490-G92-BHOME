@@ -18,7 +18,7 @@ public sealed partial class ContractLifecycleApiTests
         var w = await Setup(); var outside = await Setup();
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             foreach (var site in new[] { w, outside }) db.Add(new BillingPolicy
             {
                 LocationId = site.Location,
@@ -64,7 +64,7 @@ public sealed partial class ContractLifecycleApiTests
         var mainId = await Draft(main); var outsideId = await Draft(outside);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             db.Add(new BillingPolicy
             {
                 LocationId = holding.Location,
@@ -85,7 +85,7 @@ public sealed partial class ContractLifecycleApiTests
         var holdingId = (await Success<ContractId>(await Post(holding.Staff, "/api/v1/contracts/holdings", input))).Id;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var prior = await db.StaffLocationAssignments.SingleAsync(a => a.LocationId == holding.Location);
             prior.ChangePeriod(Today.AddDays(-30), Today.AddDays(-1));
             await db.SaveChangesAsync();

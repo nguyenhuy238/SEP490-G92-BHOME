@@ -121,7 +121,7 @@ vi.mock('../features/onboarding/IdentityWizard', () => ({
       </div>
     ) : null,
 }));
-import { HoldingNewTenant } from '../features/contracts/HoldingNewTenant';
+import { HoldingNewTenant } from '../features/contracts/holding/HoldingNewTenant';
 afterEach(cleanup);
 it('opens the selected holding-applicant side and keeps its progress after closing and retrying', async () => {
   const create = vi.fn();

@@ -38,7 +38,7 @@ public sealed partial class Compact24ExpenseTests
         var signingKey = fixture.Factory!.Services.GetRequiredService<IConfiguration>()["Jwt:SigningKey"];
         await using var host = fixture.Factory.WithWebHostBuilder(b => { b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { ["Jwt:SigningKey"] = signingKey })); b.ConfigureTestServices(s => { s.RemoveAll<IObjectStorage>(); s.AddSingleton<IObjectStorage>(store); }); });
         using var owner = host.CreateClient(); owner.DefaultRequestHeaders.Authorization = original.DefaultRequestHeaders.Authorization;
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE expenses SET evidence='[{{\"legacyReference\":\"preserve-verbatim\"}}]'::jsonb WHERE id={expense.Id}");
         var bytes = EvidenceImage(); var key = Guid.NewGuid();
         var results = await Task.WhenAll(UploadEvidence(owner, expense.Id, bytes, key), UploadEvidence(owner, expense.Id, bytes, key));

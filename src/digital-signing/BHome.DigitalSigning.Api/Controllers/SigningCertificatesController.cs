@@ -1,6 +1,6 @@
 using BHome.DigitalSigning.Application.Contracts;
 using BHome.DigitalSigning.Application.Services;
-using BHome.Domain.IdentityAccess;
+using BHome.DigitalSigning.Application.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -10,7 +10,7 @@ namespace BHome.DigitalSigning.Api.Controllers;
 // A signer's own Viettel MySign certificates. A certificate signs only for the user who declared it.
 [ApiController]
 [Route("api/v1/digital-signing/certificates")]
-[Authorize(Roles = $"{Roles.Owner},{Roles.Staff},{Roles.Tenant}")]
+[Authorize(Roles = $"{SigningRoles.Owner},{SigningRoles.Staff},{SigningRoles.Tenant}")]
 public sealed class SigningCertificatesController(SigningCertificateService certificates) : ControllerBase
 {
     public sealed record LockRequest(bool Locked);

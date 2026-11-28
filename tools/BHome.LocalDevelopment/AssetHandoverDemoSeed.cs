@@ -43,13 +43,15 @@ public static class AssetHandoverDemoSeed
         if (!await minio.BucketExistsAsync(new BucketExistsArgs().WithBucket("handover-demo"))) await minio.MakeBucketAsync(new MakeBucketArgs().WithBucket("handover-demo"));
         await Compact24SampleSeed.RunAsync(provider, environment, password);
         await using var scope = provider.CreateAsyncScope(); var services = scope.ServiceProvider;
-        var db = services.GetRequiredService<Compact24DbContext>(); var store = services.GetRequiredService<ISetupWorkspaceStore>();
-        var actor = services.GetRequiredService<LifecycleSeedActor>(); var users = services.GetRequiredService<UserManager<ApplicationUser>>();
+        var identity = services.GetRequiredService<Compact24DbContext>();
+        await using var db = OfflineFixturePersistence.Open(services);
+        var store = services.GetRequiredService<ISetupWorkspaceStore>();
+        var actor = services.GetRequiredService<LifecycleSeedActor>(); var users = services.GetRequiredService<UserManager<User>>();
         foreach (var n in new[] { 1, 2, 3, 4 })
         {
             var account = await users.FindByIdAsync(Compact24SampleSeed.Id(n).ToString()) ?? throw new LocalTestAccountException("Synthetic account missing.");
             account.EmailConfirmed = true;
-            db.Entry(account).Property("full_name").CurrentValue = $"Tài khoản demo bàn giao {n}";
+            identity.Entry(account).Property("full_name").CurrentValue = $"Tài khoản demo bàn giao {n}";
             account.PhoneNumber = $"+1555000100{n}";
             var result = await users.UpdateAsync(account);
             if (!result.Succeeded) throw new LocalTestAccountException("Cannot prepare synthetic account profile.");
@@ -102,7 +104,7 @@ public static class AssetHandoverDemoSeed
         {
             if (await db.Set<Meter>().AnyAsync(m => m.RoomId == Id(20) && m.UtilityType == type)) continue;
             var meter = new Meter { RoomId = Id(20), Code = "BG-101-" + type, UtilityType = type, InstalledOn = today.AddDays(-1) }; db.Add(meter); await db.SaveChangesAsync();
-            var task = new OperationalTask { Kind = BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading, LocationId = Id(10), MeterId = meter.Id, ReadingDate = today, Purpose = ReadingPurpose.Initial, Status = MeterTaskStatus.Completed, CompletedAt = DateTimeOffset.UtcNow }; db.Add(task); await db.SaveChangesAsync();
+            var task = new OperationalTask { Kind = BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading, RequiredLocationId = Id(10), MeterId = meter.Id, ReadingDate = today, Purpose = ReadingPurpose.Initial, MeterStatus = MeterTaskStatus.Completed, CompletedAt = DateTimeOffset.UtcNow }; db.Add(task); await db.SaveChangesAsync();
             var evidence = new MeterEvidence { TaskId = task.Id, ObjectKey = $"handover-demo/meters/{Guid.NewGuid():N}.png", ContentType = "image/png", Length = png.Length, ImageHash = Convert.ToHexString(SHA256.HashData(png)), UploadedByUserId = staff, IsUploaded = true, IsLinked = true };
             using var bytes = new MemoryStream(png); await storage.PutAsync(evidence.ObjectKey, bytes, bytes.Length, "image/png", default);
             db.Add(evidence); await db.SaveChangesAsync(); db.Add(new MeterReading { TaskId = task.Id, MeterId = meter.Id, EvidenceId = evidence.Id, ConfirmedValue = 100, ConfirmedByUserId = staff, ConfirmedAt = DateTimeOffset.UtcNow }); await db.SaveChangesAsync();

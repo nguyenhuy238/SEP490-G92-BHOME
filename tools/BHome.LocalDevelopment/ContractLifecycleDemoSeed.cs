@@ -51,7 +51,8 @@ internal static class ContractLifecycleDemoSeed
     // No process-wide clock override, status shortcut, or change to the running API.
     public static async Task HistoricalParentAsync(IServiceProvider services, CancellationToken t)
     {
-        await using var scope = services.CreateAsyncScope(); var sp = scope.ServiceProvider; var db = sp.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = services.CreateAsyncScope(); var sp = scope.ServiceProvider;
+        await using var db = OfflineFixturePersistence.Open(sp);
         var actor = sp.GetRequiredService<LifecycleSeedActor>(); actor.UserId = User(1); actor.Role = "Owner";
         var existing = await db.Set<Contract>().AsNoTracking().SingleOrDefaultAsync(c => c.RoomId == Id(21) && c.Kind == ContractKind.Main, t);
         if (existing?.Status is ContractStatus.Active or ContractStatus.Superseded) return;

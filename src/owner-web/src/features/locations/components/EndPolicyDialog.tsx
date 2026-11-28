@@ -11,7 +11,7 @@ import {
   Stack,
 } from '@mui/material';
 import { invoiceError, type Policy } from '../../../../../../packages/client-core/src/invoices';
-import { useInvoiceApi } from '../../invoices/useInvoiceApi';
+import { useInvoiceApi } from '../../invoices/hooks/useInvoiceApi';
 
 export function EndPolicyDialog({ policy, close }: { policy: Policy; close: () => void }) {
   const api = useInvoiceApi();

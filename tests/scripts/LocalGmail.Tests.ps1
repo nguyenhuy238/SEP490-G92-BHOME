@@ -56,7 +56,7 @@ try {
     Assert ($data.'Email:AllowedRecipients:0' -eq 'approved@example.invalid') 'Existing allowlist was destroyed.'
     Assert ($data.'Email:AllowAnyRecipientInDevelopment' -eq 'false') 'Legacy flag was changed unnecessarily.'
     Assert ($data.'Unrelated:Setting' -eq 'preserve') 'Unrelated setting was changed.'
-    Assert ($data.'Email:TestEnabled' -eq 'false') 'Test endpoint must remain off unless separately configured.'
+    Assert (-not $data.ContainsKey('Email:TestEnabled')) 'Retired endpoint flag must not be configured.'
     Assert ($data.'Email:AppPassword' -eq 'SYNTHETIC_PRIVATE_TEST_1234') 'SMTP credential changed.'
     Assert ($hash -eq (Get-FileHash -LiteralPath $profile -Algorithm SHA256).Hash) 'Existing .env changed.'
     $before = (Get-FileHash -LiteralPath $secretFile -Algorithm SHA256).Hash

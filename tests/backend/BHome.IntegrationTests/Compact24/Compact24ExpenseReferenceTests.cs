@@ -15,7 +15,7 @@ public sealed partial class Compact24ExpenseTests
     [CompactPostgresFact]
     public async Task ExpenseReferencesValidateRoomAssetAndExistingWorkOrderAndRetainTheirSourceLinks()
     {
-        var (owner, input) = await Setup(); await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var (owner, input) = await Setup(); await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var room = new Room { LocationId = input.LocationId, RoomNumber = "REF-A", Capacity = 2 };
         var otherRoom = new Room { LocationId = input.LocationId, RoomNumber = "REF-B", Capacity = 2 };
         var asset = new Asset { LocationId = input.LocationId, RoomId = room.Id, Name = "SYNTHETIC ASSET", Category = "Furniture", Condition = "Good" };
@@ -64,7 +64,7 @@ public sealed partial class Compact24ExpenseTests
         var (owner, input) = await Setup(); var expense = await Value(await Create(owner, input, Guid.NewGuid()));
         var oldPayload = new { input.LocationId, input.RoomId, input.ExpenseType, input.Category, Amount = input.Amount.ToString("0", System.Globalization.CultureInfo.InvariantCulture), input.OccurredOn, input.Note };
         var expected = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(oldPayload)));
-        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal(expected, await db.Database.SqlQuery<string>($"SELECT history->0->>'fingerprint' AS \"Value\" FROM expenses WHERE id={expense.Id}").SingleAsync());
     }
 }

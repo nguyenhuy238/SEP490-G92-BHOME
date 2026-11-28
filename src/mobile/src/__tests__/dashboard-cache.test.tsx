@@ -7,7 +7,7 @@ import { queryPolicies } from '../lib/queryPolicies';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { useOwnerAttention } from '../features/owner/useOwnerAttention';
 import { useStaffDashboard } from '../features/workspace/useStaffDashboard';
-import { TenantDashboardScreen } from '../screens/TenantDashboardScreen';
+import { TenantDashboardScreen } from '../features/tenant/dashboard/TenantDashboardScreen';
 import { businessToday } from '../../../../packages/client-core/src/contracts';
 const state = vi.hoisted(() => ({
   api: null as MobileApi | null,
@@ -25,7 +25,7 @@ vi.mock('../features/workspace/WorkspaceProvider', () => ({
   useWorkspace: () => ({ role: state.role, preview: false, staffLocationId: 'loc' }),
 }));
 vi.mock('../lib/toast', () => ({ conciseMessage: (text: string) => text, showError: vi.fn() }));
-vi.mock('../screens/TenantDashboard', () => ({
+vi.mock('../features/tenant/dashboard/TenantDashboard', () => ({
   TenantDashboard: (props: unknown) => <output>{JSON.stringify(props)}</output>,
 }));
 const clients: MobileApi[] = [];

@@ -10,7 +10,7 @@ import {
   type SettlementSummary,
 } from '../../../../../packages/client-core/src/contracts';
 import { useContractLifecycle } from '../../../../../packages/client-core/src/useContractLifecycle';
-import { ContractLifecyclePanel } from './ContractLifecyclePanel';
+import { ContractLifecyclePanel } from './components/settlement/ContractLifecyclePanel';
 vi.mock('../payments/RefundPanel', () => ({
   RefundPanel: ({ sourceId, sourceKind }: { sourceId: string; sourceKind: string }) => (
     <div data-testid="deposit-refund-source">

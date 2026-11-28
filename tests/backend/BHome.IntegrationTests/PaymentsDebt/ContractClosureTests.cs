@@ -19,7 +19,7 @@ public sealed partial class PaymentLedgerTests
     private async Task ReadySettlementFixture(Workspace w, bool others, bool payInvoices = true, decimal agreedDeposit = 0)
     {
         // Synthetic persisted financial/inspection preconditions, no mocked settlement result.
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var contract = await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract); var prior = await db.Set<Invoice>().SingleAsync(i => i.Id == w.Invoice);
         contract.StartDate = prior.BillingPeriod;
         contract.RequiredDeposit = agreedDeposit;
@@ -27,7 +27,7 @@ public sealed partial class PaymentLedgerTests
             foreach (var other in await db.Set<Contract>().Where(c => c.RoomId == w.Room && c.Id != w.Contract).ToArrayAsync())
                 other.Status = ContractStatus.Terminated;
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime); var period = new DateOnly(today.Year, today.Month, 1);
-        var lines = new List<InvoiceLine> { new() { Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rent", Rate = 100000, Quantity = 1, Amount = 100000, RateDate = period, OccupiedDays = 1, PeriodDays = DateTime.DaysInMonth(period.Year, period.Month) } };
+        var lines = new List<InvoiceItem> { new() { Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rent", Rate = 100000, Quantity = 1, Amount = 100000, RateDate = period, OccupiedDays = 1, PeriodDays = DateTime.DaysInMonth(period.Year, period.Month) } };
         var readings = new List<HandoverReading>();
         foreach (var type in new[] { UtilityType.Electricity, UtilityType.Water })
         {
@@ -35,7 +35,7 @@ public sealed partial class PaymentLedgerTests
             MeterReading? periodic = null;
             foreach (var purpose in new[] { ReadingPurpose.Periodic, ReadingPurpose.Final })
             {
-                var task = new OperationalTask { LocationId = w.Location, MeterId = meter.Id, ContractId = purpose == ReadingPurpose.Final ? w.Contract : null, Purpose = purpose, ReadingDate = today, BillingPeriod = purpose == ReadingPurpose.Periodic ? period : null, Status = MeterTaskStatus.Completed };
+                var task = new OperationalTask { RequiredLocationId = w.Location, MeterId = meter.Id, ContractId = purpose == ReadingPurpose.Final ? w.Contract : null, Purpose = purpose, ReadingDate = today, BillingPeriod = purpose == ReadingPurpose.Periodic ? period : null, MeterStatus = MeterTaskStatus.Completed };
                 using var image = new Mat(60, 120, MatType.CV_8UC3, Scalar.White);
                 var photo = image.ImEncode(".png");
                 var evidence = new MeterEvidence
@@ -78,7 +78,7 @@ public sealed partial class PaymentLedgerTests
         (await Post(owner, path + "/settlement", new SettlementInput("Synthetic zero-deposit fully verified", summary.Reference))).EnsureSuccessStatusCode();
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime); var key = Guid.NewGuid();
         var results = await Task.WhenAll(Post(owner, path + "/complete", new CompletionInput(today, "Available"), key), Post(owner, path + "/complete", new CompletionInput(today, "Available"), key)); Assert.All(results, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); Assert.Equal(ContractStatus.Terminated, (await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract)).Status);
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence(); Assert.Equal(ContractStatus.Terminated, (await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract)).Status);
         Assert.Equal(others ? RoomStatus.Occupied : RoomStatus.Available, (await db.Set<Room>().SingleAsync(r => r.Id == w.Room)).Status);
         Assert.Equal(others ? 2 : 0, await db.Set<Contract>().CountAsync(c => c.RoomId == w.Room && c.Status == ContractStatus.Active));
         Assert.Equal(HttpStatusCode.OK, (await tenant.GetAsync($"/api/v1/invoices/{w.Invoice}/payment")).StatusCode);
@@ -115,7 +115,7 @@ public sealed partial class PaymentLedgerTests
         var ownContract = (await tenant.GetFromJsonAsync<ContractView>($"/api/v1/contracts/{w.Contract}"))!;
         Assert.Equal("Terminated", ownContract.Status); Assert.NotEmpty(ownContract.Occupants!);
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         var members = await db.Set<ContractResident>().Where(cr => cr.ContractId == w.Contract).ToArrayAsync();
         var ids = members.Select(cr => cr.ResidentId).ToArray();
         Assert.All(members, cr => Assert.Equal(today, cr.ResidenceTo));

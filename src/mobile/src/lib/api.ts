@@ -6,6 +6,7 @@ import {
   UserFeedbackError,
 } from '../../../../packages/client-core/src/api';
 import { invalidCredentialsMessage } from '../../../../packages/client-core/src/loginValidation';
+import { dateOnly } from '../../../../packages/client-core/src/contracts';
 import { QueryCache } from './queryCache';
 import { mutationTags } from './queryPolicies';
 import type { TokenSession } from '../../../../packages/client-core/src/jwtSession';
@@ -56,6 +57,24 @@ export class MobileApiError extends Error {
     super(getUserFriendlyMessage({ status, code, problem }));
     this.name = 'MobileApiError';
   }
+}
+
+// Shared checks for untrusted JSON returned by the API. Each service still validates its own DTO.
+export const isResponseRecord = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
+export const isResponseInstant = (value: unknown) =>
+  typeof value === 'string' && Number.isFinite(Date.parse(value));
+export const isResponseMoney = (value: unknown): value is string =>
+  typeof value === 'string' && /^\d+$/.test(value);
+export function isResponseDate(value: unknown) {
+  try {
+    return typeof value === 'string' && dateOnly(value) === value;
+  } catch {
+    return false;
+  }
+}
+export function invalidResponse(): never {
+  throw new MobileApiError(502, 'invalid_response');
 }
 
 const deployedOrigins = new Set([

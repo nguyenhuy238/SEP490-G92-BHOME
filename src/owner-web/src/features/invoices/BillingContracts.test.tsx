@@ -5,11 +5,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { invoiceClient, type PolicyInput } from '../../../../../packages/client-core/src/invoices';
 import { ApiError } from '../../../../../packages/client-core/src/api';
 import { theme } from '../../theme/theme';
-import { BillingConfigurationPage } from './BillingConfigurationPage';
+import { BillingConfigurationPage } from './pages/BillingConfigurationPage';
 import { MemoryRouter } from 'react-router';
 
 const state = vi.hoisted(() => ({ request: vi.fn() }));
-vi.mock('./useInvoiceApi', () => ({
+vi.mock('./hooks/useInvoiceApi', () => ({
   useInvoiceApi: () => ({ request: state.request, ...client() }),
 }));
 vi.mock('../../../../../packages/client-core/src/auth', () => ({

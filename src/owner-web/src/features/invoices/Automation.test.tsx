@@ -4,10 +4,10 @@ import { ThemeProvider } from '@mui/material';
 import { MemoryRouter } from 'react-router';
 import { afterEach, expect, it, vi } from 'vitest';
 import { theme } from '../../theme/theme';
-import AutomationPage, { DemoAutomationPage, LiveAutomationPage } from './AutomationPage';
+import AutomationPage, { DemoAutomationPage, LiveAutomationPage } from './pages/AutomationPage';
 import { invoiceClient } from '../../../../../packages/client-core/src/invoices';
 const mocks = vi.hoisted(() => ({ request: vi.fn(), schedule: vi.fn() }));
-vi.mock('./useInvoiceApi', () => ({
+vi.mock('./hooks/useInvoiceApi', () => ({
   useInvoiceApi: () => ({ ...invoiceClient(mocks.request), ...mocks }),
 }));
 vi.mock('../../services/config', () => ({ isMockMode: false, apiBaseUrl: '' }));

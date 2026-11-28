@@ -30,7 +30,7 @@ public sealed partial class Compact24ExpenseTests
         var today = FinanceToday;
         var route = $"/api/v1/financial-reports?from={today:yyyy-MM-dd}&to={today:yyyy-MM-dd}&locationId={location.Id}";
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var changes = await db.Set<PropertyChange>().CountAsync();
         var expenses = await db.Database.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM expenses").SingleAsync();
         var response = await owner.GetAsync(route);
@@ -71,7 +71,7 @@ public sealed partial class Compact24ExpenseTests
         var room = new Room { LocationId = input.LocationId, RoomNumber = "HISTORY-SCOPE", Capacity = 2 };
         await using (var legacyScope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = legacyScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = legacyScope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             db.Add(room); await db.SaveChangesAsync();
         }
         var today = FinanceToday;

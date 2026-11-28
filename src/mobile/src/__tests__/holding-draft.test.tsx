@@ -14,7 +14,7 @@ import {
   draftPayload,
   holdingDraftPayload,
 } from '../../../../packages/client-core/src/contracts';
-import { ContractDraftForm } from '../features/contracts/ContractDraftForm';
+import { ContractDraftForm } from '../features/contracts/holding/ContractDraftForm';
 import { type MainDraftPreparation } from '../../../../packages/client-core/src/mainDrafts';
 
 const ids = Array.from({ length: 5 }, (_, i) => `00000000-0000-4000-8000-00000000000${i + 1}`);
@@ -34,7 +34,7 @@ vi.mock('../features/workspace/WorkspaceProvider', () => ({
   }),
 }));
 
-vi.mock('../features/contracts/HoldingNewTenant', () => ({
+vi.mock('../features/contracts/holding/HoldingNewTenant', () => ({
   HoldingNewTenant: ({
     initialResidentId,
     onCreated,

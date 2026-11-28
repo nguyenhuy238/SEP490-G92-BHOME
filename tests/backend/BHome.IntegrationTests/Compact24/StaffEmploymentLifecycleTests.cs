@@ -55,6 +55,17 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Equal(HttpStatusCode.OK, activeFirstPeriod.StatusCode);
         var activeStaff = (await activeFirstPeriod.Content.ReadFromJsonAsync<StaffView>())!;
         Assert.Equal("Active", activeStaff.Employment!.Status);
+        var employmentId = activeStaff.Employment.Id;
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
+        // Legacy JSON may contain fields unknown to the current DTO. Editing an employment
+        // must merge metadata and append history without rewriting the existing entries.
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE staff_employments
+            SET reward_penalty_policy=reward_penalty_policy||jsonb_build_object('LegacyPolicy',jsonb_build_object('amount',123)),
+                history=history||jsonb_build_array((history->0)||jsonb_build_object('legacyMarker','kept'))
+            WHERE id={employmentId}
+            """);
 
         var closed = firstActive with { EndDate = Today.AddYears(-1), Status = "Ended" };
         var closeResponse = await owner.PutAsJsonAsync(route,
@@ -62,6 +73,30 @@ public sealed partial class Compact24NotificationMvpTests
                 true, closed, "Close first employment period"));
         Assert.Equal(HttpStatusCode.OK, closeResponse.StatusCode);
         var closedStaff = (await closeResponse.Content.ReadFromJsonAsync<StaffView>())!;
+        var periods = (await owner.GetFromJsonAsync<EmploymentPeriodView[]>(route + "/employments"))!;
+        var period = Assert.Single(periods);
+        Assert.Null(period.EmploymentType);
+        Assert.Equal(3, period.History.Count);
+        Assert.Null(period.History[0].Before);
+        Assert.Null(period.History[0].After!.EmploymentType);
+        Assert.Equal("", period.History[2].Before!.EmploymentType);
+        Assert.Null(period.History[2].After!.EmploymentType);
+        Assert.Equal(closed, period.History[2].After);
+        Assert.True(await db.Database.SqlQuery<bool>($"""
+            SELECT (
+                reward_penalty_policy->'LegacyPolicy'->>'amount'='123'
+                AND history->1->>'legacyMarker'='kept'
+                AND history->0->'before'='null'::jsonb
+                AND NOT ((history->0->'after') ? 'employmentType')
+                AND history->2->'before'->>'employmentType'=''
+                AND NOT ((history->2->'after') ? 'employmentType')
+                AND (history->2->>'occurredAt')::timestamptz = (
+                    SELECT event_at FROM notifications
+                    WHERE record_kind='AUDIT' AND notification_type='StaffUpdated'
+                      AND related_entity_id={w.Staff.Id} AND event_at=(history->2->>'occurredAt')::timestamptz
+                    LIMIT 1)
+            ) AS "Value" FROM staff_employments WHERE id={employmentId}
+            """).SingleAsync());
 
         var historical = ended with
         {
@@ -99,6 +134,13 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync($"/api/v1/staff/{w.Tenants[0].Id}/employments")).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync(employmentRoute, renewal)).StatusCode);
 
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE staff_employments
+            SET reward_penalty_policy=reward_penalty_policy||jsonb_build_object('LegacyPolicy',jsonb_build_object('amount',123))
+            WHERE id={created.Employment!.Id}
+            """);
         var closed = first with { EndDate = Today, Status = "Ended" };
         var close = new StaffUpdate(created.AccountVersion, created.Email, created.FullName, created.Phone, true, closed, "End period");
         var closedResponse = await owner.PutAsJsonAsync(route, close);
@@ -120,7 +162,15 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.NotEqual(created.Employment.Id, current.Employment!.Id);
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync(route, close)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync(route,
-            close with { AccountVersion = current.AccountVersion, Employment = next with { StartDate = Today } })).StatusCode);
+            close with
+            {
+                AccountVersion = current.AccountVersion,
+                FullName = "Rejected overlapping update",
+                Employment = next with { StartDate = Today }
+            })).StatusCode);
+        var afterRejectedUpdate = (await owner.GetFromJsonAsync<StaffView>(route))!;
+        Assert.Equal(current.AccountVersion, afterRejectedUpdate.AccountVersion);
+        Assert.Equal(current.FullName, afterRejectedUpdate.FullName);
 
         var periods = (await owner.GetFromJsonAsync<EmploymentPeriodView[]>(employmentRoute))!;
         Assert.Equal(2, periods.Length);
@@ -135,6 +185,11 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Equal("End period", change.Reason);
         Assert.Equal(first, change.Before);
         Assert.Equal(closed, change.After);
+        Assert.True(await db.Database.SqlQuery<bool>($"""
+            SELECT (reward_penalty_policy->>'employmentType'='FullTime'
+                AND reward_penalty_policy->'LegacyPolicy'->>'amount'='123') AS "Value"
+            FROM staff_employments WHERE id={created.Employment.Id}
+            """).SingleAsync());
     }
 
     [CompactPostgresFact]
@@ -170,7 +225,7 @@ public sealed partial class Compact24NotificationMvpTests
         var verifiedWorkOrder = Guid.NewGuid();
         var moveOut = w.Contracts[0];
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO locations(id,name,address,staff_assignments)
             VALUES ({future},'Synthetic future','Synthetic address',jsonb_build_array(jsonb_build_object(

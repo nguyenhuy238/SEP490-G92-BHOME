@@ -58,13 +58,17 @@ async function main() {
   if (!schedule)
     await call(
       owner,
-      '/api/v1/billing-schedules',
+      '/api/v1/billing-automation',
       {
         locationId: id(10),
-        rateDate: 0,
-        rentSource: 0,
-        partialMonth: 0,
-        rounding: 0,
+        effectiveFrom: date(-2),
+        enabled: false,
+        authorizeAutomaticFinalization: false,
+        meterDay: 1,
+        meterDueDay: 1,
+        meterDueMonthOffset: 0,
+        timeZone: 'Asia/Ho_Chi_Minh',
+        initialSchedule: { rateDate: 0, partialMonth: 0, rounding: 0 },
         draftDay: 1,
         draftMonthOffset: 0,
         finalDay: 1,
@@ -72,6 +76,7 @@ async function main() {
         dueDay: 31,
         dueMonthOffset: 1,
         expectedVersion: 0,
+        expectedBillingScheduleVersion: 0,
       },
       'PUT',
     );

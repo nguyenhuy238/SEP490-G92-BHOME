@@ -89,7 +89,7 @@ vi.mock('../features/contracts/ContractEvidence', () => ({
   ),
 }));
 
-import { TenantMoveOutInspectionSummary } from '../features/contracts/TenantMoveOutInspectionSummary';
+import { TenantMoveOutInspectionSummary } from '../features/contracts/moveOut/TenantMoveOutInspectionSummary';
 
 afterEach(cleanup);
 

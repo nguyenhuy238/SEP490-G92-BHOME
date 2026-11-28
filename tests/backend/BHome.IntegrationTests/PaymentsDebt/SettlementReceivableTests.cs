@@ -16,7 +16,7 @@ public sealed partial class PaymentLedgerTests
         var issuePhotos = new List<Guid>();
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var storage = scope.ServiceProvider.GetRequiredService<BHome.Application.Storage.IObjectStorage>();
             foreach (var _ in Enumerable.Range(0, 3))
             {
@@ -70,7 +70,7 @@ public sealed partial class PaymentLedgerTests
         Guid inspectionId; int inspectionVersion;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var inspection = await db.Set<BHome.Domain.TenantContracts.ContractFinalInspection>()
                 .SingleAsync(i => i.ContractId == w.Contract);
             inspectionId = inspection.Id; inspectionVersion = inspection.Version;
@@ -128,12 +128,12 @@ public sealed partial class PaymentLedgerTests
         Guid inspectionId; int inspectionVersion; int originalInvoiceCount; Guid outsiderId;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var inspection = await db.Set<BHome.Domain.TenantContracts.ContractFinalInspection>().SingleAsync(i => i.ContractId == w.Contract);
             inspectionId = inspection.Id; inspectionVersion = inspection.Version;
             originalInvoiceCount = await db.Set<BHome.Domain.Billing.Invoice>().CountAsync(i => i.RoomId == w.Room);
             outsiderId = (await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
-                new ApplicationUser { UserName = Guid.NewGuid() + "@example.invalid", Email = Guid.NewGuid() + "@example.invalid" },
+                new BHome.Infrastructure.Persistence.User { UserName = Guid.NewGuid() + "@example.invalid", Email = Guid.NewGuid() + "@example.invalid" },
                 BHome.Domain.IdentityAccess.Roles.Tenant, BHome.IntegrationTests.Compact24.WorkflowTestUsers.Password)).Id;
             // A replacement arrives on the same calendar day, after the final inspection.
             // Capacity remains three; the replacement must never inherit this damage debt.
@@ -204,7 +204,7 @@ public sealed partial class PaymentLedgerTests
         var historical = await RefundValue<SettlementReceivablesView>(await tenant.GetAsync(route));
         Assert.Equal(200000, historical.Receivables[0].Outstanding);
         await using var finalScope = fixture.Factory.Services.CreateAsyncScope();
-        var finalDb = finalScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var finalDb = finalScope.ServiceProvider.GetFixturePersistence();
         var allocations = await finalDb.Set<PaymentAllocation>().Where(a => a.SettlementReceivableId == charge.Id).ToArrayAsync();
         Assert.Equal(2, allocations.Length); Assert.Equal(400000, allocations.Sum(a => a.Amount));
         Assert.All(allocations, a => { Assert.Null(a.PaidByUserId); Assert.NotNull(a.DepositOffsetApprovalId); Assert.Equal(w.Contract, a.SourceDepositContractId); });
@@ -246,7 +246,7 @@ public sealed partial class PaymentLedgerTests
         var (w, proof, photo) = await DamageFixture(pendingInvoiceAdjustment: true); using var owner = await Client(w.Owner);
         var route = $"/api/v1/contracts/{w.Contract}/move-out/receivables";
         var view = await RefundValue<SettlementReceivablesView>(await owner.GetAsync(route));
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var inspection = await db.Set<BHome.Domain.TenantContracts.ContractFinalInspection>().SingleAsync(i => i.ContractId == w.Contract);
         var charge = await RefundValue<SettlementReceivable>(await Post(owner, route + "/damage",
             new DamageChargeInput(view.Reference, inspection.Id, inspection.Version, null, 600000, "Synthetic damage", [proof], true)));
@@ -259,7 +259,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, route + "/deposit-offsets", new DepositOffsetInput(view.Reference, charge.Id, null, 1, "Tampered proof", true))).StatusCode);
         using (var content = new MemoryStream(photo)) await storage.PutAsync(evidence.ObjectKey, content, photo.Length, "image/png", default);
         // An approved post-finalization adjustment creates a real remaining invoice balance.
-        var adjustment = await db.Set<BHome.Domain.Billing.InvoiceAdjustmentRequest>().SingleAsync(r => r.InvoiceId == w.Invoice);
+        var adjustment = await db.Set<BHome.Domain.Billing.InvoiceAdjustment>().SingleAsync(r => r.InvoiceId == w.Invoice);
         (await Post(owner, $"/api/v1/invoice-adjustments/{adjustment.Id}/approve",
             new BHome.Application.Billing.AdjustmentDecisionInput(1, 1, 0, 150000, null, "Synthetic additional approved rent", true))).EnsureSuccessStatusCode();
         view = await RefundValue<SettlementReceivablesView>(await owner.GetAsync(route));

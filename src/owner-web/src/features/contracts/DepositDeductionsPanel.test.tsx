@@ -4,7 +4,7 @@ import type {
   ContractClient,
   SettlementSummary,
 } from '../../../../../packages/client-core/src/contracts';
-import { DepositDeductionsPanel } from './DepositDeductionsPanel';
+import { DepositDeductionsPanel } from './components/settlement/DepositDeductionsPanel';
 afterEach(cleanup);
 it('retains the approved historical decision and evidence count without another write form', () => {
   const summary = {

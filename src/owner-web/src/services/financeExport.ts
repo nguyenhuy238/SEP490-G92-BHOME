@@ -1,4 +1,5 @@
 import type { FinancialReport } from '../../../../packages/client-core/src/finance';
+import { downloadBlob } from '../utils/downloadBlob';
 // Preserve backend decimal strings and make text safe to open in a spreadsheet.
 export function reportCsv(report: FinancialReport) {
   const rows: unknown[][] = [
@@ -140,10 +141,5 @@ export function reportCsv(report: FinancialReport) {
   );
 }
 export function downloadFinance(content: string, name: string, type: string) {
-  const url = URL.createObjectURL(new Blob([content], { type }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = name;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadBlob(new Blob([content], { type }), name);
 }

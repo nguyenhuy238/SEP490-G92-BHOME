@@ -221,7 +221,7 @@ public sealed class SrsFe02BugHuntTests(AuthenticationDatabaseFixture fixture)
         for (var round = 0; round < 8; round++)
         {
             var location = await CreateLocationAsync(owner);
-            var staff = new List<ApplicationUser>();
+            var staff = new List<User>();
             for (var i = 0; i < 5; i++) staff.Add(await CreateUserAsync(Roles.Staff));
             var start = Today().AddDays(40 + round);
             var clients = staff.Select(_ => { var c = fixture.Factory.CreateClient(); c.DefaultRequestHeaders.Authorization = token; return c; }).ToList();
@@ -346,12 +346,12 @@ public sealed class SrsFe02BugHuntTests(AuthenticationDatabaseFixture fixture)
 
     // ---------- helpers
 
-    private async Task<ApplicationUser> CreateUserAsync(string role, bool active = true)
+    private async Task<User> CreateUserAsync(string role, bool active = true)
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         var id = Guid.NewGuid();
-        var user = new ApplicationUser { Id = id, UserName = id.ToString(), Email = $"hunt.{id:N}@example.invalid" };
+        var user = new User { Id = id, UserName = id.ToString(), Email = $"hunt.{id:N}@example.invalid" };
         Assert.True((await users.CreateAsync(user, Password)).Succeeded);
         Assert.True((await users.AddToRoleAsync(user, role)).Succeeded);
         if (!active)
@@ -364,7 +364,7 @@ public sealed class SrsFe02BugHuntTests(AuthenticationDatabaseFixture fixture)
 
     private async Task<HttpClient> ClientForNewUserAsync(string role) => await ClientForAsync(await CreateUserAsync(role));
 
-    private async Task<HttpClient> ClientForAsync(ApplicationUser user)
+    private async Task<HttpClient> ClientForAsync(User user)
     {
         var client = fixture.Factory.CreateClient();
         var session = await LoginAsync(client, user);
@@ -372,7 +372,7 @@ public sealed class SrsFe02BugHuntTests(AuthenticationDatabaseFixture fixture)
         return client;
     }
 
-    private static async Task<LoginResult> LoginAsync(HttpClient client, ApplicationUser user)
+    private static async Task<LoginResult> LoginAsync(HttpClient client, User user)
     {
         var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = Password });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
