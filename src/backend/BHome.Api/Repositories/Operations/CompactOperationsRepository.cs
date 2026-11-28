@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using NpgsqlTypes;
+using NativeStaffEmployment = BHome.Domain.Entities.StaffEmployment;
 
 namespace BHome.Infrastructure.Modules.Operations;
 
@@ -184,8 +185,14 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
             try { if (await update.ExecuteNonQueryAsync(t) != 1) throw OperationsException.Conflict("stale_staff_version"); }
             catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.UniqueViolation) { throw OperationsException.Conflict("email_already_used"); }
         }
-        Guid? employmentId; await using (var select = Command("SELECT id FROM staff_employments WHERE staff_user_id=@id ORDER BY start_date DESC,id LIMIT 1"))
-        { select.Parameters.AddWithValue("id", userId); var value = await select.ExecuteScalarAsync(t); employmentId = value is Guid id ? id : null; }
+        Guid? employmentId;
+        await using (var tables = await Compact24TableContext.OpenAsync(db, t))
+        {
+            employmentId = await tables.Set<NativeStaffEmployment>()
+                .Where(e => e.StaffUserId == userId)
+                .OrderByDescending(e => e.StartDate).ThenBy(e => e.Id)
+                .Select(e => (Guid?)e.Id).FirstOrDefaultAsync(t);
+        }
         if (employmentId is null && input.Employment.Status != "Active")
             throw OperationsException.Invalid("new_employment_must_be_active");
         await EnsureEmploymentPeriodAvailable(userId, employmentId, input.Employment.StartDate, t);
@@ -198,23 +205,18 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
     {
         await Open(t);
         await EnsureStaffExists(userId, t);
-        await using var command = Command("""
-            SELECT id,contract_number,NULLIF(reward_penalty_policy->>'employmentType',''),
-                   start_date,end_date,salary_type,base_rate,status,history::text
-            FROM staff_employments WHERE staff_user_id=@staff ORDER BY start_date DESC,id
-            """);
-        command.Parameters.AddWithValue("staff", userId);
-        var result = new List<EmploymentPeriodView>();
-        await using var reader = await command.ExecuteReaderAsync(t);
-        while (await reader.ReadAsync(t))
+        await using var tables = await Compact24TableContext.OpenAsync(db, t);
+        var employments = await tables.Set<NativeStaffEmployment>()
+            .Where(e => e.StaffUserId == userId)
+            .OrderByDescending(e => e.StartDate).ThenBy(e => e.Id).ToListAsync(t);
+        return employments.Select(e =>
         {
-            result.Add(new(reader.GetGuid(0), reader.IsDBNull(1) ? null : reader.GetString(1),
-                reader.IsDBNull(2) ? null : reader.GetString(2), reader.GetFieldValue<DateOnly>(3),
-                reader.IsDBNull(4) ? null : reader.GetFieldValue<DateOnly>(4),
-                reader.IsDBNull(5) ? null : reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetDecimal(6),
-                reader.GetString(7), JsonSerializer.Deserialize<List<EmploymentHistoryEntry>>(reader.GetString(8), Json) ?? []));
-        }
-        return result;
+            var employmentType = EmploymentType(e.RewardPenaltyPolicy);
+            return new EmploymentPeriodView(e.Id, e.ContractNumber,
+                string.IsNullOrEmpty(employmentType) ? null : employmentType, e.StartDate,
+                e.EndDate, e.SalaryType, e.BaseRate, e.Status,
+                e.History.Deserialize<List<EmploymentHistoryEntry>>(Json) ?? []);
+        }).ToArray();
     }
 
     public async Task<StaffView> CreateEmploymentPeriodAsync(Guid actorId, Guid userId,
@@ -229,10 +231,9 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
             if (version is null) throw OperationsException.Missing();
             if (!Equals(version, input.AccountVersion)) throw OperationsException.Conflict("stale_staff_version");
         }
-        await using (var existingEmployment = Command("SELECT EXISTS(SELECT 1 FROM staff_employments WHERE staff_user_id=@id)"))
+        await using (var tables = await Compact24TableContext.OpenAsync(db, t))
         {
-            existingEmployment.Parameters.AddWithValue("id", userId);
-            var hasHistory = (bool)(await existingEmployment.ExecuteScalarAsync(t))!;
+            var hasHistory = await tables.Set<NativeStaffEmployment>().AnyAsync(e => e.StaffUserId == userId, t);
             if (!hasHistory && input.Employment.Status != "Active")
                 throw OperationsException.Invalid("new_employment_must_be_active");
         }
@@ -884,56 +885,70 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
     {
         // Periods are inclusive; the latest period must begin strictly after every earlier period.
         // An open-ended prior period must be closed explicitly before a new period is recorded.
-        await using var command = Command("""
-            SELECT EXISTS(SELECT 1 FROM staff_employments
-              WHERE staff_user_id=@staff AND (@id IS NULL OR id<>@id)
-                AND (end_date IS NULL OR end_date>=@start))
-            """);
-        command.Parameters.AddWithValue("staff", staffId); AddNullableUuid(command, "id", employmentId);
-        command.Parameters.AddWithValue("start", start);
-        if ((bool)(await command.ExecuteScalarAsync(t))!) throw OperationsException.Conflict("employment_period_overlap");
+        await using var tables = await Compact24TableContext.OpenAsync(db, t);
+        if (await tables.Set<NativeStaffEmployment>().AnyAsync(e =>
+            e.StaffUserId == staffId && (employmentId == null || e.Id != employmentId) &&
+            (e.EndDate == null || e.EndDate >= start), t))
+            throw OperationsException.Conflict("employment_period_overlap");
     }
 
     private async Task SaveEmployment(Guid staffId, Guid? employmentId, EmploymentWrite input, Guid actor,
         DateTimeOffset now, string? reason, CancellationToken t)
     {
-        var metadata = input.EmploymentType is null
-            ? "{}"
-            : JsonSerializer.Serialize(new { employmentType = input.EmploymentType }, Json);
-        var snapshot = JsonSerializer.Serialize(input, Json);
+        await using var tables = await Compact24TableContext.OpenAsync(db, t);
+        var employments = tables.Set<NativeStaffEmployment>();
+        NativeStaffEmployment employment;
+        EmploymentWrite? before = null;
+        // The previous SQL timestamp parameter stored UTC with PostgreSQL's microsecond precision.
+        var occurredAt = new DateTimeOffset(now.UtcTicks - now.UtcTicks % 10, TimeSpan.Zero);
         if (employmentId is null)
         {
-            await using var insert = Command("""
-                INSERT INTO staff_employments(id,staff_user_id,contract_number,start_date,end_date,salary_type,base_rate,reward_penalty_policy,status,history)
-                VALUES(@id,@staff,@contract,@start,@end,@salary,@rate,CAST(@metadata AS jsonb),@status,
-                  jsonb_build_array(jsonb_build_object('action','Created','actorId',@actor,'occurredAt',@now,
-                    'reason',@reason,'before',NULL,'after',CAST(@snapshot AS jsonb))))
-                """);
-            insert.Parameters.AddWithValue("id", Guid.NewGuid());
-            EmploymentParameters(insert, staffId, input, metadata, actor, now);
-            insert.Parameters.AddWithValue("reason", NpgsqlDbType.Text, (object?)reason ?? DBNull.Value);
-            insert.Parameters.AddWithValue("snapshot", snapshot);
-            await insert.ExecuteNonQueryAsync(t);
+            employment = new NativeStaffEmployment
+            {
+                Id = Guid.NewGuid(),
+                StaffUserId = staffId,
+                RewardPenaltyPolicy = JsonSerializer.SerializeToElement(new Dictionary<string, JsonElement>(), Json),
+                History = JsonSerializer.SerializeToElement(Array.Empty<JsonElement>(), Json)
+            };
+            employments.Add(employment);
         }
         else
         {
-            await using var update = Command("""
-                UPDATE staff_employments SET contract_number=@contract,start_date=@start,end_date=@end,salary_type=@salary,
-                  base_rate=@rate,reward_penalty_policy=reward_penalty_policy||CAST(@metadata AS jsonb),status=@status,
-                  history=history||jsonb_build_array(jsonb_build_object('action','Updated','actorId',@actor,'occurredAt',@now,
-                    'reason',@reason,'before',jsonb_build_object('contractNumber',contract_number,
-                      'employmentType',COALESCE(reward_penalty_policy->>'employmentType',''),'startDate',start_date,
-                      'endDate',end_date,'salaryType',salary_type,'baseRate',base_rate,'status',status),
-                    'after',CAST(@snapshot AS jsonb)))
-                WHERE id=@id AND staff_user_id=@staff
-                """);
-            update.Parameters.AddWithValue("id", employmentId.Value);
-            EmploymentParameters(update, staffId, input, metadata, actor, now);
-            update.Parameters.AddWithValue("reason", NpgsqlDbType.Text, (object?)reason ?? DBNull.Value);
-            update.Parameters.AddWithValue("snapshot", snapshot);
-            await update.ExecuteNonQueryAsync(t);
+            var existing = await employments.AsTracking()
+                .SingleOrDefaultAsync(e => e.Id == employmentId.Value && e.StaffUserId == staffId, t);
+            // The previous scoped UPDATE was a no-op when no matching row existed.
+            if (existing is null) return;
+            employment = existing;
+            before = new(employment.ContractNumber, EmploymentType(employment.RewardPenaltyPolicy) ?? "",
+                employment.StartDate, employment.EndDate, employment.SalaryType, employment.BaseRate, employment.Status);
         }
+        if (input.EmploymentType is not null)
+        {
+            var metadata = employment.RewardPenaltyPolicy.EnumerateObject()
+                .ToDictionary(p => p.Name, p => p.Value);
+            metadata["employmentType"] = JsonSerializer.SerializeToElement(input.EmploymentType, Json);
+            employment.RewardPenaltyPolicy = JsonSerializer.SerializeToElement(metadata, Json);
+        }
+        var historyEntry = JsonSerializer.SerializeToElement(new EmploymentHistoryEntry(
+            employmentId is null ? "Created" : "Updated", actor, occurredAt, reason, before, input), Json);
+        employment.History = JsonSerializer.SerializeToElement(employment.History.EnumerateArray().Append(historyEntry), Json);
+        employment.ContractNumber = input.ContractNumber;
+        employment.StartDate = input.StartDate;
+        employment.EndDate = input.EndDate;
+        employment.SalaryType = input.SalaryType;
+        employment.BaseRate = input.BaseRate;
+        employment.Status = input.Status;
+        await tables.SaveNativeAsync(t);
     }
+
+    // Match jsonb ->> semantics for older metadata, including absent and JSON-null values.
+    private static string? EmploymentType(JsonElement metadata) =>
+        metadata.TryGetProperty("employmentType", out var value) ? value.ValueKind switch
+        {
+            JsonValueKind.Null => null,
+            JsonValueKind.String => value.GetString(),
+            _ => value.GetRawText()
+        } : null;
 
     private const string ResponsibilityAssignmentPredicate =
         "(a->>'staffUserId')::uuid=@staff AND (a->>'endDate')::date>=@today";
@@ -1041,13 +1056,6 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
         command.Parameters.Add(new NpgsqlParameter("status", NpgsqlDbType.Smallint)
         { Value = query.RoomStatus is null ? DBNull.Value : (short)Array.IndexOf(["Available", "OnHold", "Occupied", "Unavailable"], query.RoomStatus) });
         AddNullableUuid(command, "staff", staff); command.Parameters.AddWithValue("today", today);
-    }
-    private static void EmploymentParameters(NpgsqlCommand command, Guid staffId, EmploymentWrite input, string metadata, Guid actor, DateTimeOffset now)
-    {
-        command.Parameters.AddWithValue("staff", staffId); command.Parameters.AddWithValue("contract", NpgsqlDbType.Text, (object?)input.ContractNumber ?? DBNull.Value);
-        command.Parameters.AddWithValue("start", input.StartDate); command.Parameters.AddWithValue("end", NpgsqlDbType.Date, (object?)input.EndDate ?? DBNull.Value);
-        command.Parameters.AddWithValue("salary", NpgsqlDbType.Text, (object?)input.SalaryType ?? DBNull.Value); command.Parameters.AddWithValue("rate", NpgsqlDbType.Numeric, (object?)input.BaseRate ?? DBNull.Value);
-        command.Parameters.AddWithValue("metadata", metadata); command.Parameters.AddWithValue("status", input.Status); command.Parameters.AddWithValue("actor", actor); command.Parameters.AddWithValue("now", now);
     }
     private static void AddNullableUuid(NpgsqlCommand command, string name, Guid? value) => command.Parameters.Add(new NpgsqlParameter(name, NpgsqlDbType.Uuid) { Value = (object?)value ?? DBNull.Value });
 
