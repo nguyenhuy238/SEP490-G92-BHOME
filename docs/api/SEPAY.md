@@ -133,12 +133,12 @@ git check-ignore .env.sepay.local
 # Cấp BHOME_COMPACT24_DIRECT qua môi trường riêng tư của shell.
 dotnet tool restore
 dotnet ef migrations script --idempotent --context Compact24DbContext `
-  --project src/backend/BHome.Infrastructure --startup-project src/backend/BHome.Api `
+  --project src/backend/BHome.Api --startup-project src/backend/BHome.Api `
   --configuration Release --output .tools/sepay-migrations.sql
 
 # Sau khi kiểm tra script trên database thử nghiệm đã chọn.
 dotnet ef database update --context Compact24DbContext `
-  --project src/backend/BHome.Infrastructure --startup-project src/backend/BHome.Api `
+  --project src/backend/BHome.Api --startup-project src/backend/BHome.Api `
   --configuration Release
 
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-Api.ps1 `

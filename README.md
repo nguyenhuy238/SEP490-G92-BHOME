@@ -294,10 +294,17 @@ cho background jobs, OCR và tích hợp bên ngoài.
 ```text
 src/backend/
   BHome.sln
-  BHome.Api/             HTTP, phân quyền, health, OpenAPI
-  BHome.Application/     Use case và hợp đồng ứng dụng
-  BHome.Domain/          Định nghĩa domain
-  BHome.Infrastructure/  EF/Identity/JWT, storage, jobs, integration adapters
+  BHome.Api/             Một project ASP.NET Core 8 (BHome.Api.csproj)
+    Controllers/         HTTP, phân quyền, health, OpenAPI
+    Services/            Use case, kiểm tra nghiệp vụ
+    DTOs/                Request/response và contract types
+    Interfaces/          Interface của các dependency
+    Domain/              Entity, enum, quy tắc thuần
+    Repositories/        Đọc/ghi, khóa và transaction
+    Data/                EF, Compact24, migrations
+    Integrations/        OCR, storage và tích hợp
+    BackgroundJobs/      Worker và lịch nền
+    Configuration/       DI và cấu hình
 src/owner-web/           React + Vite + Material UI
 src/mobile/              Expo + React Native
 src/public-web/          React + Vite

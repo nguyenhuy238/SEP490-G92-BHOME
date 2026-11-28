@@ -1,44 +1,47 @@
 # Kiến trúc BHOME cho nhóm sinh viên
 
-Mục tiêu: mỗi thành viên tự tìm được code xử lý một nghiệp vụ, giải thích điều kiện và thay đổi đúng nơi, không cần đọc toàn bộ hệ thống. Đây là hướng tổ chức mã nguồn của nhánh `refactor/bhome-develop`, không phải đặc tả nghiệp vụ mới.
+Mục tiêu: mỗi thành viên tự tìm được code xử lý một nghiệp vụ, giải thích điều kiện và thay đổi đúng nơi, không cần đọc toàn bộ hệ thống. Đây là hướng tổ chức mã nguồn của nhánh `refactor/bhome-single-project`, không phải đặc tả nghiệp vụ mới.
 
-## 1. Backend — bốn tầng, một ứng dụng
+## 1. Backend — một project, các tầng trách nhiệm rõ ràng
 
-Giữ Modular Monolith .NET 8 + PostgreSQL; không tạo thêm project, microservice, framework hoặc tầng điều phối chỉ để chuyển tiếp.
+Giữ Modular Monolith .NET 8 + PostgreSQL. Bốn project backend trước đây được hợp nhất thành `src/backend/BHome.Api/BHome.Api.csproj`; namespace CLR cũ vẫn giữ để không đổi hợp đồng kiểu. DigitalSigning vẫn là subsystem riêng. Không tạo thêm project, microservice, framework hoặc tầng điều phối chỉ để chuyển tiếp.
 
-| Tầng                                | Đọc và sửa ở đây                                                                                                                                        | Không đặt ở đây                      |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| `BHome.Api/Controllers/<Nghiệp vụ>` | HTTP route, binding DTO, policy, gọi Application                                                                                                        | Tự tính tiền hoặc truy vấn DB        |
-| `BHome.Application/<Nghiệp vụ>`     | Service điều phối use case, kiểm quyền tài nguyên, điều kiện trạng thái, transaction qua repository, DTO/interface; calculator khi có trách nhiệm riêng | EF mapping, SQL, giao diện           |
-| `BHome.Domain/<Nghiệp vụ>`          | Entity, enum và quy tắc/công thức thuần                                                                                                                 | HTTP, database, dependency injection |
-| `BHome.Infrastructure/<Nghiệp vụ>`  | Repository thực, persistence, object storage, tích hợp; worker và adapter trong `Modules/` hiện hành                                                    | Tự thay đổi giá hoặc quy tắc đã chốt |
+| Tầng                               | Đọc và sửa ở đây                                                                  | Không đặt ở đây                      |
+| ---------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------ |
+| `Controllers/<Nghiệp vụ>`          | HTTP route, binding DTO, policy, gọi service                                      | Tự tính tiền hoặc truy vấn DB        |
+| `Services/<Nghiệp vụ>`             | Use case, quyền tài nguyên, trạng thái, transaction qua repository, calculator    | EF mapping, SQL, giao diện           |
+| `DTOs/`, `Interfaces/`             | DTO/contract types và interface riêng; một số kiểu liên quan vẫn nằm cùng service | Logic HTTP hoặc persistence          |
+| `Domain/<Nghiệp vụ>`               | Entity, enum và quy tắc/công thức thuần                                           | HTTP, database, dependency injection |
+| `Repositories/`, `Data/`           | Repository thực, EF mapping, Compact24, migrations                                | Tự thay đổi giá hoặc quy tắc đã chốt |
+| `Integrations/`, `BackgroundJobs/` | Adapter OCR/storage/provider, worker và lịch nền                                  | Thay đổi nghiệp vụ qua đường tắt     |
+| `Configuration/`                   | Đăng ký DI, cấu hình ứng dụng                                                     | Nghiệp vụ trong composition root     |
 
-Luồng chạy: Controller → Application Service → Domain (quy tắc) và repository interface → Infrastructure → PostgreSQL. Hướng phụ thuộc mã nguồn: Application → Domain; Infrastructure → Application/Domain; API là composition root đăng ký implementation. Infrastructure cũng có kiểm soát giao dịch, tính nhất quán và bảo vệ dữ liệu ở nơi lưu; không chuyển các guard đó lên controller.
+Đường dẫn trong bảng tính từ `src/backend/BHome.Api/`. Luồng chạy: Controller → Service → Domain (quy tắc) và repository interface → Repository/Data → PostgreSQL. Hướng phụ thuộc logic giữ nguyên; `Configuration/` đăng ký implementation. Vì cùng assembly, kiểm tra ranh giới namespace trong `ArchitectureTests` thay thế kiểm tra phụ thuộc assembly trước đây. Không chuyển kiểm soát giao dịch, tính nhất quán và bảo vệ dữ liệu lên controller.
 
 ### Quy ước tổ chức
 
 - Tên file theo trách nhiệm thực: `*Controller`, `*Service`, `*Repository`, `*Contracts`, `*Calculation`/`*Calculator`. Không đặt service chính trong file `Contracts` lớn khiến người mới khó tìm. Nhóm DTO/interface nhỏ cùng service được phép nếu cả nhóm rất ngắn và có chung trách nhiệm (ví dụ thông báo hết hạn hợp đồng).
 - Tách công thức thuần khỏi entity khi công thức được dùng độc lập; không đổi kiểu số, thứ tự làm tròn, dữ liệu tham chiếu hoặc công thức. Chỉ tách calculator khi nó có trách nhiệm thực, không tạo wrapper 1 dòng.
-- Giữ các partial class có cùng dependency/transaction nhưng đặt phần code theo nghiệp vụ. Không nhân đôi DI, repository, DTO hay service chỉ để đạt số file/tầng mục tiêu. `Modules/` chứa worker/module và persistence liên quan, `Persistence/` chứa cấu hình Compact24 và migration; không di chuyển lịch sử đã phát hành để làm đẹp tên thư mục.
+- Giữ các partial class có cùng dependency/transaction nhưng đặt phần code theo nghiệp vụ. Không nhân đôi DI, repository, DTO hay service chỉ để đạt số file/tầng mục tiêu. `Data/Compact24/Migrations/` chứa lịch sử migration Compact24; giữ nguyên ID, SQL và logical resource names của migration đã phát hành.
 - Đọc `AGENTS.md` và [bản đồ Backend](../business-flows/BACKEND.md) trước khi sửa.
 
 ## 2. Ví dụ thật — hóa đơn tháng
 
 ```text
 BHome.Api/Controllers/Billing/InvoicesController.cs
-BHome.Application/Billing/
+BHome.Api/Services/Billing/
   InvoiceService.cs                # Quyền, tạo/refresh/chốt, khóa phòng
   InvoiceCalculator.cs             # Lập dòng phí, tổng và missing inputs
-  InvoiceContracts.cs              # Request/response + repository interface
   ContractBillingPrices.cs         # Biểu phí trong hợp đồng đã chốt
   FixedChargeCalculation.cs        # Phí cố định và phần đã tính trước
   PersonMonthOccupancy.cs           # Số người tính phí
   BillingAutomationService.cs       # Cấu hình lịch tự động
   BillingAutomationOperations.cs    # Preview, queue, chạy thủ công
-BHome.Domain/Billing/
+BHome.Api/DTOs/Billing/InvoiceContracts.cs # Request/response + repository interface
+BHome.Api/Domain/Billing/
   Invoice.cs                        # Entity, trạng thái, dòng hóa đơn
   InvoiceMath.cs                    # Amount, CalendarDate
-BHome.Infrastructure/Billing/
+BHome.Api/Repositories/Billing/
   InvoiceRepository.cs              # Đọc/ghi và khóa dữ liệu
   MeterBillingCoverage.cs           # Chỉ số và phần đã thu
   FixedChargeCoverage.cs            # Khoản cố định đã thu

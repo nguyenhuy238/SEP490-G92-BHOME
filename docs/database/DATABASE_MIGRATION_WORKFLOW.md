@@ -26,7 +26,7 @@ Không reset/import/drop dữ liệu business.
 
 Runtime có `ToSqlQuery` projections và typed writer. Scaffolder chỉ tạo hai bảng
 native Identity, nên dùng Up tự sinh sẽ thiếu phần lớn schema. Baseline dùng SQL
-**đóng băng** `Persistence/Compact24/Migrations/InitialCompact24.sql`, kiểm checksum
+**đóng băng** `Data/Compact24/Migrations/InitialCompact24.sql`, kiểm checksum
 khi đọc, cùng designer và `Compact24DbContextModelSnapshot` riêng. Chỉ bỏ outer
 BEGIN/COMMIT để EF sở hữu transaction gồm cả history INSERT; giữ DO/function bodies.
 
@@ -55,8 +55,8 @@ hoạch review riêng, không chỉ INSERT history để bỏ qua kiểm chứng
 4. Scaffold, review và bổ sung SQL cho phần schema không được model projections quản lý:
 
 ```powershell
-dotnet ef migrations add <Name> --context Compact24DbContext --project src/backend/BHome.Infrastructure --startup-project src/backend/BHome.Api --output-dir Persistence/Compact24/Migrations
-dotnet ef migrations script --idempotent --context Compact24DbContext --project src/backend/BHome.Infrastructure --startup-project src/backend/BHome.Api --output .tools/compact24-review.sql
+dotnet ef migrations add <Name> --context Compact24DbContext --project src/backend/BHome.Api --startup-project src/backend/BHome.Api --output-dir Data/Compact24/Migrations
+dotnet ef migrations script --idempotent --context Compact24DbContext --project src/backend/BHome.Api --startup-project src/backend/BHome.Api --output .tools/compact24-review.sql
 dotnet build src/backend/BHome.sln -c Release
 dotnet test src/backend/BHome.sln -c Release --no-build
 ```

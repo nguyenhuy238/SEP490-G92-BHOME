@@ -1,6 +1,6 @@
 # BHOME - Bắt đầu đọc mã nguồn
 
-Đây là mục lục dành cho cả nhóm, không phải báo cáo tiến độ hay bản thay thế Report 3. Mã nguồn và quyết định nghiệp vụ đã được duyệt là căn cứ khi có sai khác. Các đường dẫn dùng code nhánh `refactor/bhome-develop` (Develop đã đồng bộ đến `76dcbbab`). Xem [kiến trúc dành cho sinh viên](../architecture/STUDENT_ARCHITECTURE.md).
+Đây là mục lục dành cho cả nhóm, không phải báo cáo tiến độ hay bản thay thế Report 3. Mã nguồn và quyết định nghiệp vụ đã được duyệt là căn cứ khi có sai khác. Các đường dẫn dùng code nhánh `refactor/bhome-single-project`, tiếp nối baseline `bcce2843`. Xem [kiến trúc dành cho sinh viên](../architecture/STUDENT_ARCHITECTURE.md).
 
 ## 1. Đọc theo vai trò, không đọc theo số lượng file
 
@@ -31,13 +31,13 @@ flowchart TD
     J[Background job] --> C
 ```
 
-Đây là hướng đi khi lần theo một request, không phải chiều dependency biên dịch. Application không tham chiếu trực tiếp Infrastructure; DI chọn implementation. Owner Web dùng React/TypeScript/MUI/Vite, Mobile dùng Expo/React Native, Public Web dùng React/Vite. Cả ba gọi API .NET 8. Database thực tế là Compact24; không mặc định mỗi entity tương ứng một bảng.
+Đây là hướng đi khi lần theo một request, không phải chiều dependency biên dịch. Backend chính dùng một project `BHome.Api.csproj`; Application/Domain/Infrastructure là các ranh giới logic, được tổ chức trong các thư mục `Services`, `Domain`, `DTOs`, `Interfaces`, `Repositories`, `Data`, `Integrations`, `BackgroundJobs`. DI vẫn chọn implementation và Application không tham chiếu trực tiếp Infrastructure. DigitalSigning vẫn riêng. Owner Web dùng React/TypeScript/MUI/Vite, Mobile dùng Expo/React Native, Public Web dùng React/Vite. Cả ba gọi API .NET 8. Database thực tế là Compact24; không mặc định mỗi entity tương ứng một bảng.
 
 ## 3. Thực hành đọc một nghiệp vụ
 
 Ví dụ Staff lưu kiểm tra bàn giao: mở `src/mobile/src/features/contracts/handover/MoveInDraftHandoverPanel.tsx`, tìm lời gọi lưu bản nháp; truy vết API `POST /api/v1/contracts/{id}/handover/draft` trong `ContractsController`; đọc `ContractService.SaveHandoverDraftAsync` ở `ContractHandoverDraftService.cs`; sau đó đọc `HandoverDraftRepository.cs` và test `Compact24MoveInDraftTests.cs`. Phân biệt ghi bản nháp, gửi kiểm tra, ký và lưu bản xác nhận. Đừng xem một lần lưu thành hoàn tất bàn giao.
 
-Ví dụ tính tiền hóa đơn tháng: mở `src/backend/BHome.Application/Billing/InvoiceCalculator.cs` (`CalculateAsync`), rồi theo `ContractBillingPrices`, `FixedChargeCalculation`, `InvoiceMath` và `InvoiceRepository`. Nếu muốn hiểu quyền tạo/chốt và giao dịch, đọc caller `InvoiceService.cs` trước; UI Chủ trọ nằm ở `src/owner-web/src/features/invoices/pages/`, UI Khách thuê ở `src/mobile/src/features/tenant/billing/`.
+Ví dụ tính tiền hóa đơn tháng: mở `src/backend/BHome.Api/Services/Billing/InvoiceCalculator.cs` (`CalculateAsync`), rồi theo `ContractBillingPrices`, `FixedChargeCalculation`, `InvoiceMath` và `InvoiceRepository`. Nếu muốn hiểu quyền tạo/chốt và giao dịch, đọc caller `InvoiceService.cs` trước; UI Chủ trọ nằm ở `src/owner-web/src/features/invoices/pages/`, UI Khách thuê ở `src/mobile/src/features/tenant/billing/`.
 
 Khi tự đọc bất kỳ chức năng nào, trả lời bằng code thật:
 

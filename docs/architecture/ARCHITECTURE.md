@@ -5,6 +5,13 @@ implementations may differ (including authentication, Compact24, OCR, background
 For the current source navigation, start with [the business-flow map](../business-flows/README.md).
 The core architecture remains a single modular layered application, not microservices.
 
+**Current project layout (single-project refactor):** the former `BHome.Api`, `BHome.Application`,
+`BHome.Domain` and `BHome.Infrastructure` projects compile together as
+`src/backend/BHome.Api/BHome.Api.csproj`. Logical dependency directions and CLR namespaces are retained.
+Use [STUDENT_ARCHITECTURE.md](STUDENT_ARCHITECTURE.md) and [MODULES.md](MODULES.md) for current paths.
+DigitalSigning remains a separate subsystem. The older project diagram and foundation decisions below
+are retained as historical design context, not instructions to recreate those projects.
+
 ## System boundaries
 
 ```mermaid
@@ -35,7 +42,7 @@ information only; there is no Guest account, reservation, deposit, payment or si
 All clients are Vietnamese, format VND centrally and display business times in `Asia/Ho_Chi_Minh`.
 Display localization is outside the domain layer.
 
-## Backend dependency direction
+## Original backend dependency direction (historical project layout)
 
 ```mermaid
 flowchart LR
@@ -57,7 +64,7 @@ access interface when a feature requires persistence; implement its query/comman
 Do not add a generic repository, unit-of-work wrapper, mediator or CQRS layer without a demonstrated
 need. EF's scoped context already supplies tracking and transactional behavior.
 
-## Modules and team ownership
+## Original module placement (historical project layout)
 
 Use matching `<Module>/` paths in Domain/Application, `Modules/<Module>/` in Infrastructure and
 `Controllers/<Module>/` in API when new features arrive. The current infrastructure-wide boundaries

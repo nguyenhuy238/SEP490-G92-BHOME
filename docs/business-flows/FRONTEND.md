@@ -1,6 +1,6 @@
 # BHOME — Bản đồ đọc code frontend
 
-Tài liệu chỉ đường theo mã đang chạy trên nhánh `refactor/bhome-develop` (Develop đã đồng bộ đến `76dcbbab`). Mục đích: từ thao tác của người dùng tìm được màn hình, hàm gửi request và API backend. Không phải đặc tả nghiệp vụ mới; đọc tài liệu backend tương ứng để biết điều kiện giao dịch, bảng dữ liệu và quy tắc chuyển trạng thái chính xác.
+Tài liệu chỉ đường theo mã đang chạy trên nhánh `refactor/bhome-single-project` (baseline `bcce2843`). Mục đích: từ thao tác của người dùng tìm được màn hình, hàm gửi request và API backend. Không phải đặc tả nghiệp vụ mới; đọc tài liệu backend tương ứng để biết điều kiện giao dịch, bảng dữ liệu và quy tắc chuyển trạng thái chính xác. Việc gộp project backend không đổi route, API hay cấu trúc frontend.
 
 ## 1. Bắt đầu đọc ở đâu?
 

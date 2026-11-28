@@ -1,5 +1,7 @@
 # BHOME - Refactor để nhóm sinh viên làm chủ mã nguồn
 
+**Cập nhật nhánh `refactor/bhome-single-project` (baseline `bcce2843`):** bốn project backend đã được tổ chức thành một `src/backend/BHome.Api/BHome.Api.csproj`, giữ nguyên các ranh giới trách nhiệm và namespace. DigitalSigning, các project test và tool vẫn riêng. Xem [STUDENT_ARCHITECTURE.md](STUDENT_ARCHITECTURE.md) và [bản đồ backend](../business-flows/BACKEND.md) cho cấu trúc hiện hành. Phần lộ trình bên dưới ghi lại các đợt refactor trước đó; kết quả CI cũ không phải bằng chứng nghiệm thu của nhánh mới.
+
 Nhánh: `refactor/bhome-develop`. Mốc gốc: `origin/develop` tại `f3be1bfe` (PR #189), đã đồng bộ các thay đổi Develop đến `76dcbbab` qua merge `93d309af`. Không lấy các commit riêng của member/THuy làm mốc. Không merge hay deploy khi chưa nghiệm thu.
 
 ## Mục tiêu và giới hạn
