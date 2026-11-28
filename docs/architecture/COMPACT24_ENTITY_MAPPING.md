@@ -4,8 +4,8 @@
 
 Database vẫn có 24 bảng nghiệp vụ trong schema `public`. Backend vẫn là một project `BHome.Api` và giữ các use case, DTO, quyền, tính tiền và API hiện có. Đây là giai đoạn chuyển đổi mô hình lưu trữ, chưa phải thay thế toàn bộ persistence cũ.
 
-- `Domain/Entities/<module>/`: 24 POCO tương ứng 24 bảng, 390 thuộc tính vật lý. `[Table]` và `[Column]` thể hiện trực tiếp tên bảng/cột và kiểu PostgreSQL; nullability theo DDL. `ContractResident` có khóa ghép `contract_id`, `resident_id`.
-- `Data/Compact24/Compact24TableContext.cs`: mô hình EF Core đọc bảng trực tiếp, khóa chính và 85 quan hệ FK rõ ràng. Không đăng ký context này làm persistence ghi mặc định, không sở hữu migration. `OpenAsync` dùng connection và transaction của `Compact24DbContext`; truy vấn không tracking. `SaveChanges` bị chặn. Đây là ranh giới chuyển tiếp, không phải database hoặc project thứ hai.
+- `Domain/Entities/<module>/`: 24 Entity tương ứng 24 bảng, 390 thuộc tính vật lý. 22 POCO dùng `[Table]` và `[Column]`; `ApplicationUser` và `CompactRefreshRow` là hai Entity Identity hiện có, cấu hình tại `Compact24DbContext.cs` để không nhân đôi user/session hoặc thay cơ chế Identity. Kiểu PostgreSQL và nullability theo DDL. `ContractResident` có khóa ghép `contract_id`, `resident_id`.
+- `Data/Compact24/Compact24DbContext.cs` + `Compact24NativeModel.cs`: một DbContext runtime có 24 mapping bảng vật lý và 85 quan hệ FK. Đã bỏ context native phụ; các repository dùng context scoped hiện có, truy vấn đọc `AsNoTracking()`, ghi qua EF trong transaction của repository. Mô hình vật lý bị loại khỏi migration scaffolding vì DDL/migration SQL đã phát hành là nguồn chính. `Compact24NativeWrites.cs` chỉ cho phép `SaveChangesAsync` với các luồng đã chuyển (scenario thêm, expense/employment thêm và sửa), không cho phép xóa vật lý hoặc ghi bảng chưa chuyển; Nhánh ghi projection và Identity vẫn giữ guard hiện có.
 - `Domain/<module>/`: giữ model nghiệp vụ đang được service sử dụng, enum, calculator, rule và đối tượng snapshot/lịch sử. Các class này không đại diện cho bảng vật lý mới. Không đổi namespace, ID, DTO, giá hay trạng thái chỉ để làm mapping đẹp hơn.
 - `Data/Compact24/Compact24Records.cs`, `Compact24RecordSql.cs`, `Compact24DomainWriter.cs`: vẫn phục vụ những projection và thao tác ghi cần tương thích với dữ liệu đã lưu. Không xóa khi còn consumer, không tạo thêm projection tổng quát mới nếu cột native đủ đáp ứng.
 
@@ -13,8 +13,8 @@ Database vẫn có 24 bảng nghiệp vụ trong schema `public`. Backend vẫn 
 
 | Module | Bảng | Entity |
 | --- | --- | --- |
-| IdentityAccess | `users` | `User` |
-| IdentityAccess | `refresh_tokens` | `RefreshToken` |
+| IdentityAccess | `users` | `ApplicationUser` |
+| IdentityAccess | `refresh_tokens` | `CompactRefreshRow` |
 | IdentityAccess | `staff_employments` | `StaffEmployment` |
 | PropertyManagement | `locations` | `Location` |
 | PropertyManagement | `rooms` | `Room` |
@@ -38,21 +38,24 @@ Database vẫn có 24 bảng nghiệp vụ trong schema `public`. Backend vẫn 
 | Finance | `financial_scenarios` | `FinancialScenario` |
 | Notifications | `notifications` | `Notification` |
 
-Namespace của Entity lưu trữ là `BHome.Domain.Entities`. Khi một repository cần cả Entity lưu trữ và model nghiệp vụ cùng tên, dùng alias `using Native = BHome.Domain.Entities;` để tránh nhầm lẫn. Chỉ Repository/Data sử dụng trực tiếp model lưu trữ ở giai đoạn này; không trả Entity chứa dữ liệu riêng tư ra HTTP.
+Namespace của 22 Entity POCO là `BHome.Domain.Entities`; hai Entity Identity giữ namespace CLR cũ. Khi một repository cần cả Entity lưu trữ và model nghiệp vụ cùng tên, dùng alias `using Native = BHome.Domain.Entities;` để tránh nhầm lẫn. Chỉ Repository/Data sử dụng trực tiếp model lưu trữ ở giai đoạn này; không trả Entity chứa dữ liệu riêng tư ra HTTP.
 
-## Các luồng đọc đã chuyển
+## Các luồng đọc/ghi đã chuyển
 
 | Repository | Luồng | Nguồn dữ liệu native |
 | --- | --- | --- |
 | `SetupWorkspaceStore` | Guard cơ sở hoạt động sau khi khóa; tra cơ sở của phòng; danh sách ID phòng; phạm vi công tơ | `locations`, `rooms`, `meters` |
 | `SharedConfigurationStore` | Kiểm tra cơ sở hoạt động sau advisory lock | `locations` |
 | `InvoiceRepository` | Danh sách cơ sở tính phí của Tenant; xác định cơ sở trước khóa phòng; kiểm tra tồn tại cơ sở sau khóa | `contracts`, `rooms`, `locations` |
+| `FinancialScenarioRepository` | Lưu kịch bản, danh sách, xem, replay theo actor/key, giữ nguyên snapshot và công thức | `financial_scenarios` |
+| `ExpenseRepository` | CRUD không xóa, chi phí, đầu tư hàng loạt, phân trang, phạm vi và tham chiếu; lưu history qua EF | `expenses`, `locations`, `rooms`, `assets`, `operational_tasks`, `incident_reports` |
+| `CompactOperationsRepository` | Đọc lịch sử, kiểm tra trùng kỳ, tạo và cập nhật kỳ lao động; giữ khóa account và audit | `staff_employments` |
 
-Công thức, snapshot biểu phí, quyền theo người thuê, predicate hợp đồng Main/Renewal đã kích hoạt, advisory lock và transaction không đổi. Các thao tác ghi tiếp tục đi qua writer/repository có guard hiện tại. Nhánh offline legacy vẫn dùng projection cũ.
+Công thức, snapshot biểu phí, quyền theo người thuê, predicate hợp đồng Main/Renewal đã kích hoạt, advisory lock và transaction không đổi. Các luồng ghi chưa chuyển tiếp tục đi qua writer/repository có guard hiện tại. Chi phí và kịch bản dùng DTO hiện có; `ExpenseDtos.cs`, `FinancialScenarioDtos.cs` và các interface Repository tách khỏi Service, giữ namespace và hợp đồng API. Nhánh offline legacy vẫn dùng projection cũ.
 
 ## JSONB và quy tắc nghiệp vụ
 
-57 cột JSONB dùng `JsonElement` hoặc `JsonElement?` ở mô hình vật lý để không tự ý thay schema envelope, loại bỏ trường chưa nhận diện hoặc biến dữ liệu lịch sử thành dữ liệu hiện thời. Các class nghiệp vụ như `ContractHandover`, `ContractMoveOut`, `InvoiceLine`, `InvoiceMath` vẫn giữ trách nhiệm hiện tại. Khi chuyển từng nghiệp vụ tiếp theo, dùng các kiểu snapshot có cấu trúc rõ ràng, kiểm thử đọc/ghi cả payload cũ và mới, giữ unknown fields khi chỉnh sửa một phần JSON. Không dùng generic deserialize/serialize toàn bộ JSON để ghi đè lịch sử.
+57 cột JSONB giữ nguyên định dạng; POCO dùng `JsonElement` hoặc `JsonElement?`, riêng các cột JSON Identity giữ cấu hình string/shadow hiện có để không tự ý thay schema envelope, loại bỏ trường chưa nhận diện hoặc biến dữ liệu lịch sử thành dữ liệu hiện thời. Các class nghiệp vụ như `ContractHandover`, `ContractMoveOut`, `InvoiceLine`, `InvoiceMath` vẫn giữ trách nhiệm hiện tại. Khi chuyển từng nghiệp vụ tiếp theo, dùng các kiểu snapshot có cấu trúc rõ ràng, kiểm thử đọc/ghi cả payload cũ và mới, giữ unknown fields khi chỉnh sửa một phần JSON. Không dùng generic deserialize/serialize toàn bộ JSON để ghi đè lịch sử.
 
 ## Quy tắc chuyển tiếp và kiểm thử
 
@@ -63,4 +66,4 @@ Công thức, snapshot biểu phí, quyền theo người thuê, predicate hợp
 
 ## Phần còn lại
 
-Chuyển dần các luồng đọc và ghi của Property, Billing, Contracts, Payments/Refunds, Tasks, Notifications và Identity. Chỉ loại bỏ model projection và cơ chế writer tổng quát khi toàn bộ consumer đã chuyển, có kiểm thử PostgreSQL thật về các giao dịch và lịch sử. Việc có đủ 24 Entity vật lý không đồng nghĩa đã chuyển xong tất cả Repository hoặc chỉ còn 24 class nghiệp vụ.
+Chuyển dần các luồng đọc và ghi còn lại của Property, Billing, Contracts, Payments/Refunds, Tasks, Notifications và Identity; các luồng expense payment/depreciation, forecast aggregate và staff/account join vẫn có SQL đặc thù. Chỉ loại bỏ model projection và cơ chế writer tổng quát khi toàn bộ consumer đã chuyển, có kiểm thử PostgreSQL thật về các giao dịch và lịch sử. Việc có đủ 24 Entity vật lý không đồng nghĩa đã chuyển xong tất cả Repository hoặc chỉ còn 24 class nghiệp vụ.
