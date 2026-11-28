@@ -367,7 +367,7 @@ vi.mock('../components/WorkflowControls', () => ({
   ),
 }));
 vi.mock('../lib/toast', () => ({ showSuccess: vi.fn() }));
-import { StaffMoveOutInspectionScreen } from '../screens/StaffMoveOutInspectionScreen';
+import { StaffMoveOutInspectionScreen } from '../features/contracts/moveOut/StaffMoveOutInspectionScreen';
 
 beforeEach(() => {
   URL.createObjectURL = vi.fn(() => 'blob:private-preview');

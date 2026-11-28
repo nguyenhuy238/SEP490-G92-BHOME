@@ -1,7 +1,6 @@
 using System.Diagnostics;
-using BHome.Application.IdentityAccess;
+using BHome.DigitalSigning.Application.Identity;
 using BHome.DigitalSigning.Application.Contracts;
-using BHome.Domain.IdentityAccess;
 
 namespace BHome.DigitalSigning.Application.Services;
 
@@ -9,7 +8,7 @@ namespace BHome.DigitalSigning.Application.Services;
 // what an Owner saved. A field left blank keeps the configured value, so a deployment that only sets variables works
 // without a saved row. The client secret is stored encrypted and never returned.
 public sealed class SigningAccountService(
-    ICurrentUser user, ISigningSettingsStore store, ISecretProtector protector, DigitalSigningPolicy policy,
+    ISigningCurrentUser user, ISigningSettingsStore store, ISecretProtector protector, DigitalSigningPolicy policy,
     SigningAccountCache cache, TimeProvider clock) : IViettelAccountSource
 {
     private const string Database = "DATABASE";
@@ -142,7 +141,7 @@ public sealed class SigningAccountService(
     {
         if (user.UserId is not { } id || id == Guid.Empty)
             throw new DigitalSigningException(DigitalSigningError.Unauthenticated, "Bạn cần đăng nhập.");
-        if (!user.IsInRole(Roles.Owner))
+        if (!user.IsInRole(SigningRoles.Owner))
             throw DigitalSigningException.Forbidden("Chỉ chủ nhà cấu hình được tài khoản ký số.");
         return id;
     }

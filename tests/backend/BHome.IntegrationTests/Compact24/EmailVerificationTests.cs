@@ -23,7 +23,7 @@ public sealed partial class Compact24NotificationMvpTests
     {
         var w = await Seed(); var probe = new SmtpProbe(); using var host = AuthenticationHost(probe);
         using var session = await Client(w.Tenants[2], host); using var anonymous = host.CreateClient();
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await db.Users.Where(u => u.Id == w.Tenants[2].Id).ExecuteUpdateAsync(s => s.SetProperty(u => u.EmailConfirmed, false));
         var before = await db.Users.AsNoTracking().SingleAsync(u => u.Id == w.Tenants[2].Id);
         (await anonymous.PostAsJsonAsync("/api/v1/auth/forgot-password", new { userName = before.Email })).EnsureSuccessStatusCode();
@@ -68,7 +68,7 @@ public sealed partial class Compact24NotificationMvpTests
         var w = await Seed(); var probe = new SmtpProbe(); var clock = new VerificationClock();
         using var configured = AuthenticationHost(probe);
         using var host = configured.WithWebHostBuilder(b => b.ConfigureServices(s => s.AddSingleton<TimeProvider>(clock)));
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var id = w.Tenants[0].Id;
         await db.Users.Where(u => u.Id == id).ExecuteUpdateAsync(s => s.SetProperty(u => u.EmailConfirmed, false));
         using var client = host.CreateClient();
@@ -100,7 +100,7 @@ public sealed partial class Compact24NotificationMvpTests
     public async Task EmailVerificationCannotConsumeInvitationOrBypassPendingProvisioningAndKeepsLoginAvailable()
     {
         var w = await Seed(); var probe = new SmtpProbe(); using var host = AuthenticationHost(probe);
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var id = w.Tenants[0].Id;
         await db.Users.Where(u => u.Id == id).ExecuteUpdateAsync(s => s.SetProperty(u => u.EmailConfirmed, false));
         using var client = host.CreateClient();
@@ -126,7 +126,7 @@ public sealed partial class Compact24NotificationMvpTests
     {
         var w = await Seed(); var probe = new SmtpProbe { Failure = new("email_smtp_450", retryable: true) };
         using var host = AuthenticationHost(probe); using var client = host.CreateClient();
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await db.Users.Where(u => u.Id == w.Tenants[2].Id).ExecuteUpdateAsync(s => s.SetProperty(u => u.EmailConfirmed, false));
         (await client.PostAsJsonAsync("/api/v1/auth/request-email-verification", new { userName = w.Tenants[2].Email })).EnsureSuccessStatusCode();
         var delivery = await AuthenticationDelivery(host, w.Tenants[2].Id); await SendEmail(host, delivery);

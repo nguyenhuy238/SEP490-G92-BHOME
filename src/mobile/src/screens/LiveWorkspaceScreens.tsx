@@ -136,7 +136,7 @@ export { MeterTasksScreen } from './MeterTasksScreen';
 
 export { OwnerOperationsScreen } from './OwnerOperationsScreen';
 
-export { TenantDashboardScreen as TenantHomeScreen } from './TenantDashboardScreen';
+export { TenantDashboardScreen as TenantHomeScreen } from '../features/tenant/dashboard/TenantDashboardScreen';
 
 export function TaskNotificationsScreen() {
   const { api } = useSession();

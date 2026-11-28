@@ -5,7 +5,7 @@ import {
   contractClient,
   type ContractRequest,
 } from '../../../../../packages/client-core/src/contracts';
-import { FinalChargeReviewPanel } from './FinalChargeReviewPanel';
+import { FinalChargeReviewPanel } from './components/settlement/FinalChargeReviewPanel';
 function mount(missingInputs: string[] = []) {
   const request = vi.fn<ContractRequest>(
     async <T,>(_path: string, init?: RequestInit): Promise<T> => {

@@ -9,9 +9,6 @@ COPY global.json Directory.Build.targets ./
 COPY src/backend/Directory.Build.props src/backend/
 COPY src/digital-signing/Directory.Build.props src/digital-signing/
 COPY src/backend/BHome.Api/BHome.Api.csproj src/backend/BHome.Api/
-COPY src/backend/BHome.Application/BHome.Application.csproj src/backend/BHome.Application/
-COPY src/backend/BHome.Domain/BHome.Domain.csproj src/backend/BHome.Domain/
-COPY src/backend/BHome.Infrastructure/BHome.Infrastructure.csproj src/backend/BHome.Infrastructure/
 COPY src/digital-signing/BHome.DigitalSigning.Application/BHome.DigitalSigning.Application.csproj src/digital-signing/BHome.DigitalSigning.Application/
 COPY src/digital-signing/BHome.DigitalSigning.Domain/BHome.DigitalSigning.Domain.csproj src/digital-signing/BHome.DigitalSigning.Domain/
 COPY src/digital-signing/BHome.DigitalSigning.Infrastructure/BHome.DigitalSigning.Infrastructure.csproj src/digital-signing/BHome.DigitalSigning.Infrastructure/
@@ -42,7 +39,7 @@ ENV BHOME_COMPACT24_DIRECT="Host=127.0.0.1;Database=bhome_compact24_000000000000
 
 RUN mkdir /out && dotnet ef migrations script 0 --no-transactions \
     --context Compact24DbContext \
-    --project src/backend/BHome.Infrastructure \
+    --project src/backend/BHome.Api \
     --startup-project src/backend/BHome.Api \
     --configuration Release --output /out/compact24.sql
 
@@ -52,6 +49,8 @@ COPY --from=schema /out/ /
 
 FROM source AS seed-build
 
+# Offline persistence is needed by the local seed tool only, not the API image.
+COPY tools/BHome.LegacyPersistence/ tools/BHome.LegacyPersistence/
 RUN dotnet publish tools/BHome.LocalDevelopment/BHome.LocalDevelopment.csproj -c Release -o /seed
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0-bookworm-slim AS runtime-base

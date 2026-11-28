@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Operations;
 using BHome.Domain.IdentityAccess;
@@ -129,8 +130,8 @@ public sealed class AccountProvisioningUnitTests(PostgresContainerFixture postgr
             "select email_confirmed from users where id=@id", ("id", result.UserId)));
         Assert.False(await world.ScalarAsync<bool>(
             "select exists(select 1 from users where id=@id and reset_token_hash is not null)", ("id", result.UserId)));
-        var staff = (await world.Get<UserManager<ApplicationUser>>().FindByIdAsync(result.UserId.ToString()))!;
-        Assert.False(await world.Get<UserManager<ApplicationUser>>().CheckPasswordAsync(staff, "StaffPass123@"));
+        var staff = (await world.Get<UserManager<User>>().FindByIdAsync(result.UserId.ToString()))!;
+        Assert.False(await world.Get<UserManager<User>>().CheckPasswordAsync(staff, "StaffPass123@"));
         Assert.Empty(world.Email.Queued);
         Assert.Equal(1, await world.AuditCountAsync("StaffCreated"));
     }
@@ -152,8 +153,8 @@ public sealed class AccountProvisioningUnitTests(PostgresContainerFixture postgr
 
         Assert.True(result.IsActive);
         Assert.Equal(1, await world.UserCountAsync("haihoang@bhome.test"));
-        var staff = (await world.Get<UserManager<ApplicationUser>>().FindByIdAsync(result.UserId.ToString()))!;
-        Assert.False(await world.Get<UserManager<ApplicationUser>>().CheckPasswordAsync(staff, "Pass123456@"));
+        var staff = (await world.Get<UserManager<User>>().FindByIdAsync(result.UserId.ToString()))!;
+        Assert.False(await world.Get<UserManager<User>>().CheckPasswordAsync(staff, "Pass123456@"));
         Assert.Empty(world.Email.Queued);
     }
 
@@ -195,8 +196,8 @@ public sealed class AccountProvisioningUnitTests(PostgresContainerFixture postgr
     public async Task UTC07_UpdateStaffAsync_DeactivateFreeStaff_InactiveAndSessionsStop()
     {
         var staffApiTest = await AddStaffAsync("staff.api.test@example.invalid", "Staff Api Test");
-        var user = (await world.Get<UserManager<ApplicationUser>>().FindByIdAsync(staffApiTest.ToString()))!;
-        var stamp = await world.Get<UserManager<ApplicationUser>>().GetSecurityStampAsync(user);
+        var user = (await world.Get<UserManager<User>>().FindByIdAsync(staffApiTest.ToString()))!;
+        var stamp = await world.Get<UserManager<User>>().GetSecurityStampAsync(user);
         var session = await world.Get<IAuthenticationSessions>()
             .CreateAsync(new VerifiedIdentity(staffApiTest, [Roles.Staff], stamp), "Mobile app", default);
         Assert.NotNull(session);
@@ -223,14 +224,16 @@ public sealed class AccountProvisioningUnitTests(PostgresContainerFixture postgr
         Assert.True(await world.ScalarAsync<bool>("select is_active from users where id = @id", ("id", staffSample)));
     }
 
-    [Fact(DisplayName = "UTC09 - UpdateStaffAsync: Reason chi co khoang trang -> 400 reason_required, khong cap nhat")]
+    [Fact(DisplayName = "UTC09 - UpdateStaffAsync: Reason chi co khoang trang -> validation_error, khong cap nhat")]
     public async Task UTC09_UpdateStaffAsync_BlankReason_Rejected()
     {
         var staff1 = await AddStaffAsync("staff1@gmail.com", "Nguyen Van B");
         var before = (await Operations.StaffAsync(staff1, default)).FullName;
         var update = await UpdateOf(staff1, "staff1@gmail.com", "Nguyen Van C", isActive: true, " ");
 
-        await AssertRejected(() => Operations.UpdateStaffAsync(staff1, update, default), 400, "reason_required");
+        var error = await Assert.ThrowsAsync<InputValidationException>(() => Operations.UpdateStaffAsync(staff1, update, default));
+        Assert.Equal("validation_error", error.Message);
+        Assert.Contains("reason", error.Errors.Keys);
 
         Assert.Equal(before, (await Operations.StaffAsync(staff1, default)).FullName);
     }
@@ -257,7 +260,7 @@ public sealed class AccountProvisioningUnitTests(PostgresContainerFixture postgr
         var result = await Invitations.InviteStaffAsync(Staff1Id, default);
         Assert.Equal("AcceptedByProvider", result.DeliveryState);
         var message = Assert.Single(world.Email.Sent, item => item.Destination == "staff1@gmail.com");
-        var manager = world.Get<UserManager<ApplicationUser>>();
+        var manager = world.Get<UserManager<User>>();
         var staff = (await manager.FindByIdAsync(Staff1Id.ToString()))!;
         Assert.True(await manager.CheckPasswordAsync(staff, "Staff123456@"));
         Assert.True(await world.Get<IPasswordService>().ResetAsync(staff.Email!, message.Token, ValidPassword, default));
@@ -271,7 +274,7 @@ public sealed class AccountProvisioningUnitTests(PostgresContainerFixture postgr
     {
         world.Email.IsDurable = true;
         await world.AddUserAsync(Staff1Id, "staff1@gmail.com", Roles.Staff, "Staff123456@", emailConfirmed: true);
-        var users = world.Get<UserManager<ApplicationUser>>();
+        var users = world.Get<UserManager<User>>();
         var staff = (await users.FindByIdAsync(Staff1Id.ToString()))!;
         var stamp = await users.GetSecurityStampAsync(staff);
         var session = await world.Get<IAuthenticationSessions>().CreateAsync(
@@ -332,9 +335,9 @@ public sealed class AccountProvisioningUnitTests(PostgresContainerFixture postgr
         Assert.True(await world.ScalarAsync<bool>(
             "select email_confirmed from users where id=@id", ("id", Staff1Id)));
         Assert.Equal(1, await world.AuditCountAsync("StaffPasswordIssued"));
-        var user = (await world.Get<UserManager<ApplicationUser>>().FindByIdAsync(Staff1Id.ToString()))!;
-        Assert.True(await world.Get<UserManager<ApplicationUser>>().CheckPasswordAsync(user, mail.Token));
-        Assert.False(await world.Get<UserManager<ApplicationUser>>().CheckPasswordAsync(user, "Staff123456@"));
+        var user = (await world.Get<UserManager<User>>().FindByIdAsync(Staff1Id.ToString()))!;
+        Assert.True(await world.Get<UserManager<User>>().CheckPasswordAsync(user, mail.Token));
+        Assert.False(await world.Get<UserManager<User>>().CheckPasswordAsync(user, "Staff123456@"));
     }
 
     [Fact(DisplayName = "IssueStaffPasswordAsync: neu queue that bai, Staff cu van chua active va mat khau cu duoc giu")]
@@ -376,8 +379,8 @@ public sealed class AccountProvisioningUnitTests(PostgresContainerFixture postgr
 
     // ===================== InviteAsync(Guid residentId, TenantInvitationRequest request) =====================
 
-    [Fact(DisplayName = "UTC12 - InviteAsync: nguoi o cung Nguyen Thi Mai trong hop dong Active, chua co tai khoan -> tao Tenant Inactive va gui moi")]
-    public async Task UTC12_InviteAsync_CoOccupantWithoutAccount_CreatesInactiveTenantAndInvites()
+    [Fact(DisplayName = "UTC12 - InviteAsync: nguoi o cung Nguyen Thi Mai trong hop dong Active, chua co tai khoan -> tao Tenant chua xac minh email va gui moi")]
+    public async Task UTC12_InviteAsync_CoOccupantWithoutAccount_CreatesUnconfirmedTenantAndInvites()
     {
         await AddTenantSampleTenancyAsync(emailConfirmed: true);
         var maiId = Guid.NewGuid();
@@ -389,7 +392,8 @@ public sealed class AccountProvisioningUnitTests(PostgresContainerFixture postgr
         var result = await Invitations.InviteAsync(maiId, new TenantInvitationRequest("mainguyen@bhome.test"), default);
 
         Assert.Equal("AcceptedByProvider", result.DeliveryState);
-        Assert.False(await world.ScalarAsync<bool>("select is_active from users where normalized_email = upper(@e)", ("e", "mainguyen@bhome.test")));
+        Assert.True(await world.ScalarAsync<bool>("select is_active from users where normalized_email = upper(@e)", ("e", "mainguyen@bhome.test")));
+        Assert.False(await world.ScalarAsync<bool>("select email_confirmed from users where id = @id", ("id", result.UserId)));
         Assert.True(await world.ScalarAsync<bool>("select 'Tenant' = any(roles) from users where id = @id", ("id", result.UserId)));
         Assert.Single(world.Email.Sent, s => s.Destination == "mainguyen@bhome.test");
         Assert.Equal(1, await world.AuditCountAsync("AccountInvitationCreated"));
@@ -427,7 +431,7 @@ public sealed class AccountProvisioningUnitTests(PostgresContainerFixture postgr
     public async Task UTC15_AcceptAsync_ValidUnusedLink_ActivatesAccount()
     {
         var token = await InvitationTokenForTenantSampleAsync();
-        var user = (await world.Get<UserManager<ApplicationUser>>().FindByIdAsync(TenantSampleId.ToString()))!;
+        var user = (await world.Get<UserManager<User>>().FindByIdAsync(TenantSampleId.ToString()))!;
         var earlier = await world.Get<IAuthenticationSessions>().CreateAsync(
             new VerifiedIdentity(TenantSampleId, [Roles.Tenant], user.SecurityStamp ?? ""), "Mobile app", default);
         Assert.NotNull(earlier?.RefreshToken); // pre-condition: an earlier session exists

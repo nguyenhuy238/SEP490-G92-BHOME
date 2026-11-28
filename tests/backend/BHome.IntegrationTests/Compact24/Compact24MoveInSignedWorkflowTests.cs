@@ -70,7 +70,7 @@ public sealed partial class Compact24OwnerSetupTests
     {
         if (!internalContract) return;
         await using var scope = services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var contract = await db.Set<Contract>().SingleAsync(c => c.Id == id);
         contract.SigningMode = ContractSigningModes.Internal;
         await db.SaveChangesAsync();
@@ -92,16 +92,16 @@ public sealed partial class Compact24OwnerSetupTests
             $"contract-pre-move-in-inventory:{contractId:N}")).AsSpan(0, 16));
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var task = new OperationalTask
             {
                 Kind = OperationalTaskKind.MoveInInventory,
                 ContractId = contractId,
-                LocationId = w.Location,
+                RequiredLocationId = w.Location,
                 TargetRoomId = w.Room,
-                Title = "Kiểm kê tài sản trước bàn giao",
+                TaskTitle = "Kiểm kê tài sản trước bàn giao",
                 Requirements = "Ghi nhận thiếu/hỏng kèm ảnh",
-                Status = MeterTaskStatus.Assigned,
+                MeterStatus = MeterTaskStatus.Assigned,
                 AssignedStaffUserId = w.Staff.Id,
                 AssignedAt = DateTimeOffset.UtcNow,
                 MoveInInventoryJson = JsonSerializer.Serialize(new MoveInInventorySnapshot(
@@ -186,8 +186,10 @@ public sealed partial class Compact24OwnerSetupTests
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
             var room = await db.Set<Room>().SingleAsync(r => r.Id == w.Room);
+            await using var transaction = await db.Database.BeginTransactionAsync();
             room.Version++;
             await db.SaveChangesAsync();
+            await transaction.CommitAsync();
         }
 
         var beforeSubmit = (await staff.GetFromJsonAsync<HandoverDraftView>(
@@ -320,17 +322,10 @@ public sealed partial class Compact24OwnerSetupTests
             $"/api/v1/contracts/{contractId}/handover/draft"))!;
         Assert.True(tenantReadyView.Missing.Length == 0,
             "Unexpected Tenant Ready blockers: " + string.Join(", ", tenantReadyView.Missing));
-        var tenantRequest = await Read<HandoverDraftView>(await HandoverPost(tenant, contractId,
-            "handover/draft/tenant-sign", new HandoverDraftTenantSign(ready.Version,
-                new SigningInput(Guid.Empty, Method: SigningMethods.Otp, Consent: true))));
-        Assert.True(tenantRequest.Missing.Length == 0,
-            "Unexpected Tenant OTP blockers: " + string.Join(", ", tenantRequest.Missing));
-        var otpMail = Assert.Single(mailbox.Sent,
-            message => message.EventType == "HANDOVER_SIGNING_OTP");
-        var otp = otpMail.Title[(otpMail.Title.LastIndexOf(' ') + 1)..];
         var signed = await Read<HandoverDraftView>(await HandoverPost(tenant, contractId,
-            "handover/draft/tenant-sign/otp/confirm",
-            new HandoverDraftTenantSignOtp(tenantRequest.Version, otp)));
+            "handover/draft/tenant-sign/session", new HandoverDraftTenantSessionSign(
+                ready.Version, true, OwnerSignature(ready.Version).Ink)));
+        Assert.DoesNotContain(mailbox.Sent, message => message.EventType == "HANDOVER_SIGNING_OTP");
         Assert.Equal("Confirmed", signed.Status);
         var final = (await tenant.GetFromJsonAsync<HandoverView>(
             $"/api/v1/contracts/{contractId}/handover"))!;
@@ -379,8 +374,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(HttpStatusCode.Forbidden, (await HandoverPost(staff, id,
             "handover/draft/ready", OwnerSignature(submitted.Version))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(tenant, id,
-            "handover/draft/tenant-sign", new HandoverDraftTenantSign(submitted.Version,
-                new SigningInput(Guid.Empty, Method: SigningMethods.Otp, Consent: true)))).StatusCode);
+            "handover/draft/tenant-sign/session", new HandoverDraftTenantSessionSign(submitted.Version, true, OwnerSignature(submitted.Version).Ink))).StatusCode);
         var ready = await Read<HandoverDraftView>(await HandoverPost(owner, id,
             "handover/draft/ready", OwnerSignature(submitted.Version)));
         Assert.Equal("Ready", ready.Status);
@@ -505,9 +499,8 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(HttpStatusCode.Forbidden,
             (await HandoverPost(tenant, id, "handover/draft/submit", new HandoverDraftSubmit(initial.Version))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict,
-            (await HandoverPost(tenant, id, "handover/draft/tenant-sign",
-                new HandoverDraftTenantSign(initial.Version,
-                    new SigningInput(Guid.Empty, Method: SigningMethods.Otp, Consent: true)))).StatusCode);
+            (await HandoverPost(tenant, id, "handover/draft/tenant-sign/session",
+                new HandoverDraftTenantSessionSign(initial.Version, true, OwnerSignature(initial.Version).Ink))).StatusCode);
 
         await StartRealMoveInTask(staff, host.Services, id, w.Staff.Id);
         var choices = (await staff.GetFromJsonAsync<HandoverChoices>($"/api/v1/contracts/{id}/handover/choices"))!;
@@ -600,44 +593,34 @@ public sealed partial class Compact24OwnerSetupTests
             Assert.DoesNotContain("PHỤ LỤC BẰNG CHỨNG", signedText);
             Assert.DoesNotContain("Ảnh và bằng chứng được lưu riêng", signedText);
         }
-        Assert.Equal(HttpStatusCode.Conflict,
+        Assert.Equal(HttpStatusCode.NotFound,
             (await HandoverPost(tenant, id, "handover/draft/tenant-confirmation",
-                new HandoverDraftTenantConfirmation(ready.Version))).StatusCode);
+                new { version = ready.Version })).StatusCode);
 
+        var tenantInput = new HandoverDraftTenantSessionSign(ready.Version, true,
+            OwnerSignature(ready.Version).Ink);
+        Assert.Equal(HttpStatusCode.NotFound, (await HandoverPost(tenant, id,
+            "handover/draft/tenant-sign", new { version = ready.Version })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await tenant.GetAsync(route + "/tenant-sign/otp")).StatusCode);
+        foreach (var suffix in new[] { "/resend", "/confirm" })
+            Assert.Equal(HttpStatusCode.NotFound, (await HandoverPost(tenant, id,
+                "handover/draft/tenant-sign/otp" + suffix, new { version = ready.Version })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await HandoverPost(tenant, id,
-            "handover/draft/tenant-sign", new HandoverDraftTenantSign(ready.Version,
-                new SigningInput(Guid.Empty, Method: SigningMethods.Otp, Consent: false)))).StatusCode);
-        var pending = await Read<HandoverDraftView>(await HandoverPost(tenant, id,
-            "handover/draft/tenant-sign", new HandoverDraftTenantSign(ready.Version,
-                new SigningInput(Guid.Empty, Method: SigningMethods.Otp, Consent: true))));
-        Assert.True(pending.TenantSigningPending);
-        Assert.Equal(ready.Version + 1, pending.Version);
-        var challenge = (await tenant.GetFromJsonAsync<SigningOtpView>(route + "/tenant-sign/otp"))!;
-        Assert.Equal("Sent", challenge.Status);
-        var sent = Assert.Single(mailbox.Sent, m => m.EventType == "HANDOVER_SIGNING_OTP" && m.Destination == w.Tenant.Email);
-        var code = sent.Title[(sent.Title.LastIndexOf(' ') + 1)..];
-        Assert.Matches("^[0-9]{6}$", code);
-        Assert.Equal(HttpStatusCode.Conflict,
-            (await HandoverPost(tenant, id, "handover/draft/tenant-sign/otp/confirm",
-                new HandoverDraftTenantSignOtp(ready.Version, code))).StatusCode);
-        var badCode = code == "000000" ? "111111" : "000000";
-        Assert.Equal(HttpStatusCode.BadRequest,
-            (await HandoverPost(tenant, id, "handover/draft/tenant-sign/otp/confirm",
-                new HandoverDraftTenantSignOtp(pending.Version, badCode))).StatusCode);
+            "handover/draft/tenant-sign/session", tenantInput with { Consent = false })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(tenant, id,
+            "handover/draft/tenant-sign/session", tenantInput with { Version = ready.Version - 1 })).StatusCode);
         var key = Guid.NewGuid();
         var confirmed = await Read<HandoverDraftView>(await HandoverPost(tenant, id,
-            "handover/draft/tenant-sign/otp/confirm",
-            new HandoverDraftTenantSignOtp(pending.Version, code), key));
+            "handover/draft/tenant-sign/session", tenantInput, key));
         Assert.Equal("Confirmed", confirmed.Status);
         Assert.NotNull(confirmed.TenantSignedAt);
         Assert.Equal("Completed", confirmed.MoveInTask!.Status);
+        Assert.DoesNotContain(mailbox.Sent, m => m.EventType == "HANDOVER_SIGNING_OTP");
         var replay = await Read<HandoverDraftView>(await HandoverPost(tenant, id,
-            "handover/draft/tenant-sign/otp/confirm",
-            new HandoverDraftTenantSignOtp(pending.Version, code), key));
+            "handover/draft/tenant-sign/session", tenantInput, key));
         Assert.Equal(confirmed.Version, replay.Version);
-        Assert.Equal(HttpStatusCode.Conflict,
-            (await HandoverPost(tenant, id, "handover/draft/tenant-sign/otp/confirm",
-                new HandoverDraftTenantSignOtp(pending.Version, code))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(tenant, id,
+            "handover/draft/tenant-sign/session", tenantInput)).StatusCode);
         using var finalPdf = new PdfDocument(new PdfReader(new MemoryStream(await tenant.GetByteArrayAsync(route + "/pdf"))));
         var signatures = new SignatureUtil(finalPdf);
         var signatureNames = signatures.GetSignatureNames();

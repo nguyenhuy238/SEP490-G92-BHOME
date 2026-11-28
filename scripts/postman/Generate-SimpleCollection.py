@@ -199,11 +199,11 @@ def value(schema, name, r, depth=0):
 
 # Role permissions come from repository constants, not a client-side authorization claim.
 permissions={}
-permission_source=(ROOT/'src/backend/BHome.Domain/IdentityAccess/Permissions.cs').read_text()
+permission_source=(ROOT/'src/backend/BHome.Api/Common/IdentityAccess/Permissions.cs').read_text()
 for match in re.finditer(r'public static class (\w+)\s*\{([^{}]*)\}',permission_source):
     for key,val in re.findall(r'const string (\w+) = "([^"]+)"',match[2]):permissions[match[1]+'.'+key]=val
 policy_roles={}
-role_source=(ROOT/'src/backend/BHome.Domain/IdentityAccess/RolePermissions.cs').read_text()
+role_source=(ROOT/'src/backend/BHome.Api/Common/IdentityAccess/RolePermissions.cs').read_text()
 for symbol,roles in re.findall(r'\[Permissions\.([\w.]+)\] = Allow\(([^)]+)\)',role_source):
     policy_roles[permissions[symbol]]=set(re.findall(r'Roles\.(\w+)',roles))
 def role_for(r):

@@ -55,7 +55,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(next.AddMonths(1).AddDays(-1).Day, initial.Obligations.RentCoverage.OccupiedRoomDays);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var contracts = await db.Set<Contract>().Where(c => c.RoomId == w.Room).OrderBy(c => c.Id).ToArrayAsync();
             Assert.Equal(3, contracts.Length);
             contracts[0].EndDate = next.AddDays(4);
@@ -70,9 +70,9 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal("3100000", partial.MonthlyRent);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var contract = await db.Set<Contract>().Where(c => c.RoomId == w.Room).OrderBy(c => c.Id).FirstAsync();
-            contract.MonthlyRent = 3200000;
+            contract.RentAmount = 3200000;
             await db.SaveChangesAsync();
         }
         var conflict = (await owner.GetFromJsonAsync<ScenarioDefaults>(path))!;
@@ -149,7 +149,7 @@ public sealed partial class PaymentLedgerTests
         Guid previousInvoice;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var current = await db.Set<Invoice>().AsNoTracking().SingleAsync(i => i.Id == w.Invoice);
             period = current.BillingPeriod;
             var previous = new Invoice
@@ -167,9 +167,9 @@ public sealed partial class PaymentLedgerTests
                 DueDate = period.AddDays(-1),
                 ScheduleSnapshot = "{}",
                 Recipients = w.Tenants.Select(t => new InvoiceRecipient { TenantUserId = t }).ToList(),
-                Lines = [new InvoiceLine { Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rent",
+                Lines = [new InvoiceItem { Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rent",
                     Rate = rent - 1_000_000, Quantity = 1, Amount = rent - 1_000_000, OccupiedDays = 30, PeriodDays = 30, RateDate = period.AddMonths(-1) },
-                    new InvoiceLine { Category = ChargeCategory.ServiceFee, ChargeCode = "SERVICE-INTERNET", Name = "Synthetic internet",
+                    new InvoiceItem { Category = ChargeCategory.ServiceFee, ChargeCode = "SERVICE-INTERNET", Name = "Synthetic internet",
                         Rate = 1_000_000, Quantity = 1, Amount = 1_000_000, OccupiedDays = 30, PeriodDays = 30, RateDate = period.AddMonths(-1) }]
             };
             db.Add(previous); await db.SaveChangesAsync();

@@ -36,6 +36,7 @@ import {
 import { PageHeader } from '../../components/common/PortalUI';
 import { MoneyField } from '../../components/common/MoneyField';
 import { useMeterApi } from '../meters/useMeterApi';
+import { downloadBlob } from '../../utils/downloadBlob';
 
 export default function TaxTrackingPage() {
   const { request } = useMeterApi();
@@ -61,12 +62,7 @@ export default function TaxTrackingPage() {
         {},
         'blob',
       );
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `chung-tu-v${details.evidenceVersion}`;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      downloadBlob(blob, `chung-tu-v${details.evidenceVersion}`);
     },
   });
   const profiles = useQuery({

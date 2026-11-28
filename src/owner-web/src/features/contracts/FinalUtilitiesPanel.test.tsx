@@ -6,7 +6,7 @@ import {
   type ContractRequest,
   type FinalUtilityPreview,
 } from '../../../../../packages/client-core/src/contracts';
-import { FinalUtilitiesPanel } from './FinalUtilitiesPanel';
+import { FinalUtilitiesPanel } from './components/settlement/FinalUtilitiesPanel';
 const row: FinalUtilityPreview = {
   contractId: 'contract',
   utilityType: 'Electricity',

@@ -6,7 +6,7 @@ import { TenantHouseholdPanel } from '../features/profile/TenantHouseholdPanel';
 
 const s = vi.hoisted(() => ({ request: vi.fn(), id: 'own-contract', select: vi.fn() }));
 vi.mock('../lib/SessionProvider', () => ({ useSession: () => ({ api: s }) }));
-vi.mock('../features/tenant/useTenantTenancy', () => ({
+vi.mock('../features/tenant/room/useTenantTenancy', () => ({
   useTenantTenancy: () => ({
     current: s.id ? { id: s.id } : undefined,
     items: [],

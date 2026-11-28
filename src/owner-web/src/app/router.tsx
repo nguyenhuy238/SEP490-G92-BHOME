@@ -38,7 +38,7 @@ const TemporaryResidencePage = lazy(
 );
 const MetersPage = lazy(() => import('../features/meters/pages/MetersPage'));
 const InvoicesPage = lazy(() => import('../features/invoices/pages/InvoicesPage'));
-const AutomationPage = lazy(() => import('../features/invoices/AutomationPage'));
+const AutomationPage = lazy(() => import('../features/invoices/pages/AutomationPage'));
 const AdjustmentsPage = lazy(() => import('../features/adjustments/AdjustmentsPage'));
 const PaymentsPage = lazy(() => import('../features/payments/pages/PaymentsPage'));
 const TenantRefundRequestsPage = lazy(

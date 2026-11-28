@@ -13,7 +13,7 @@ public sealed partial class PaymentLedgerTests
         Guid id; string? email;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); var person = await db.Set<Resident>().SingleAsync(r => r.TenantUserId == w.Tenants[0]);
+            var db = scope.ServiceProvider.GetFixturePersistence(); var person = await db.Set<Resident>().SingleAsync(r => r.TenantUserId == w.Tenants[0]);
             person.IdentityData = "{\"syntheticEncryptedEnvelope\":\"ciphertext-untouched\"}"; person.IdentityHmac = new string('A', 64); person.HmacKeyVersion = "SYNTHETIC";
             await db.SaveChangesAsync(); id = person.Id; email = person.ContactEmail;
         }
@@ -34,7 +34,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Empty(released.ActiveHolds); Assert.False(released.CanDelete); Assert.Contains("retention_policy_unapproved", released.BlockingReasons);
         var reviewed = await RefundValue<IdentityRetentionView>(await Post(owner, route + "/reviews", new IdentityRetentionInput(released.Reference, "Review", null, "Synthetic review records restrictions without erasing fields", true)));
         Assert.Equal(3, reviewed.History.Length); Assert.False(reviewed.CanDelete);
-        await using var finalScope = fixture.Factory.Services.CreateAsyncScope(); var finalDb = finalScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var finalScope = fixture.Factory.Services.CreateAsyncScope(); var finalDb = finalScope.ServiceProvider.GetFixturePersistence();
         var retained = await finalDb.Set<Resident>().SingleAsync(r => r.Id == id);
         Assert.Equal("ciphertext-untouched", System.Text.Json.JsonDocument.Parse(retained.IdentityData).RootElement.GetProperty("syntheticEncryptedEnvelope").GetString());
         Assert.Equal(new string('A', 64), retained.IdentityHmac); Assert.Equal(email, retained.ContactEmail); Assert.Equal(w.Tenants[0], retained.TenantUserId);

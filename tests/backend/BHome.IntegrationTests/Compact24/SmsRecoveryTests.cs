@@ -43,7 +43,7 @@ public sealed partial class Compact24NotificationMvpTests
         }));
         using var client = host.CreateClient(); var identifier = w.Tenants[0].UserName!; var request = await RecoveryRequest(client, identifier);
         Assert.True(await host.Services.GetRequiredService<PostgresJobWorker>().ProcessAllowedAsync(default, ["sms-recovery-delivery"]));
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal(unknown ? "PendingReview" : "Pending", await db.Database.SqlQuery<string>($"SELECT delivery_status AS \"Value\" FROM notifications WHERE id={request.ChallengeId}").SingleAsync());
         if (!unknown)
         {
@@ -85,7 +85,7 @@ public sealed partial class Compact24NotificationMvpTests
     {
         var w = await Seed(); using var sms = await SmsHost(w); var clock = new ResidenceClock(DateTimeOffset.UtcNow); using var host = RecoveryHost(sms, clock);
         var account = role == "Owner" ? w.Owner : role == "Staff" ? w.Staff : w.Tenants[0];
-        await using var s = host.Services.CreateAsyncScope(); var db = s.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var s = host.Services.CreateAsyncScope(); var db = s.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var email = (await db.Users.AsNoTracking().SingleAsync(u => u.Id == account.Id)).Email!;
         var rolesBefore = await db.Database.SqlQuery<string>($"SELECT roles::text AS \"Value\" FROM users WHERE id={account.Id}").SingleAsync();
         using var old = host.CreateClient(); var login = await old.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password }); login.EnsureSuccessStatusCode();
@@ -111,7 +111,7 @@ public sealed partial class Compact24NotificationMvpTests
         // The fixture's sole Owner is reused by other tests. Restore its synthetic password through Identity.
         if (role == "Owner")
         {
-            db.ChangeTracker.Clear(); var manager = s.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<BHome.Infrastructure.Persistence.ApplicationUser>>();
+            db.ChangeTracker.Clear(); var manager = s.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<BHome.Infrastructure.Persistence.User>>();
             var user = (await manager.FindByIdAsync(account.Id.ToString()))!;
             Assert.True((await manager.ResetPasswordAsync(user, await manager.GeneratePasswordResetTokenAsync(user), Password)).Succeeded);
         }
@@ -121,7 +121,7 @@ public sealed partial class Compact24NotificationMvpTests
     public async Task SmsRecoveryUnknownUnverifiedAndMissingPhoneRequestsAreGenericAndDoNotSend()
     {
         var w = await Seed(); using var sms = await SmsHost(w); using var host = RecoveryHost(sms, new ResidenceClock(DateTimeOffset.UtcNow));
-        await using var s = host.Services.CreateAsyncScope(); var db = s.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var s = host.Services.CreateAsyncScope(); var db = s.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET phone_confirmed=false WHERE id={w.Tenants[0].Id}");
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET phone=NULL WHERE id={w.Tenants[1].Id}");
         using var client = host.CreateClient();
@@ -160,7 +160,7 @@ public sealed partial class Compact24NotificationMvpTests
         using var client = host.CreateClient(); var identifier = w.Tenants[0].Id.ToString("N") + ".sms-demo";
         var request = await RecoveryRequest(client, identifier); var otp = await RecoveryOtp(host, w.Tenants[0].Id);
         var verify = await VerifyRecovery(client, identifier, request, otp); verify.EnsureSuccessStatusCode(); var grant = (await verify.Content.ReadFromJsonAsync<SmsRecoveryVerified>())!;
-        await using var s = host.Services.CreateAsyncScope(); var db = s.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var s = host.Services.CreateAsyncScope(); var db = s.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET phone_confirmed=false WHERE id={w.Tenants[0].Id}");
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/auth/sms-recovery/reset", new { identifier, request.ChallengeId, grant.Authorization, newPassword = "Synthetic!Sms-Recovered-927", confirmPassword = "Synthetic!Sms-Recovered-927" })).StatusCode);
         using var sandbox = host.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>

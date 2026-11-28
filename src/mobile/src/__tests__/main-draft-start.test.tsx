@@ -81,7 +81,7 @@ vi.mock('../components/WorkflowControls', () => ({
     </select>
   ),
 }));
-vi.mock('../features/contracts/MainDraftScreen', () => ({
+vi.mock('../features/contracts/main/MainDraftScreen', () => ({
   MainDraftScreen: (props: { onSaved?: (id: string) => void; onCancel: () => void }) => {
     state.opened(props);
     return (
@@ -93,7 +93,7 @@ vi.mock('../features/contracts/MainDraftScreen', () => ({
     );
   },
 }));
-import { MainDraftStart } from '../features/contracts/MainDraftStart';
+import { MainDraftStart } from '../features/contracts/main/MainDraftStart';
 import { router } from 'expo-router';
 beforeEach(() => {
   vi.clearAllMocks();

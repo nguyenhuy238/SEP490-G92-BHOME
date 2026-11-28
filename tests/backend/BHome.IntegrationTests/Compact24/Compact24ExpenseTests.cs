@@ -22,7 +22,7 @@ public sealed partial class Compact24ExpenseTests(Compact24Fixture fixture) : IC
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
             var user = await WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
-                new ApplicationUser { Id = id, UserName = email, Email = email, IsActive = true }, role, password);
+                new User { Id = id, UserName = email, Email = email, IsActive = true }, role, password);
             email = user.Email!;
         }
         var client = fixture.Factory!.CreateClient();
@@ -34,7 +34,7 @@ public sealed partial class Compact24ExpenseTests(Compact24Fixture fixture) : IC
     {
         var owner = await User("Owner");
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var location = new Location("Synthetic Finance " + Guid.NewGuid());
         db.Add(location); await db.SaveChangesAsync();
         return (owner, new(location.Id, null, "OPERATING", "Điện khu vực chung", 123456, new(2026, 11, 1), "Chứng từ tổng hợp"));
@@ -60,7 +60,7 @@ public sealed partial class Compact24ExpenseTests(Compact24Fixture fixture) : IC
         Assert.Equal(2, updated.Version); Assert.Equal(200000, updated.Amount);
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync($"{Root}/{created.Id}", new ExpenseUpdate(input, 1, "Phiên bản cũ"))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync($"{Root}/{created.Id}", new ExpenseUpdate(input with { ExpenseType = "INITIAL_INVESTMENT" }, 2, "Đổi phân loại"))).StatusCode);
-        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var history = await db.Database.SqlQuery<string>($"SELECT history::text AS \"Value\" FROM expenses WHERE id={created.Id}").SingleAsync();
         Assert.Contains("123456", history); Assert.Contains("200000", history); Assert.Contains("Đối chiếu chứng từ", System.Text.Json.JsonDocument.Parse(history).RootElement[1].GetProperty("Reason").GetString());
         Assert.True(await db.IsSchemaReadyAsync());

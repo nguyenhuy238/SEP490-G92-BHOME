@@ -48,7 +48,7 @@ public sealed class LocalTestAccountsTests : IAsyncLifetime
     {
         Assert.True(await LocalTestAccounts.CreateAsync(provider, "Development", Password));
         await using var scope = provider.CreateAsyncScope();
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         foreach (var role in new[] { "Owner", "Staff", "Tenant" })
         {
             var user = await users.FindByNameAsync(role.ToLowerInvariant() + ".dev");
@@ -63,8 +63,8 @@ public sealed class LocalTestAccountsTests : IAsyncLifetime
     public async Task ExistingNameDoesNotAcquireNewRolesOrPasswordAndNoOtherAccountsAreCreated()
     {
         await using var scope = provider.CreateAsyncScope();
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-        var existing = new ApplicationUser { Id = Guid.NewGuid(), UserName = "owner.dev", Email = "collision@example.invalid" };
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+        var existing = new User { Id = Guid.NewGuid(), UserName = "owner.dev", Email = "collision@example.invalid" };
         Assert.True((await users.CreateAsync(existing, Password)).Succeeded);
         Assert.False(await LocalTestAccounts.CreateAsync(provider, "Development", "Different!Password-983"));
         Assert.Empty(await users.GetRolesAsync(existing));
@@ -84,8 +84,8 @@ public sealed class LocalTestAccountsTests : IAsyncLifetime
     public async Task EmailCollisionRollsBackEarlierAccountAndItsAudit()
     {
         await using var scope = provider.CreateAsyncScope();
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-        Assert.True((await users.CreateAsync(new ApplicationUser
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+        Assert.True((await users.CreateAsync(new User
         {
             Id = Guid.NewGuid(),
             UserName = "collision",

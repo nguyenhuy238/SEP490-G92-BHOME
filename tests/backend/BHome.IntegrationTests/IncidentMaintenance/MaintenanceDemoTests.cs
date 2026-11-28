@@ -85,7 +85,7 @@ public sealed class MaintenanceDemoTests(MaintenanceStorageFixture fixture) : IC
     public async Task DemoSeedIsRepeatableAndEvidenceUsesRealPrivateMinio()
     {
         await Seed(); await Seed();
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(6, await db.Set<MaintenanceWorkOrder>().CountAsync(w => w.LocationId == MaintenanceDemoSeed.Id(10) && w.Description.StartsWith("[DEMO BF07")));
         Assert.Equal(5, await db.Set<IncidentReport>().CountAsync(r => r.LocationId == MaintenanceDemoSeed.Id(10)));
         Assert.Equal(2, await db.Set<MaintenanceCompensation>().CountAsync(c => c.LocationId == MaintenanceDemoSeed.Id(10)));

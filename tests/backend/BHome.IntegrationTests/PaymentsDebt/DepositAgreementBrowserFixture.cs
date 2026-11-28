@@ -18,7 +18,7 @@ public sealed partial class PaymentLedgerTests
         using var owner = await Client(w.Owner);
         await RefundValue<ContractId>(await Post(owner, $"/api/v1/contracts/{w.Contract}/deposit-verifications",
             new DepositInput("SYN-BROWSER-" + Guid.NewGuid(), 400000, "Synthetic verified principal; no real bank")));
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var person = await db.Set<Resident>().SingleAsync(r => r.TenantUserId == w.Tenants[1]);
         person.DisplayLabel = "SYNTHETIC AGREED RECIPIENT";
         await db.SaveChangesAsync();

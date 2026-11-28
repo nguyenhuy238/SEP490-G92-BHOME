@@ -14,8 +14,6 @@ public sealed class CaptureController(CaptureService service) : ControllerBase
     [HttpGet("staff")] public Task<IReadOnlyList<NamedResource>> Staff(CancellationToken t) => service.StaffAsync(t);
     [HttpPost("staff"), Authorize(Roles = Roles.Owner), RequestSizeLimit(16384)] public Task<IdResult> Staff(StaffInput x, CancellationToken t) => service.CreateStaffAsync(x, t);
     [HttpPost("locations"), Authorize(Roles = Roles.Owner)] public Task<IdResult> Location(LocationInput x, CancellationToken t) => service.CreateLocationAsync(x, t);
-    [HttpPost("rooms"), Authorize(Roles = Roles.Owner)] public Task<IdResult> Room(RoomInput x, CancellationToken t) => service.CreateRoomAsync(x, t);
-    [HttpPost("assignments"), Authorize(Roles = Roles.Owner)] public Task<IdResult> Assignment(AssignmentInput x, CancellationToken t) => service.AssignStaffAsync(x, t);
     [HttpGet("locations/{id:guid}/residents")] public Task<IReadOnlyList<ResidentSummary>> Residents(Guid id, CancellationToken t) => service.ResidentsAsync(id, t);
     [HttpPost("residents")] public Task<IdResult> Resident(ResidentInput x, CancellationToken t) => service.CreateResidentAsync(x, t);
     [HttpPost("residents/{id:guid}/confirm"), Authorize(Roles = Roles.Staff), RequestSizeLimit(16384)] public Task<IdentityConfirmationResult> Identity(Guid id, IdentityConfirmation x, CancellationToken t) => service.ConfirmIdentityAsync(id, x, t);

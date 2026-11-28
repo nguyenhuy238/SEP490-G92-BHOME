@@ -114,7 +114,7 @@ public sealed partial class Compact24OwnerSetupTests
         await Read<IncidentCommandResult>(await Keyed(owner, workRoute + "/verify", verification, verificationKey));
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             Assert.Equal(1, await db.Set<MaintenanceExpense>().CountAsync(expense => expense.WorkOrderId == workId));
         }
         var replacementReview = (await owner.GetFromJsonAsync<AssetReplacementReview>(reviewRoute + "?replacementCost=200000"))!;

@@ -789,7 +789,6 @@ export type ContractRequest = <T>(
   responseType?: 'json' | 'blob' | 'bytes',
 ) => Promise<T>;
 const root = '/api/v1/contracts';
-const certificates = '/api/v1/digital-signing/certificates';
 export function contractClient(request: ContractRequest) {
   const holdingRoomReadiness = (id: string, signal?: AbortSignal, effectiveOn?: string) =>
     request<{
@@ -1163,17 +1162,6 @@ export function contractClient(request: ContractRequest) {
       request<TerminationReview>(`${root}/${guid(id)}/move-out/review`, { signal }),
     history: (id: string, signal?: AbortSignal) =>
       request<SettlementReview[]>(`${root}/${id}/move-out/settlement-history`, { signal }),
-    certificates: (signal?: AbortSignal) => request<Certificate[]>(certificates, { signal }),
-    declareCertificate: (providerUserId: string, serialNumber: string) =>
-      request<Certificate>(certificates, {
-        method: 'POST',
-        body: JSON.stringify({ providerUserId, serialNumber: serialNumber || null }),
-      }),
-    lockCertificate: (id: string, locked: boolean) =>
-      request<void>(`${certificates}/${guid(id)}/lock`, {
-        method: 'POST',
-        body: JSON.stringify({ locked }),
-      }),
     locations: (signal?: AbortSignal) =>
       request<NamedOption[]>('/api/v1/capture/locations', { signal }),
     rooms: (locationId: string, signal?: AbortSignal) =>
@@ -1691,8 +1679,7 @@ const proposedFields: ActionField[] = [
   { name: 'reason', label: 'Lý do', type: 'multiline', max: 2000 },
 ];
 /**
- * signingMethods: what GET /contracts/signing-methods offers. When given, the certificate request ('Yêu cầu ký MySign')
- * appears only if VIETTEL_MYSIGN (or the Development simulation) is offered; OTP and UPLOAD_PROOF have their own panel.
+ * Signing methods offered by the server; only simulation uses the generic signing action.
  */
 export function contractActions(
   c: ContractView,
@@ -1711,8 +1698,7 @@ export function contractActions(
   const mine = c.signatures.filter((s) => s.signerUserId === actorId);
   const open = c.signatures.some((s) => !['Signed', 'Simulated', 'Failed'].includes(s.status));
   const certificateSigning =
-    !signingMethods ||
-    signingMethods.includes(c.isDevelopmentDemo ? 'SIMULATED' : 'VIETTEL_MYSIGN');
+    c.isDevelopmentDemo && (!signingMethods || signingMethods.includes('SIMULATED'));
   // Polling and reference recovery only exist for remote (certificate) signing.
   const remote = mine.filter(
     (s) => !s.method || ['VIETTEL_MYSIGN', 'SIMULATED'].includes(s.method),
@@ -1726,18 +1712,7 @@ export function contractActions(
     !open &&
     certificateSigning
   )
-    result.push(
-      action(
-        'signing',
-        c.isDevelopmentDemo ? 'Mô phỏng ký' : 'Yêu cầu ký MySign',
-        c.isDevelopmentDemo
-          ? []
-          : [{ name: 'certificateId', label: 'Chứng thư của bạn', type: 'certificate' }],
-        c.isDevelopmentDemo
-          ? ''
-          : 'Hãy đọc kỹ điều khoản. Xác nhận ký trên ứng dụng của nhà cung cấp. Gửi yêu cầu chưa đồng nghĩa đã ký hoặc kích hoạt.',
-      ),
-    );
+    result.push(action('signing', 'Mô phỏng ký', [], ''));
   if (signer && remote.some((s) => s.status === 'Pending'))
     result.push(action('signing/sync', 'Kiểm tra kết quả ký'));
   if (signer && remote.some((s) => ['Dispatching', 'ManualReview'].includes(s.status)))

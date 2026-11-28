@@ -32,8 +32,8 @@ public sealed class OperationalTaskApiTests(CaptureFixture fixture) : IClassFixt
         var id = Guid.NewGuid();
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
-            var user = new ApplicationUser { Id = id, UserName = name, Email = name, LockoutEnabled = true };
+            var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<User>>();
+            var user = new User { Id = id, UserName = name, Email = name, LockoutEnabled = true };
             user = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider, user, role, "Synthetic-Task!539");
             id = user.Id; name = user.Email!;
         }
@@ -45,7 +45,7 @@ public sealed class OperationalTaskApiTests(CaptureFixture fixture) : IClassFixt
     private async Task<Workspace> Setup(bool assigned = true)
     {
         var owner = await User(Roles.Owner); var staff = await User(Roles.Staff); var tenant = await User(Roles.Tenant);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var location = new Location("Synthetic Task Location") { ChainId = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext ? null : await db.Set<BHome.Domain.PropertyManagement.Chain>().Select(c => c.Id).SingleAsync(), Address = "Synthetic address" }; db.Add(location);
         if (assigned) db.Add(new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddDays(-10), Today.AddDays(10)));
         await db.SaveChangesAsync(); return new(owner, staff, tenant, location.Id);
@@ -100,7 +100,7 @@ public sealed class OperationalTaskApiTests(CaptureFixture fixture) : IClassFixt
         Guid otherRoomId;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var room = new BHome.Domain.PropertyManagement.Room { LocationId = w.Location, RoomNumber = "QUEUE-101", Capacity = 2 };
             var other = new BHome.Domain.PropertyManagement.Room { LocationId = w.Location, RoomNumber = "QUEUE-102", Capacity = 2 };
             db.AddRange(room, other);
@@ -177,13 +177,13 @@ public sealed class OperationalTaskApiTests(CaptureFixture fixture) : IClassFixt
         task = await Action(w.Owner, task, "verify");
         Assert.Equal("Completed", task.Status); Assert.Equal(w.Owner.Id, task.VerifiedByUserId);
         Assert.Equal(HttpStatusCode.Conflict, (await Send(w.Owner, $"{Base}/{task.Id}/cancel", new TaskAction(task.Version, "late cancel"))).StatusCode);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Single(await db.Set<OperationalTaskEvidence>().Where(x => x.TaskId == task.Id).ToArrayAsync());
         Assert.Equal(1, await db.SecurityAudit.CountAsync(x => x.TargetId == task.Id && x.Event == "Task_verify"));
         var history = await db.Set<OperationalTaskHistory>().Where(x => x.TaskId == task.Id).ToArrayAsync();
         Assert.Contains(history, h => h.Action == "rework" && h.Note == "Synthetic rework reason");
         Assert.Equal(1, await db.Set<OperationalTaskCommand>().CountAsync(x => x.TaskId == task.Id && x.Key == key));
-        await TaskEvidenceCleanup.CleanupAsync(db, scope.ServiceProvider.GetRequiredService<IObjectStorage>(), DateTimeOffset.UtcNow.AddHours(2), default);
+        await TaskEvidenceCleanup.CleanupAsync(scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(), scope.ServiceProvider.GetRequiredService<IObjectStorage>(), DateTimeOffset.UtcNow.AddHours(2), default);
         Assert.Equal(bytes, await w.Owner.Client.GetByteArrayAsync($"{Base}/{task.Id}/evidence/{evidence.Id}"));
     }
 
@@ -203,8 +203,8 @@ public sealed class OperationalTaskApiTests(CaptureFixture fixture) : IClassFixt
         var unchanged = await Action(w.Owner, task, "assign"); Assert.Equal(task.Version, unchanged.Version);
         var page = await w.Owner.Client.GetFromJsonAsync<TaskPage<TaskView>>($"{Base}?locationId={w.Location}&pageSize=1&priority=High");
         Assert.Equal(1, page!.TotalCount); Assert.Single(page.Items);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-        Assert.Equal(1, await db.Set<OperationalTask>().CountAsync(x => x.LocationId == w.Location));
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
+        Assert.Equal(1, await db.Set<OperationalTask>().CountAsync(x => x.RequiredLocationId == w.Location));
         Assert.Equal(1, await db.Set<OperationalTaskHistory>().CountAsync(x => x.TaskId == task.Id && x.Action == "created"));
         Assert.Equal(1, await db.Set<OperationalTaskHistory>().CountAsync(x => x.TaskId == task.Id && x.Action == "updated"));
         var history = await db.Set<OperationalTaskHistory>().FirstAsync(x => x.TaskId == task.Id);
@@ -227,7 +227,7 @@ public sealed class OperationalTaskApiTests(CaptureFixture fixture) : IClassFixt
         Assert.Equal(HttpStatusCode.NotFound, (await stranger.Client.GetAsync($"{Base}/{task.Id}/history")).StatusCode);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var assignment = await db.StaffLocationAssignments.SingleAsync(x => x.LocationId == w.Location);
             db.Entry(assignment).Property(x => x.EndDate).CurrentValue = Today.AddDays(-1);
             await db.SaveChangesAsync();
@@ -259,7 +259,7 @@ public sealed class OperationalTaskApiTests(CaptureFixture fixture) : IClassFixt
         var task = await Success<TaskView>(await Send(w.Owner, Base, Input(w)));
         task = await Action(w.Staff, task, "start");
         Assert.Equal(HttpStatusCode.BadRequest, (await Upload(w.Staff, task.Id, [1, 2, 3])).StatusCode);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var inner = scope.ServiceProvider.GetRequiredService<IObjectStorage>();
         var failing = new FailingStorage(inner);
         using var host = fixture.Factory.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton<IObjectStorage>(failing)));
@@ -272,7 +272,7 @@ public sealed class OperationalTaskApiTests(CaptureFixture fixture) : IClassFixt
         Assert.False(await db.Set<OperationalTaskEvidence>().AnyAsync(x => x.TaskId == task.Id));
         var intent = await db.Set<OperationalTaskFileUpload>().SingleAsync(x => x.TaskId == task.Id);
         Assert.Equal(task.Version, (await db.Set<OperationalTask>().SingleAsync(x => x.Id == task.Id)).Version);
-        await TaskEvidenceCleanup.CleanupAsync(db, inner, DateTimeOffset.UtcNow.AddHours(2), default);
+        await TaskEvidenceCleanup.CleanupAsync(scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(), inner, DateTimeOffset.UtcNow.AddHours(2), default);
         Assert.False(await db.Set<OperationalTaskFileUpload>().AnyAsync(x => x.Id == intent.Id));
         Assert.Equal(HttpStatusCode.Conflict, (await Send(w.Staff, $"{Base}/{task.Id}/submit", new TaskAction(task.Version, "done"))).StatusCode);
     }
@@ -283,7 +283,7 @@ public sealed class OperationalTaskApiTests(CaptureFixture fixture) : IClassFixt
         task = await Action(w.Staff, task, "start");
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var row = await db.Set<OperationalTask>().SingleAsync(x => x.Id == task.Id);
             row.DueAt = DateTimeOffset.UtcNow.AddDays(-1); await db.SaveChangesAsync();
         }
@@ -298,7 +298,7 @@ public sealed class OperationalTaskApiTests(CaptureFixture fixture) : IClassFixt
         task = (await w.Owner.Client.GetFromJsonAsync<TaskView>($"{Base}/{task.Id}"))!;
         Assert.False(task.IsOverdue);
         await using var finalScope = fixture.Factory.Services.CreateAsyncScope();
-        var finalDb = finalScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var finalDb = finalScope.ServiceProvider.GetFixturePersistence();
         Assert.Single(await finalDb.Set<OperationalTaskHistory>().Where(x => x.TaskId == task.Id && (x.Action == "verify" || x.Action == "cancel")).ToArrayAsync());
         var decision = await finalDb.Set<OperationalTaskHistory>().SingleAsync(x => x.TaskId == task.Id && (x.Action == "verify" || x.Action == "cancel"));
         Assert.True(decision.WasOverdue);

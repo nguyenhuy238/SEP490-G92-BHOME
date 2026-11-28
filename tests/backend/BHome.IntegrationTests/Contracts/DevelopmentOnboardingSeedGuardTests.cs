@@ -1,4 +1,4 @@
-using BHome.Api.Controllers;
+using BHome.IntegrationTests.Fixtures;
 using BHome.Api.Configuration;
 using BHome.Infrastructure.Development;
 using BHome.Domain.IdentityAccess;
@@ -24,8 +24,8 @@ public sealed class DevelopmentOnboardingSeedGuardTests
             var configuration = new ConfigurationManager();
             DevelopmentEnvironmentFile.AddFile(configuration, file);
 
-            Assert.True(configuration.GetValue<bool>("DevelopmentContractSeed:Enabled"));
-            Assert.Equal("synthetic-dev-password", configuration["DevelopmentContractSeed:TenantPassword"]);
+            Assert.Null(configuration["DevelopmentContractSeed:Enabled"]);
+            Assert.Null(configuration["DevelopmentContractSeed:TenantPassword"]);
             Assert.Null(configuration["UNRELATED:Value"]);
         }
         finally { File.Delete(file); }
@@ -34,26 +34,26 @@ public sealed class DevelopmentOnboardingSeedGuardTests
     [Fact]
     public void OnlyExplicitlyEnabledDevelopmentOnLoopbackDatabaseCanCreateSyntheticContracts()
     {
-        Assert.True(DevelopmentOnboardingSeedController.Allowed("Development", true, Local));
-        Assert.True(DevelopmentOnboardingSeedController.Allowed("Development", true,
+        Assert.True(DevelopmentOnboardingSeedFixtureController.Allowed("Development", true, Local));
+        Assert.True(DevelopmentOnboardingSeedFixtureController.Allowed("Development", true,
             "Host=localhost;Database=bhome_neon_local_20261115;Username=test;Password=not-a-secret"));
-        Assert.False(DevelopmentOnboardingSeedController.Allowed("Production", true, Local));
-        Assert.False(DevelopmentOnboardingSeedController.Allowed("Testing", true, Local));
-        Assert.False(DevelopmentOnboardingSeedController.Allowed("Development", false, Local));
-        Assert.False(DevelopmentOnboardingSeedController.Allowed("Development", true,
+        Assert.False(DevelopmentOnboardingSeedFixtureController.Allowed("Production", true, Local));
+        Assert.False(DevelopmentOnboardingSeedFixtureController.Allowed("Testing", true, Local));
+        Assert.False(DevelopmentOnboardingSeedFixtureController.Allowed("Development", false, Local));
+        Assert.False(DevelopmentOnboardingSeedFixtureController.Allowed("Development", true,
             "Host=ep-demo.neon.tech;Database=bhome_compact24_dev_synthetic;Username=test;Password=not-a-secret"));
-        Assert.False(DevelopmentOnboardingSeedController.Allowed("Development", true,
+        Assert.False(DevelopmentOnboardingSeedFixtureController.Allowed("Development", true,
             "Host=127.0.0.1;Database=other_database;Username=test;Password=not-a-secret"));
-        Assert.False(DevelopmentOnboardingSeedController.Allowed("Development", true, "not a connection string"));
+        Assert.False(DevelopmentOnboardingSeedFixtureController.Allowed("Development", true, "not a connection string"));
     }
 
     [Fact]
     public void DevelopmentSeedIsOwnerOnlyAndDoesNotExposeDatabaseToController()
     {
-        var authorization = Assert.Single(typeof(DevelopmentOnboardingSeedController)
+        var authorization = Assert.Single(typeof(DevelopmentOnboardingSeedFixtureController)
             .GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>());
         Assert.Equal(Roles.Owner, authorization.Roles);
-        Assert.DoesNotContain(typeof(DevelopmentOnboardingSeedController).GetConstructors()
+        Assert.DoesNotContain(typeof(DevelopmentOnboardingSeedFixtureController).GetConstructors()
             .SelectMany(c => c.GetParameters()), p => typeof(DbContext).IsAssignableFrom(p.ParameterType));
     }
 }

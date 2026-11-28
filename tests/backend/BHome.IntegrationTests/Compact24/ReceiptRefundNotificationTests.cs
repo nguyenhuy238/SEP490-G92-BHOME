@@ -47,7 +47,7 @@ public sealed partial class Compact24RefundTests
                 b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { ["NotificationChannels:Enabled"] = "true" }));
                 b.ConfigureServices(s => s.AddSingleton<INotificationChannelProvider>(provider));
             });
-            await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var worker = scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>(); await worker.EnqueueDueAsync(default);
             var notice = await db.Set<UserNotification>().Where(n => n.RelatedObjectId == row.Id && n.AudienceRole == "Tenant" &&
                 n.Title == "Hoàn tiền chuyển dư đã được xác minh thực hiện").Select(n => n.Id).SingleAsync();
@@ -75,7 +75,7 @@ public sealed partial class Compact24RefundTests
     private static async Task<HttpClient> LoginUser(Compact24WorkflowFixture fixture, Guid id)
     {
         await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope();
-        var email = await scope.ServiceProvider.GetRequiredService<Compact24DbContext>().Users.Where(u => u.Id == id).Select(u => u.Email).SingleAsync();
+        var email = await scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>().Users.Where(u => u.Id == id).Select(u => u.Email).SingleAsync();
         var client = fixture.Capture.Factory.CreateClient();
         var login = await Value<LoginResult>(await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = WorkflowTestUsers.Password }));
         client.DefaultRequestHeaders.Authorization = new("Bearer", login.AccessToken); return client;
@@ -93,7 +93,7 @@ public sealed partial class Compact24RefundTests
             var (owner, receipt) = await Setup(fixture); using var ownerClient = owner;
             var sourceRoute = $"/api/v1/payment-transactions/{receipt}/refunds";
             var source = await Value<RefundSource>(await owner.GetAsync(sourceRoute));
-            await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var person = await db.Set<Resident>().SingleAsync(r => r.Id == source.Beneficiaries[0].Id);
             using var tenant = await LoginUser(fixture, person.TenantUserId!.Value);
             var otherId = await db.Users.Where(u => u.Id != person.TenantUserId && EF.Property<string[]>(u, "roles").Contains("Tenant")).Select(u => u.Id).FirstAsync();
@@ -151,7 +151,7 @@ public sealed partial class Compact24RefundTests
             var row = await Value<RefundView>(await Post(owner, sourceRoute, new RefundInput(source.Beneficiaries[0].Id, 20000, "Synthetic return", true), Guid.NewGuid()));
             row = await Value<RefundView>(await Post(owner, $"{Root}/{row.Id}/decision", new RefundDecision(row.Version, true, "Synthetic approval", true), Guid.NewGuid()));
             row = await Value<RefundView>(await Execute(owner, row, Guid.NewGuid(), DateTimeOffset.UtcNow, "SYN-REFUND-NOTICE", Photo()));
-            await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var original = await db.Database.SqlQuery<string>($"SELECT history::text AS \"Value\" FROM refund_requests WHERE id={row.Id}").SingleAsync();
             var record = System.Text.Json.JsonDocument.Parse(original).RootElement.EnumerateArray().Last().GetRawText();
             var invalid = record.Replace("sha256", "missingHash", StringComparison.Ordinal);
@@ -173,7 +173,7 @@ public sealed partial class Compact24RefundTests
         try
         {
             var (owner, receipt) = await Setup(fixture, verifiedPayer: false); using var client = owner;
-            await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var users = await db.Users.CountAsync(); var residents = await db.Set<Resident>().CountAsync();
             var context = await Value<ExternalPaymentPayerContext>(await owner.GetAsync($"/api/v1/payment-transactions/{receipt}/external-payer"));
             var payer = await Value<ExternalPaymentPayer>(await Post(owner, $"/api/v1/payment-transactions/{receipt}/external-payer",
@@ -199,7 +199,7 @@ public sealed partial class Compact24RefundTests
         {
             await new PaymentLedgerTests(fixture.Capture).DepositReceiptPreservesPartialFundsAndReturnsExcessToActualPayer(holding: false, external: false);
             await PumpRefundNotices(fixture);
-            await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var notifications = await db.Set<UserNotification>().Where(n => n.RelatedObjectType == "Refund").ToArrayAsync();
             Assert.Equal(3, notifications.Length); Assert.All(notifications, n => Assert.Equal("Owner", n.AudienceRole));
         }

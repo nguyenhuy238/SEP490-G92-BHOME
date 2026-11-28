@@ -25,7 +25,7 @@ public sealed partial class Compact24OwnerSetupTests
         var outside = await Seed();
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             db.AddRange(
                 new BillingPolicy { LocationId = w.Location, ChargeCode = "RENT", Name = "Rent", Category = ChargeCategory.Rent, Method = ChargingMethod.FixedPerRoomPerMonth, Rate = 3200000, EffectiveFrom = Today.AddDays(-1) },
                 new BillingPolicy { LocationId = w.Location, ChargeCode = "ELECTRICITY", Name = "Electricity", Category = ChargeCategory.Electricity, Method = ChargingMethod.Metered, Rate = 3500, EffectiveFrom = Today.AddDays(-1) },
@@ -43,6 +43,7 @@ public sealed partial class Compact24OwnerSetupTests
         using var host = Host().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
+            builder.ConfigureServices(services => services.AddScoped<DevelopmentOnboardingSeedService>());
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
@@ -59,7 +60,8 @@ public sealed partial class Compact24OwnerSetupTests
         using var owner = await Client(w.Owner, host);
         using var staff = await Client(w.Staff, host);
         using var tenant = await Client(w.Tenant, host);
-        const string endpoint = "/api/v1/development/onboarding-seed";
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.PostAsJsonAsync("/api/v1/development/onboarding-seed", new { locationId = w.Location, roomId = w.Room })).StatusCode);
+        const string endpoint = "/test-probe/onboarding-seed";
         var key = Guid.NewGuid();
 
         async Task<HttpResponseMessage> Send(HttpClient client, Guid location, Guid room, Guid requestKey)
@@ -94,7 +96,7 @@ public sealed partial class Compact24OwnerSetupTests
             "Serialized", 1, "cái");
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var store = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
             db.Add(existingAsset);
             await db.SaveChangesAsync();
@@ -149,13 +151,13 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Contains(workPage.Items, item => item.Target?.ContractId == created.ContractId && item.Kind == "AdHoc");
 
         await using var check = host.Services.CreateAsyncScope();
-        var stored = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var stored = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal(1, await stored.Set<Room>().CountAsync(room => room.LocationId == w.Location));
         Assert.Equal(RoomStatus.Occupied, (await stored.Set<Room>().SingleAsync(room => room.Id == w.Room)).Status);
         var contract = await stored.Set<Contract>().Include(c => c.Residents).SingleAsync(c => c.Id == created.ContractId);
         Assert.Equal(w.Owner.Id, contract.OwnerSignerId);
         Assert.Equal(ContractStatus.Active, contract.Status);
-        Assert.Equal(3200000m, contract.MonthlyRent);
+        Assert.Equal(3200000m, contract.RentAmount);
         Assert.Equal(0m, contract.RequiredDeposit);
         // PostgreSQL stores whole-VND contract amounts but policy rates have scale 4.
         // The persisted demo contract must still supply immutable billing prices.

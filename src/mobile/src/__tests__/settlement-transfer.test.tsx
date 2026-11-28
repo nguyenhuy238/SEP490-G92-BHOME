@@ -32,7 +32,7 @@ vi.mock('../features/workspace/useWorkspaceQuery', () => ({
       : null,
   }),
 }));
-import { TenantSettlementTransfer } from '../screens/TenantSettlementTransfer';
+import { TenantSettlementTransfer } from '../features/tenant/billing/TenantSettlementTransfer';
 afterEach(() => {
   cleanup();
   vi.useRealTimers();

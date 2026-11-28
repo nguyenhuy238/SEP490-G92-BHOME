@@ -61,7 +61,7 @@ public sealed class SePaySandboxSeedTests
         string? hash;
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             hash = await db.Users.Where(u => u.Id == SePaySandboxSeed.Id(1)).Select(u => u.PasswordHash).SingleAsync();
             Assert.Equal(2, await db.Set<InvoiceRecipient>().CountAsync(x => x.InvoiceId == first.InvoiceId));
         }
@@ -75,7 +75,7 @@ public sealed class SePaySandboxSeedTests
         var replay = await SePaySandboxSeed.RunAsync(host.Services, "Testing", "Different!Synthetic-Password-546");
         Assert.False(replay.Created); Assert.Equal(first.PaymentCode, replay.PaymentCode);
         await using var verified = host.Services.CreateAsyncScope();
-        var verifiedDb = verified.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var verifiedDb = verified.ServiceProvider.GetFixturePersistence();
         Assert.Equal(hash, await verifiedDb.Users.Where(u => u.Id == SePaySandboxSeed.Id(1)).Select(u => u.PasswordHash).SingleAsync());
         Assert.Equal(2500000m, await verifiedDb.Database.SqlQuery<decimal>($"""SELECT COALESCE(sum(amount),0) AS "Value" FROM payment_allocations WHERE target_invoice_id={first.InvoiceId}""").SingleAsync());
     });
@@ -84,7 +84,7 @@ public sealed class SePaySandboxSeedTests
     public async Task RefusesExistingNonFixtureDataWithoutCreatingSyntheticUsers() => await InDatabase(async fixture =>
     {
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         db.Add(new BHome.Domain.Locations.Location("Existing unrelated fixture")); await db.SaveChangesAsync();
         // Target validation happens before writes; a valid dedicated configuration still
         // must not mix the Sandbox seed into an unrelated populated database.

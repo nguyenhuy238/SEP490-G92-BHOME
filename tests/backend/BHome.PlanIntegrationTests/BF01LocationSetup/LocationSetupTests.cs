@@ -35,7 +35,9 @@ public sealed class LocationSetupTests(PlanSessions sessions)
         // 4. Create a Room with the Room Type and a capacity.
         //    LOCATION_ROOM_API.md: Room DTO has no roomTypeId any more, so the Room is created with the documented payload.
         var roomNumber = PropertySetup.NewRoomNumber();
-        var roomResponse = await _setup.PostRoomAsync(locationId, roomNumber, capacity: 3);
+        await PlanAssert.SuccessAsync(roomTypeResponse, "create room defaults");
+        var defaults = await roomTypeResponse.JsonAsync();
+        var roomResponse = await _setup.PostConfiguredRoomAsync(locationId, PropertySetup.Id(defaults), PropertySetup.Version(defaults), roomNumber);
 
         // Expected: Each record is saved and shown in its list. The new Room is Available.
         //           The actor and a snapshot of the change are kept.
@@ -43,7 +45,7 @@ public sealed class LocationSetupTests(PlanSessions sessions)
         Assert.Contains(locations.Items(), l => l.Str("id") == locationId);
 
         await PlanAssert.SuccessAsync(roomResponse, "step 4 create Room");
-        var room = await roomResponse.JsonAsync();
+        var room = (await roomResponse.JsonAsync()).GetProperty("rooms")[0];
         var roomId = PropertySetup.Id(room);
         Assert.Contains(await _setup.RoomsOfAsync(locationId), r => r.Str("id") == roomId);
         var savedRoom = await _setup.ReadAsync($"api/v1/rooms/{roomId}");
@@ -58,10 +60,9 @@ public sealed class LocationSetupTests(PlanSessions sessions)
             "The Room history must keep the Owner as actor of the creation. History: " + string.Join(", ", history.Select(h => h.GetRawText())));
 
         // Room Type record (plan step 3): must be saved and shown in its list.
-        await PropertySetup.RequireRoomTypeRouteAsync(roomTypeResponse, "step 3 create Room Type");
         await PlanAssert.SuccessAsync(roomTypeResponse, "step 3 create Room Type");
-        var roomTypeId = PropertySetup.Id(await roomTypeResponse.JsonAsync());
-        var roomTypes = await _setup.ReadAsync($"api/v1/room-types?locationId={locationId}&page=1&pageSize=100");
+        var roomTypeId = PropertySetup.Id(defaults);
+        var roomTypes = await _setup.ReadAsync($"api/v1/locations/{locationId}/room-defaults");
         Assert.Contains(roomTypes.Items(), t => t.Str("id") == roomTypeId);
     }
 
@@ -94,11 +95,10 @@ public sealed class LocationSetupTests(PlanSessions sessions)
         await PlanAssert.SuccessAsync(savedHistory, "history of the saved Room");
 
         // Room Type part (steps 1-2).
-        await PropertySetup.RequireRoomTypeRouteAsync(first, "step 1 create Room Type \"Standard\"");
         await PlanAssert.SuccessAsync(first, "step 1 create Room Type \"Standard\"");
         await PlanAssert.StatusAsync(second, HttpStatusCode.Conflict, "step 2 same Room Type name, different case");
-        var types = (await _setup.ReadAsync($"api/v1/room-types?locationId={locationId}&page=1&pageSize=100")).Items();
-        Assert.Single(types, t => string.Equals(t.Str("name"), "Standard", StringComparison.OrdinalIgnoreCase));
+        var types = (await _setup.ReadAsync($"api/v1/locations/{locationId}/room-defaults")).Items();
+        Assert.Single(types, t => string.Equals(t.GetProperty("data").Str("name"), "Standard", StringComparison.OrdinalIgnoreCase));
     }
 
     [SkippableFact(DisplayName = "ITC-BF01-003 Test that a Room with an active tenancy cannot be set to a conflicting status.")]
@@ -149,34 +149,30 @@ public sealed class LocationSetupTests(PlanSessions sessions)
         // Pre-condition: Room Type exists.
         var locationId = PropertySetup.Id(await _setup.CreateLocationAsync());
         var created = await _setup.PostRoomTypeAsync(locationId, PlanData.Unique("Standard"));
-        await PropertySetup.RequireRoomTypeRouteAsync(created, "precondition create Room Type");
         await PlanAssert.SuccessAsync(created, "precondition create Room Type");
         var roomTypeId = PropertySetup.Id(await created.JsonAsync());
 
         // 1. Open the same Room Type in two sessions.
         var sessionA = await sessions.TokenAsync("owner");
         var sessionB = (await sessions.NewSessionAsync("owner", "BF01-004 second session")).AccessToken;
-        var viewA = await _setup.ReadAsync($"api/v1/room-types/{roomTypeId}", sessionA);
-        var viewB = await _setup.ReadAsync($"api/v1/room-types/{roomTypeId}", sessionB);
+        var viewA = await _setup.ReadRoomDefaultsAsync(locationId, roomTypeId, sessionA);
+        var viewB = await _setup.ReadRoomDefaultsAsync(locationId, roomTypeId, sessionB);
 
         // 2. Save a change in the first session.
-        var saveA = await _api.PutAsync($"api/v1/room-types/{roomTypeId}", RoomTypeUpdate(viewA, "Phiên 1"), sessionA);
+        var saveA = await _api.PutAsync($"api/v1/locations/{locationId}/room-defaults/{roomTypeId}", RoomTypeUpdate(viewA, "Phiên 1"), sessionA);
         await PlanAssert.SuccessAsync(saveA, "step 2 first session save");
 
         // 3. Save a change in the second session with the old version.
-        var saveB = await _api.PutAsync($"api/v1/room-types/{roomTypeId}", RoomTypeUpdate(viewB, "Phiên 2"), sessionB);
+        var saveB = await _api.PutAsync($"api/v1/locations/{locationId}/room-defaults/{roomTypeId}", RoomTypeUpdate(viewB, "Phiên 2"), sessionB);
 
         // Expected: The second save is refused with a version conflict.
         await PlanAssert.StatusAsync(saveB, HttpStatusCode.Conflict, "step 3 second session with the old version");
-        var final = await _setup.ReadAsync($"api/v1/room-types/{roomTypeId}");
-        Assert.Equal("Phiên 1", final.Str("description"));
+        var final = await _setup.ReadRoomDefaultsAsync(locationId, roomTypeId);
+        Assert.Equal("Phiên 1", final.GetProperty("data").Str("description"));
 
         // Expected: A reference to a record of another Location is refused.
         var otherLocationId = PropertySetup.Id(await _setup.CreateLocationAsync());
-        var crossRoom = await _api.PostAsync(
-            "api/v1/rooms",
-            new { locationId = otherLocationId, roomTypeId, roomNumber = PropertySetup.NewRoomNumber(), floor = "1", capacity = 2, status = 0 },
-            sessionA);
+        var crossRoom = await _setup.PostConfiguredRoomAsync(otherLocationId, roomTypeId, PropertySetup.Version(final), PropertySetup.NewRoomNumber(), sessionA);
         await PlanAssert.RefusedAsync(crossRoom, "Room of another Location referencing this Room Type");
         var roomOfL1 = await _setup.CreateRoomAsync(locationId);
         var crossAsset = await _api.PostAsync(
@@ -391,18 +387,8 @@ public sealed class LocationSetupTests(PlanSessions sessions)
         Assert.Equal(2500000m, PropertySetup.Dec((await _setup.ReadAsync($"api/v1/billing-policies/{PropertySetup.Id(started)}")).Str("rate")));
     }
 
-    private static object RoomTypeUpdate(JsonElement view, string description) => new
-    {
-        locationId = view.Str("locationId"),
-        name = view.Str("name"),
-        description,
-        defaultCapacity = 2,
-        areaM2 = 20.5m,
-        amenities = new[] { "Ban công" },
-        isActive = true,
-        version = PropertySetup.Version(view),
-        reason = "Kiểm thử chỉnh sửa đồng thời",
-    };
+    private static object RoomTypeUpdate(JsonElement view, string description) =>
+        PropertySetup.RoomDefaultsWrite(view.GetProperty("data").Str("name")!, description, PropertySetup.Version(view));
 
     private static async Task AssertNotShownAsync(HttpResponseMessage list, HttpResponseMessage detail, string what)
     {

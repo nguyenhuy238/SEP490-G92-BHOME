@@ -29,7 +29,7 @@ const state = vi.hoisted(() => ({
   params: null as Record<string, string | undefined> | null,
 }));
 const id = 'bc050000-0000-4000-8000-000000004003';
-vi.mock('../features/contracts/HoldingProgress', () => ({ HoldingProgress: () => null }));
+vi.mock('../features/contracts/holding/HoldingProgress', () => ({ HoldingProgress: () => null }));
 const transport = { request: state.request };
 vi.mock('../theme/theme', () => ({ colors: {}, staffColors: {} }));
 vi.mock('expo-router', () => ({
@@ -166,12 +166,12 @@ vi.mock('../features/contracts/ContractActionForm', () => ({
     ),
   SigningCertificates: () => null,
 }));
-vi.mock('../features/contracts/ContractDraftForm', () => ({
+vi.mock('../features/contracts/holding/ContractDraftForm', () => ({
   ContractDraftForm: ({ onCancel }: { onCancel: () => void }) => (
     <button onClick={onCancel}>Cấu hình giữ chỗ</button>
   ),
 }));
-vi.mock('../features/contracts/MainDraftScreen', () => ({
+vi.mock('../features/contracts/main/MainDraftScreen', () => ({
   MainDraftScreen: ({
     initialId,
     persistRoute = true,
@@ -186,7 +186,7 @@ vi.mock('../features/contracts/MainDraftScreen', () => ({
     </span>
   ),
 }));
-vi.mock('../features/contracts/MainDraftStart', () => ({
+vi.mock('../features/contracts/main/MainDraftStart', () => ({
   MainDraftStart: () => <span>Main preparation</span>,
 }));
 vi.mock('../features/contracts/ContractEvidence', () => ({
@@ -195,10 +195,10 @@ vi.mock('../features/contracts/ContractEvidence', () => ({
 vi.mock('../features/contracts/ContractWorkflowPanel', () => ({
   ContractWorkflowPanel: ({ section }: { section: string }) => <span>Workflow {section}</span>,
 }));
-vi.mock('../features/contracts/ContractHandoverPanel', () => ({
+vi.mock('../features/contracts/handover/ContractHandoverPanel', () => ({
   ContractHandoverPanel: () => <span>Handover panel</span>,
 }));
-vi.mock('../features/contracts/MoveInDraftHandoverPanel', () => ({
+vi.mock('../features/contracts/handover/MoveInDraftHandoverPanel', () => ({
   MoveInDraftHandoverPanel: () => <span>Handover draft panel</span>,
 }));
 vi.mock('../features/contracts/ContractLifecyclePanel', () => ({

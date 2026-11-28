@@ -19,7 +19,7 @@ const state = vi.hoisted(() => ({ roles: ['Owner'], transport: vi.fn() }));
 vi.mock('../../../../../packages/client-core/src/auth', () => ({
   useAuth: () => ({ session: { userId: 'owner', roles: state.roles } }),
 }));
-vi.mock('../contracts/useContractsApi', () => ({
+vi.mock('../contracts/hooks/useContractsApi', () => ({
   useContractsApi: () => ({ transport: state.transport }),
 }));
 vi.mock('../../components/common/ResourcePage', () => ({

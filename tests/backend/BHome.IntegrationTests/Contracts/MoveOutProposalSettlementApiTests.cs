@@ -35,7 +35,7 @@ public sealed partial class ContractLifecycleApiTests
         await ConfigureMoveOutBillingAsync(w);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             db.Add(new BillingPolicy
             {
                 LocationId = w.Location,
@@ -53,7 +53,7 @@ public sealed partial class ContractLifecycleApiTests
         // test webhook out of the real/Live SePay payment environment.
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var contract = await db.Set<Contract>().SingleAsync(c => c.Id == contractId);
             contract.PaymentMode = "Test";
             contract.IsDevelopmentDemo = true;
@@ -153,7 +153,7 @@ public sealed partial class ContractLifecycleApiTests
                 "synthetic-original-owner-financial-approval", true,
                 ExistingOutstanding: preview.ExistingOutstanding, PhysicalReference: "", AutomaticCharges: automatic);
             await using var scope = fixture.Factory.Services.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var json = JsonSerializer.Serialize(new
             {
                 schemaVersion = 1,
@@ -183,7 +183,7 @@ public sealed partial class ContractLifecycleApiTests
                     "PendingOwnerReview", 0, 0, null, [], [], "owner_confirmed_inspection_required"));
             await using (var scope = fixture.Factory.Services.CreateAsyncScope())
             {
-                var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+                var db = scope.ServiceProvider.GetFixturePersistence();
                 var record = JsonSerializer.Serialize(new
                 {
                     schemaVersion = 1,
@@ -333,7 +333,7 @@ public sealed partial class ContractLifecycleApiTests
             Path(contractId, "move-out/receivables")));
         Assert.All(view.Receivables, row => Assert.Equal(0, row.Outstanding));
         await using var verification = sepayHost.Services.CreateAsyncScope();
-        var dbVerified = verification.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var dbVerified = verification.ServiceProvider.GetFixturePersistence();
         Assert.Equal(2, await dbVerified.Set<PaymentAllocation>().CountAsync(a =>
             a.TargetSettlementContractId == contractId && a.SettlementReceivableId == charge.Charge.Id));
         var afterPayment = await Success<SettlementTransferInstructions>(await tenant.GetAsync(
@@ -352,7 +352,7 @@ public sealed partial class ContractLifecycleApiTests
             h.ContractId == contractId && h.Action == "Completed").ToArrayAsync());
     }
     private async Task ConfigureMoveOutBillingAsync(Workspace w) =>
-        _ = await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules",
+        _ = await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/test-probe/billing-schedules",
             new BillingScheduleWrite(w.Location, BillingRateDate.PeriodStart, BillingRentSource.RepresentativeContract,
                 PartialMonthRule.FullMonth, VndRounding.AwayFromZero, 1, 0, 1, 1, 10, 1, 0)));
 }

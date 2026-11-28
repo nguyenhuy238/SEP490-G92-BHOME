@@ -27,7 +27,7 @@ import {
   type MoveOut,
 } from '../../../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../../../packages/client-core/src/localization';
-import { useContractsApi } from '../useContractsApi';
+import { useContractsApi } from '../hooks/useContractsApi';
 
 const title = 'Yêu cầu kết thúc hợp đồng';
 const labels = {

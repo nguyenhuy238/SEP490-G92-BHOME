@@ -1,6 +1,6 @@
 import { ContractNotice } from './ContractNotice';
-import { RentalContractFlow } from './RentalContractFlow';
-import { HoldingContractFlow } from './HoldingContractFlow';
+import { RentalContractFlow } from './main/RentalContractFlow';
+import { HoldingContractFlow } from './holding/HoldingContractFlow';
 import { conciseMessage, showError } from '../../lib/toast';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -26,15 +26,19 @@ import { useWorkspace } from '../workspace/WorkspaceProvider';
 import { Action, Box, Heading, Pill, Row, ui } from '../../components/WorkspaceKit';
 import { ChoiceField } from '../../components/WorkflowControls';
 import { ContractActionForm } from './ContractActionForm';
-import { ContractSigningPanel, signatureLine, useSigningMethods } from './ContractSigningPanel';
-import { ContractDraftForm } from './ContractDraftForm';
-import { MainDraftScreen } from './MainDraftScreen';
-import { MainDraftStart } from './MainDraftStart';
+import {
+  ContractSigningPanel,
+  signatureLine,
+  useSigningMethods,
+} from './signing/ContractSigningPanel';
+import { ContractDraftForm } from './holding/ContractDraftForm';
+import { MainDraftScreen } from './main/MainDraftScreen';
+import { MainDraftStart } from './main/MainDraftStart';
 import { CameraCapture } from '../../components/CameraCapture';
 import { ContractEvidence } from './ContractEvidence';
 import { ContractWorkflowPanel } from './ContractWorkflowPanel';
-import { ContractHandoverPanel } from './ContractHandoverPanel';
-import { MoveInDraftHandoverPanel } from './MoveInDraftHandoverPanel';
+import { ContractHandoverPanel } from './handover/ContractHandoverPanel';
+import { MoveInDraftHandoverPanel } from './handover/MoveInDraftHandoverPanel';
 import { ContractLifecyclePanel } from './ContractLifecyclePanel';
 import { ContractExpiryPanel } from './ContractExpiryPanel';
 import { ContractProgress } from './ContractProgress';
@@ -51,7 +55,7 @@ import { mobileContractActions } from './contractSections';
 import { OwnerMainContractFlow } from '../owner/OwnerMainContractFlow';
 import { OwnerWebNotice } from '../../components/OwnerWebNotice';
 import { ContractLoading } from './ContractLoading';
-import { useTenantCurrentRental } from '../tenant/TenantCurrentRentalContext';
+import { useTenantCurrentRental } from '../tenant/room/TenantCurrentRentalContext';
 
 export function ContractScreen({
   prepare = false,

@@ -20,7 +20,7 @@ public sealed partial class IncidentApiTests
         var (w, id, evidence) = await VerifiedMaintenance(100000);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             db.Add(new BHome.Domain.TenantContracts.DepositVerification
             {
                 ContractId = w.Contract,
@@ -41,7 +41,7 @@ public sealed partial class IncidentApiTests
         Assert.Equal(0, pendingSummary.MaintenanceDeductions); Assert.False(pendingSummary.Resolved);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             db.Add(new BHome.Domain.TenantContracts.ContractMoveOut
             {
                 ContractId = w.Contract,
@@ -79,9 +79,16 @@ public sealed partial class IncidentApiTests
         Assert.Equal(deducted, await Ok<CompensationView>(await Send(w.Owner, $"{Orders}/{id}/compensation/deduct", decision, key)));
         Assert.Equal(HttpStatusCode.Conflict, (await Send(w.Owner, $"{Orders}/{id}/compensation/cancel", new CompensationDecision(deducted.Version, "Unsupported reversal"))).StatusCode);
         await using var verify = fixture.Factory.Services.CreateAsyncScope();
-        var context = verify.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var context = verify.ServiceProvider.GetFixturePersistence();
         Assert.False(await context.Set<BHome.Domain.Billing.Invoice>().AnyAsync(i => i.RepresentativeContractId == w.Contract));
         Assert.Equal(50000, (await context.Set<MaintenanceCompensation>().SingleAsync(c => c.WorkOrderId == id)).Amount);
+        var runtime = verify.ServiceProvider.GetRequiredService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>();
+        var task = await runtime.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking().SingleAsync(t => t.Id == id);
+        var decisions = task.History.EnumerateArray().Where(h => h.GetProperty("recordType").GetString() == "MaintenanceCompensation").ToArray();
+        Assert.Equal(2, decisions.Length);
+        Assert.All(decisions, h => Assert.Equal(row.Id.ToString(), h.GetProperty("recordKey").GetString()));
+        Assert.Equal("DepositPending", decisions[0].GetProperty("state").GetProperty("status").GetString());
+        Assert.Equal("Deducted", decisions[1].GetProperty("state").GetProperty("status").GetString());
         var finalSummary = await Ok<BHome.Application.Contracts.ContractSettlementSummary>(await w.Owner.Client.GetAsync($"/api/v1/contracts/{w.Contract}/move-out/settlement-summary"));
         Assert.Equal(50000, finalSummary.MaintenanceDeductions); Assert.Equal(50000, finalSummary.ApprovedDeductions);
         Assert.DoesNotContain("maintenance_compensation_pending", finalSummary.UnresolvedItems);
@@ -138,10 +145,21 @@ public sealed partial class IncidentApiTests
         Assert.Equal("Settled", (await w.Tenant.Client.GetFromJsonAsync<TransferInstructions>($"/api/v1/invoices/{row.InvoiceId}/transfer-instructions"))!.Availability);
         Assert.Equal(HttpStatusCode.Conflict, (await Send(w.Owner, $"{Orders}/{id}/compensation/cancel", new CompensationDecision(row.Version, "Unsupported post-payment reversal"))).StatusCode);
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         var invoice = await db.Set<BHome.Domain.Billing.Invoice>().SingleAsync(i => i.Id == row.InvoiceId);
         Assert.Equal("AD_HOC", invoice.Type);
         Assert.Single(await db.Set<MaintenanceCompensation>().Where(c => c.WorkOrderId == id).ToArrayAsync());
+        var runtime = scope.ServiceProvider.GetRequiredService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>();
+        var nativeInvoice = await runtime.Set<BHome.Domain.Billing.Invoice>().AsNoTracking().SingleAsync(i => i.Id == row.InvoiceId);
+        Assert.Equal("AD_HOC", nativeInvoice.Type);
+        Assert.Equal(BHome.Domain.Billing.InvoiceStatus.Final, nativeInvoice.Status);
+        Assert.Contains(w.Tenant.Id, nativeInvoice.RecipientUserIds);
+        var versions = nativeInvoice.History.EnumerateArray().Where(h => h.GetProperty("recordType").GetString() == "Invoice").ToArray();
+        Assert.Equal(2, versions.Length);
+        Assert.Equal(0, versions[0].GetProperty("state").GetProperty("status").GetInt32());
+        Assert.Equal(1, versions[1].GetProperty("state").GetProperty("status").GetInt32());
+        Assert.Single(await db.Set<BHome.Domain.Entities.Notification>().AsNoTracking()
+            .Where(n => n.RecordKind == "OUTBOX" && n.EventKey == "InvoiceIssuedEvent:" + row.InvoiceId).ToArrayAsync());
     }
 
     [CompactPostgresFact]
@@ -154,6 +172,6 @@ public sealed partial class IncidentApiTests
         Assert.Equal(HttpStatusCode.BadRequest, (await Send(w.Owner, $"{Orders}/{id}/compensation", input with { Amount = 100001 })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await Send(w.Tenant, $"{Orders}/{id}/compensation", input)).StatusCode);
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        Assert.Empty(await scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>().Set<MaintenanceCompensation>().Where(c => c.WorkOrderId == id).ToArrayAsync());
+        Assert.Empty(await scope.ServiceProvider.GetFixturePersistence().Set<MaintenanceCompensation>().Where(c => c.WorkOrderId == id).ToArrayAsync());
     }
 }

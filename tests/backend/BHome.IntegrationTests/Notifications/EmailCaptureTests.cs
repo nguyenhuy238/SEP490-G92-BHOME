@@ -115,8 +115,6 @@ public sealed class EmailCaptureTests
             FromEmail = "sender@example.invalid",
             AppPassword = "synthetic",
             AllowedRecipients = ["allowed@example.invalid"],
-            TestEnabled = true,
-            TestRecipient = "diagnostic@example.invalid"
         };
         var sender = new MailKitEmailSender(Options.Create(options), NullLogger<MailKitEmailSender>.Instance,
             new HostingEnvironment { EnvironmentName = environment });

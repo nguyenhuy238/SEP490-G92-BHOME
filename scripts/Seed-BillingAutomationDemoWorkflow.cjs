@@ -113,27 +113,6 @@ async function main() {
     return;
   }
   let calendar = await call(owner, `/api/v1/billing-schedules/${id(10)}`);
-  if (!calendar)
-    calendar = await call(
-      owner,
-      '/api/v1/billing-schedules',
-      {
-        locationId: id(10),
-        rateDate: 0,
-        rentSource: 0,
-        partialMonth: 0,
-        rounding: 0,
-        draftDay: Number(today.slice(-2)),
-        draftMonthOffset: 0,
-        finalDay: Number(today.slice(-2)),
-        finalMonthOffset: 0,
-        dueDay: 31,
-        dueMonthOffset: 0,
-        expectedVersion: 0,
-      },
-      null,
-      'PUT',
-    );
   let plan = await call(owner, `/api/v1/billing-automation/${id(10)}?period=${period}`);
   if (!plan)
     plan = await call(
@@ -149,7 +128,18 @@ async function main() {
         meterDueMonthOffset: 0,
         timeZone: 'Asia/Ho_Chi_Minh',
         expectedVersion: 0,
-        expectedBillingScheduleVersion: calendar.version,
+        expectedBillingScheduleVersion: calendar?.version ?? 0,
+        draftDay: Number(today.slice(-2)),
+        draftMonthOffset: 0,
+        finalDay: Number(today.slice(-2)),
+        finalMonthOffset: 0,
+        dueDay: 31,
+        dueMonthOffset: 0,
+        initialSchedule: {
+          rateDate: calendar?.rateDate ?? 0,
+          partialMonth: calendar?.partialMonth ?? 0,
+          rounding: calendar?.rounding ?? 0,
+        },
       },
       null,
       'PUT',
@@ -435,7 +425,7 @@ async function main() {
         meterDueMonthOffset: 0,
         timeZone: 'Asia/Ho_Chi_Minh',
         expectedVersion: plan.version,
-        expectedBillingScheduleVersion: calendar.version,
+        expectedBillingScheduleVersion: plan.billingScheduleVersion,
       },
       null,
       'PUT',

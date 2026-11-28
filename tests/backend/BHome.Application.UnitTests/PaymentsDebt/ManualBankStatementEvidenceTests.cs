@@ -49,7 +49,7 @@ public sealed class ManualBankStatementEvidenceTests
         public readonly ICurrentUser User = Substitute.For<ICurrentUser>();
         public readonly IContractImageValidator Validator = Substitute.For<IContractImageValidator>();
         public readonly Storage Files = new();
-        public readonly List<PaymentTransfer> Transfers = [];
+        public readonly List<Payment> Transfers = [];
         public readonly List<PaymentCommand> Commands = [];
         public bool InsideTransaction;
         public bool FailTransaction;
@@ -73,19 +73,20 @@ public sealed class ManualBankStatementEvidenceTests
                 .Returns(call => Task.FromResult<PaymentCommand?>(Commands.FirstOrDefault(c =>
                     c.ActorId == call.ArgAt<Guid>(0) && c.Key == call.ArgAt<Guid>(1) && c.Operation == call.ArgAt<string>(2))));
             Repository.TransferReferenceAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-                .Returns(call => Task.FromResult<PaymentTransfer?>(Transfers.FirstOrDefault(p =>
+                .Returns(call => Task.FromResult<Payment?>(Transfers.FirstOrDefault(p =>
                     p.ProviderIdentity == call.ArgAt<string>(0) && p.NormalizedReference == call.ArgAt<string>(1))));
             Repository.TransferAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-                .Returns(call => Task.FromResult<PaymentTransfer?>(Transfers.FirstOrDefault(p => p.Id == call.ArgAt<Guid>(0))));
+                .Returns(call => Task.FromResult<Payment?>(Transfers.FirstOrDefault(p => p.Id == call.ArgAt<Guid>(0))));
             Repository.ProviderReferenceReceivedAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult(false));
-            Repository.When(r => r.Add(Arg.Any<object>())).Do(call =>
+            Repository.AddAsync(Arg.Any<object>(), Arg.Any<CancellationToken>()).Returns(call =>
             {
                 switch (call.ArgAt<object>(0))
                 {
-                    case PaymentTransfer transfer: Transfers.Add(transfer); break;
+                    case Payment transfer: Transfers.Add(transfer); break;
                     case PaymentCommand command: Commands.Add(command); break;
                 }
+                return Task.CompletedTask;
             });
             Service = new PaymentService(Repository, User, TimeProvider.System, storage: Files, images: Validator);
         }

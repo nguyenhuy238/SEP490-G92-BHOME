@@ -22,7 +22,7 @@ public sealed partial class InvoiceApiTests
             // Synthetic fixture extension only: a canonical room-check issue with
             // its own private proof. Owner must price it BEFORE the final review.
             await using var fixtureScope = fixture.Factory.Services.CreateAsyncScope();
-            var fixtureDb = fixtureScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var fixtureDb = fixtureScope.ServiceProvider.GetFixturePersistence();
             using var fixtureImage = new Mat(40, 100, MatType.CV_8UC3, Scalar.White);
             var photo = fixtureImage.ImEncode(".png");
             var proof = new ContractInspectionEvidence
@@ -134,7 +134,7 @@ public sealed partial class InvoiceApiTests
                     route + $"/{syntheticDamageId}/transfer-instructions"));
                 Assert.Equal(100000, instructions.OutstandingAmount);
                 await using var proofScope = fixture.Factory.Services.CreateAsyncScope();
-                var proofDb = proofScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+                var proofDb = proofScope.ServiceProvider.GetFixturePersistence();
                 Assert.Single(await proofDb.Set<Invoice>().Where(i => i.RoomId == w.Room).ToArrayAsync());
                 return;
             }
@@ -180,7 +180,7 @@ public sealed partial class InvoiceApiTests
         summary = await Success<ContractSettlementSummary>(await w.Tenant.Client.GetAsync(root + "/move-out/settlement-summary"));
         Assert.True(summary.Resolved, string.Join(',', summary.UnresolvedItems)); Assert.Equal(total, summary.ApprovedDepositOffsets);
         Assert.Equal(deposit - total, summary.RefundAmount); Assert.Equal(0, summary.Calculation!.AvailableSecurityDeposit);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(BHome.Domain.PropertyManagement.RoomStatus.Available, (await db.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == w.Room)).Status);
         Assert.Equal(1, await db.Set<Invoice>().CountAsync(i => i.RoomId == w.Room));
         var finance = await scope.ServiceProvider.GetRequiredService<IFinancialReportRepository>().ReadAsync(new(Today.AddDays(-1), Today, RoomId: w.Room), default);

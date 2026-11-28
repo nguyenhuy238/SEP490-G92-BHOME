@@ -1,7 +1,6 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
-using BHome.Application.IdentityAccess;
-using BHome.Domain.IdentityAccess;
+using BHome.DigitalSigning.Application.Identity;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 
@@ -18,9 +17,9 @@ internal sealed class DemoAuthenticationHandler(
 
     public static readonly IReadOnlyDictionary<string, (Guid Id, string Role)> Users = new Dictionary<string, (Guid, string)>
     {
-        ["owner"] = (Guid.Parse("11111111-1111-1111-1111-111111111111"), Roles.Owner),
-        ["staff"] = (Guid.Parse("22222222-2222-2222-2222-222222222222"), Roles.Staff),
-        ["tenant"] = (Guid.Parse("33333333-3333-3333-3333-333333333333"), Roles.Tenant)
+        ["owner"] = (Guid.Parse("11111111-1111-1111-1111-111111111111"), SigningRoles.Owner),
+        ["staff"] = (Guid.Parse("22222222-2222-2222-2222-222222222222"), SigningRoles.Staff),
+        ["tenant"] = (Guid.Parse("33333333-3333-3333-3333-333333333333"), SigningRoles.Tenant)
     };
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -33,7 +32,7 @@ internal sealed class DemoAuthenticationHandler(
     }
 }
 
-internal sealed class HttpCurrentUser(IHttpContextAccessor accessor) : ICurrentUser
+internal sealed class HttpCurrentUser(IHttpContextAccessor accessor) : ISigningCurrentUser
 {
     public Guid? UserId => Guid.TryParse(accessor.HttpContext?.User.FindFirst("sub")?.Value, out var id) ? id : null;
     public bool IsInRole(string role) => accessor.HttpContext?.User.IsInRole(role) == true;

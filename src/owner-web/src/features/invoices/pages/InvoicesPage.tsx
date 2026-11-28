@@ -39,7 +39,7 @@ import { formatContractMoney } from '../../../../../../packages/client-core/src/
 import { PageHeader, FilterToolbar, StatusChip } from '../../../components/common/PortalUI';
 import { OwnerTable, OwnerPagination } from '../../../components/common/OwnerWorkspace';
 import { isMockMode } from '../../../services/config';
-import { useInvoiceApi } from '../useInvoiceApi';
+import { useInvoiceApi } from '../hooks/useInvoiceApi';
 import { OwnerInvoicePaymentPanel } from '../../payments/OwnerInvoicePaymentPanel';
 
 export default function InvoicesPage() {

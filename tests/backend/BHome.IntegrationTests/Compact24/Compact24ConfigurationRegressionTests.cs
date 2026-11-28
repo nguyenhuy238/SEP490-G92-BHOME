@@ -13,7 +13,7 @@ public sealed partial class Compact24OwnerSetupTests
     public async Task SharedPreviewWritesNeitherBusinessRecordsNorAuditAndParallelApplyCreditsOnce()
     {
         var w = await Seed(); using var owner = await Client(w.Owner); var doc = await Published(owner, "policy-templates"); var route = $"/api/v1/shared-configuration/policy-templates/{doc.Id}";
-        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var auditBefore = await db.SecurityAudit.CountAsync();
         var recordsBefore = await db.Database.SqlQueryRaw<long>("SELECT count(*) AS \"Value\" FROM operational_tasks").SingleAsync();
         var input = new SharedApply(w.Location, doc.Version); var plan = await Read<ConfigurationPlan>(await owner.PostAsJsonAsync(route + "/apply-preview", input));
@@ -41,7 +41,7 @@ public sealed partial class Compact24OwnerSetupTests
     public async Task ParallelConfigurationCopyReplaysOneResult()
     {
         var source = await Seed(); var target = await Seed(); using var owner = await Client(source.Owner); var input = await CopySource(owner, source.Location, target.Location);
-        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var auditBefore = await db.SecurityAudit.CountAsync(); var recordsBefore = await db.Database.SqlQueryRaw<long>("SELECT count(*) AS \"Value\" FROM operational_tasks").SingleAsync();
         var plan = await Read<ConfigurationCopyPlan>(await owner.PostAsJsonAsync("/api/v1/location-configuration/copy-preview", input));
         Assert.Equal(auditBefore, await db.SecurityAudit.CountAsync()); Assert.Equal(recordsBefore, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS \"Value\" FROM operational_tasks").SingleAsync());
@@ -55,7 +55,7 @@ public sealed partial class Compact24OwnerSetupTests
     {
         var w = await Seed(); using var owner = await Client(w.Owner); var doc = await Published(owner, "fee-templates"); var route = $"/api/v1/shared-configuration/fee-templates/{doc.Id}";
         var input = new SharedApply(w.Location, doc.Version); var plan = await Read<ConfigurationPlan>(await owner.PostAsJsonAsync(route + "/apply-preview", input));
-        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>(); var name = "test_apply_failure_" + Guid.NewGuid().ToString("N");
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>(); var name = "test_apply_failure_" + Guid.NewGuid().ToString("N");
         var create = $"CREATE FUNCTION {name}() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN IF NEW.location_id = ''{w.Location}''::uuid AND NEW.task_data->>''recordType''=''SharedConfigurationOperation'' THEN RAISE EXCEPTION ''Synthetic late application failure''; END IF; RETURN NEW; END'; CREATE TRIGGER {name} BEFORE INSERT ON operational_tasks FOR EACH ROW EXECUTE FUNCTION {name}();";
         await db.Database.ExecuteSqlRawAsync(create);
         try

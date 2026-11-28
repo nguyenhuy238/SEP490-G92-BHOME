@@ -6,8 +6,8 @@ import type { MobileApi } from '../lib/api';
 import {
   hasActiveRoomRental,
   TenantContractAccessGate,
-} from '../features/tenant/TenantContractAccessGate';
-import { useTenantCurrentRental } from '../features/tenant/TenantCurrentRentalContext';
+} from '../features/tenant/room/TenantContractAccessGate';
+import { useTenantCurrentRental } from '../features/tenant/room/TenantCurrentRentalContext';
 
 const state = vi.hoisted(() => ({
   role: 'Tenant',

@@ -24,7 +24,7 @@ const state = vi.hoisted(() => ({
   serial: 0,
   uuidSerial: 0,
 }));
-vi.mock('../features/contracts/MainDraftScreen', () => ({
+vi.mock('../features/contracts/main/MainDraftScreen', () => ({
   MainDraftScreen: (props: {
     visible: boolean;
     roomId: string;

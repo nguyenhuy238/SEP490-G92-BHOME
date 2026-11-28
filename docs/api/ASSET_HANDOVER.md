@@ -1,7 +1,7 @@
 # API bàn giao tài sản
 
 Phạm vi: UC-17 và kiểm tra trả phòng UC-19 theo quyết định ngày 16/11/2026.
-Định nghĩa DTO chuẩn nằm trong `BHome.Application/Contracts/ContractHandoverContracts.cs`,
+Định nghĩa DTO chuẩn nằm trong `BHome.Api/DTOs/Contracts/ContractHandoverContracts.cs`,
 `ContractAssetChangeContracts.cs`, `ContractContracts.cs`; client dùng `packages/client-core/src/contracts.ts`.
 Backend xác nhận trạng thái, quyền và số lượng. Client không tự quyết định thanh toán hoặc liability.
 
