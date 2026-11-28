@@ -337,14 +337,16 @@ it('checks the public API when the gateway hides readiness', async () => {
   });
   expect(fetcher).toHaveBeenCalledTimes(3);
 });
-it('checks Staging through the public API without touching private readiness', async () => {
-  const base = 'https://api-staging.103.146.23.157.sslip.io';
-  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response('[]'));
-  await checkApiConnection(base, fetcher);
-  expect(fetcher).toHaveBeenCalledTimes(1);
-  expect(fetcher.mock.calls[0]![0]).toBe(`${base}/api/v1/public/locations`);
-  expect(fetcher.mock.calls[0]![1]?.credentials).toBe('omit');
-});
+it.each(['https://api-staging.103.146.23.157.sslip.io', 'https://api.103.146.23.157.sslip.io'])(
+  'checks %s through the public API without touching private readiness',
+  async (base) => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response('[]'));
+    await checkApiConnection(base, fetcher);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls[0]![0]).toBe(`${base}/api/v1/public/locations`);
+    expect(fetcher.mock.calls[0]![1]?.credentials).toBe('omit');
+  },
+);
 it('uses the opt-in Staging proxy only for loopback development requests', () => {
   const base = 'https://api-staging.103.146.23.157.sslip.io';
   const path = '/api/v1/auth/login';

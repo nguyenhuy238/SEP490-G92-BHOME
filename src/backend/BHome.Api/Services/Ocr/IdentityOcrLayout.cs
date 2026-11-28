@@ -43,14 +43,19 @@ internal static class IdentityOcrLayout
     {
         var height = Math.Max(anchor.Height, value.Height);
         var sameRow = Math.Abs(anchor.Y + anchor.Height / 2 - value.Y - value.Height / 2) <= height * .5f;
-        if (sameRow) return value.X >= anchor.X + anchor.Width - height * .2f && value.X - anchor.X - anchor.Width <= height * 6;
+        if (sameRow) return value.X >= anchor.X + anchor.Width - height * .2f && value.X - anchor.X - anchor.Width <= height * 10;
         return value.Y >= anchor.Y + anchor.Height * .7f && value.Y - anchor.Y - anchor.Height <= height * 3 && SameColumn(anchor, value);
     }
 
-    public static bool Continuation(OcrLine previous, OcrLine next)
+    public static bool Continuation(OcrLine previous, OcrLine next, OcrLine? label = null)
     {
-        if (previous.Bounds is not { } a || next.Bounds is not { } b || !NearAfter(a, b) ||
+        if (previous.Bounds is not { } a || next.Bounds is not { } b ||
             b.Y - a.Y - a.Height > Math.Max(a.Height, b.Height) * 1.5f) return false;
+        // A chip card's residence can start to the right of its bilingual label,
+        // then wrap to the label's left margin. Preserve that hanging indent;
+        // unrelated columns still need the original label's alignment.
+        if (!NearAfter(a, b) && !(label?.Bounds is { } anchor && SameColumn(anchor, b) &&
+            b.Y >= a.Y + a.Height * .7f && b.Y >= anchor.Y + anchor.Height * .7f)) return false;
         return next.Text.Any(char.IsLetter) && !IsBoilerplate(next.Text);
     }
 

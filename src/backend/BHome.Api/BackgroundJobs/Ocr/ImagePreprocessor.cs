@@ -35,6 +35,7 @@ public sealed class ImagePreprocessor(OcrOptions options) : IImagePreprocessor
         if (source.Empty()) throw new OcrInputException("corrupted_image");
         if ((long)source.Width * source.Height > options.MaxPixels) throw new OcrInputException("image_dimensions");
         var result = new Mat();
+        var warnings = new List<string>();
         try
         {
             if (profile.ClockwiseQuarterTurns == 0) source.CopyTo(result);
@@ -49,7 +50,12 @@ public sealed class ImagePreprocessor(OcrOptions options) : IImagePreprocessor
             if (identity)
             {
                 using var card = new Mat();
-                if (IdentityCardCropper.TryCrop(result, card)) card.CopyTo(result);
+                if (IdentityCardCropper.TryCrop(result, card))
+                {
+                    card.CopyTo(result);
+                    if (card.Width < 640) warnings.Add("identity_small_card");
+                }
+                else if (result.Width / (double)result.Height is < 1.35 or > 1.9) warnings.Add("identity_card_not_found");
             }
             var ratio = Math.Min(1d, (double)options.MaxDimension / Math.Max(result.Width, result.Height));
             if (ratio < 1) Cv2.Resize(result, result, new Size(Math.Max(1, (int)(result.Width * ratio)),
@@ -61,13 +67,28 @@ public sealed class ImagePreprocessor(OcrOptions options) : IImagePreprocessor
             // did not improve issue-date extraction within the container deadline.
             var identityWidth = Math.Min(1200, options.MaxDimension);
             if (kind == OcrDocumentKind.IdentityFront && result.Width / (double)result.Height is >= 1.35 and <= 1.9 && result.Width < identityWidth)
-                Cv2.Resize(result, result, new Size(identityWidth, (int)Math.Round(result.Height * (double)identityWidth / result.Width)), 0, 0, InterpolationFlags.Cubic);
+            {
+                // Keep the existing sampling for modest enlargement. A larger
+                // distant-card enlargement needs more support for small accents.
+                var interpolation = identityWidth / (double)result.Width > 2.25 ? InterpolationFlags.Lanczos4 : InterpolationFlags.Cubic;
+                Cv2.Resize(result, result, new Size(identityWidth, (int)Math.Round(result.Height * (double)identityWidth / result.Width)), 0, 0, interpolation);
+            }
             using var gray = new Mat();
             Cv2.CvtColor(result, gray, ColorConversionCodes.BGR2GRAY);
+            if (identity && Cv2.Mean(gray).Val0 < 75) warnings.Add("identity_low_light");
+            if (identity && result.Width / (double)result.Height is >= 1.35 and <= 1.9 && Cv2.Mean(gray).Val0 < 110)
+            {
+                // Lift observed shadows on a localized/tightly framed card.
+                // Keep colour and avoid a hard threshold that erases accents.
+                using var lut = new Mat(1, 256, MatType.CV_8UC1);
+                for (var value = 0; value < 256; value++)
+                    lut.Set(0, value, (byte)Math.Round(255 * Math.Pow(value / 255d, .85)));
+                Cv2.LUT(result, lut, result);
+                Cv2.CvtColor(result, gray, ColorConversionCodes.BGR2GRAY);
+            }
             using var laplacian = new Mat();
             Cv2.Laplacian(gray, laplacian, MatType.CV_64F);
             Cv2.MeanStdDev(laplacian, out _, out var deviation);
-            var warnings = new List<string>();
             if (deviation.Val0 * deviation.Val0 < profile.MinLaplacianVariance) warnings.Add("blur_or_low_detail");
             using var highlights = new Mat();
             Cv2.InRange(gray, new Scalar(250), new Scalar(255), highlights);
